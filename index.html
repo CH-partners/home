@@ -89,111 +89,14 @@ body {
   color:#b91c1c;
   font-weight:700;
 }
-.nav-item-red:hover { background:#fecaca; color:#991b1b; }
-.nav-item-red.active { background:#dc2626; color:#fff; }
-
-.allocation-toolbar {
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  align-items:center;
-  margin-bottom:18px;
+.nav-item-red:hover {
+  background:#fecaca;
+  color:#991b1b;
 }
-.project-badge-wrap {
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  align-items:center;
-  margin-bottom:18px;
-}
-.project-badge {
-  border:1px solid #fecaca;
-  background:#fff5f5;
-  color:#b91c1c;
-  border-radius:999px;
-  padding:9px 14px;
-  font-size:13px;
-  font-weight:700;
-  cursor:pointer;
-  transition:all .15s ease;
-}
-.project-badge:hover {
-  background:#fee2e2;
-}
-.project-badge.active {
+.nav-item-red.active {
   background:#dc2626;
   color:#fff;
-  border-color:#dc2626;
 }
-.allocation-summary {
-  font-size:13px;
-  color:#64748b;
-  margin-bottom:12px;
-}
-.allocation-table-wrap {
-  overflow:auto;
-  border:1px solid #e5e7eb;
-  border-radius:18px;
-  background:#fff;
-}
-.allocation-table {
-  width:100%;
-  min-width:880px;
-  border-collapse:collapse;
-}
-.allocation-table th,
-.allocation-table td {
-  border-bottom:1px solid #e5e7eb;
-  border-right:1px solid #f1f5f9;
-  padding:10px 12px;
-  text-align:left;
-  vertical-align:middle;
-}
-.allocation-table th:last-child,
-.allocation-table td:last-child {
-  border-right:0;
-}
-.allocation-table thead th {
-  background:#f8fafc;
-  font-size:13px;
-  font-weight:700;
-  color:#334155;
-  position:sticky;
-  top:0;
-  z-index:1;
-}
-.allocation-table tbody tr:hover {
-  background:#fcfcfd;
-}
-.allocation-name-cell {
-  min-width:120px;
-  font-weight:700;
-  color:#0f172a;
-  background:#fff;
-}
-.allocation-input {
-  width:100%;
-  min-width:120px;
-  border:1px solid #cbd5e1;
-  border-radius:10px;
-  padding:8px 10px;
-  font-size:13px;
-  font-family:inherit;
-  background:#fff;
-}
-.allocation-input[readonly] {
-  background:#f8fafc;
-  color:#64748b;
-}
-.allocation-empty {
-  padding:38px 18px;
-  text-align:center;
-  color:#64748b;
-  border:1px dashed #cbd5e1;
-  border-radius:18px;
-  background:#fff;
-}
-
 
 .admin-box {
   margin-top:0;
@@ -240,7 +143,7 @@ body {
 .admin-btn.primary:hover { background:#1e40af; color:#fff; }
 
 .main { padding:34px 36px 48px; }
-.sheet-panel { display:none; max-width:1120px; }
+.sheet-panel { display:none; max-width:1280px; }
 .sheet-panel.active { display:block; }
 .sheet-header { margin-bottom:18px; }
 .sheet-header h1 {
@@ -535,6 +438,108 @@ body {
   font-weight:700;
 }
 
+/* 작업배분표 */
+.work-toolbar {
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-bottom:18px;
+  align-items:center;
+}
+.work-badges {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:18px;
+}
+.work-badge {
+  border:1px solid #d1d5db;
+  background:#fff;
+  color:#334155;
+  padding:8px 14px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:700;
+  cursor:pointer;
+}
+.work-badge:hover {
+  background:#eff6ff;
+  color:#1d4ed8;
+  border-color:#bfdbfe;
+}
+.work-badge.active {
+  background:#dbeafe;
+  color:#1d4ed8;
+  border-color:#93c5fd;
+}
+.work-empty {
+  padding:24px;
+  border:1px dashed #cbd5e1;
+  border-radius:16px;
+  background:#f8fafc;
+  color:#475569;
+}
+.work-table-wrap {
+  overflow:auto;
+  border:1px solid #e5e7eb;
+  border-radius:16px;
+}
+.work-table {
+  width:100%;
+  border-collapse:collapse;
+  min-width:900px;
+}
+.work-table th,
+.work-table td {
+  border-bottom:1px solid #e5e7eb;
+  border-right:1px solid #e5e7eb;
+  padding:10px;
+  vertical-align:middle;
+  background:#fff;
+}
+.work-table th {
+  background:#f8fafc;
+  font-size:13px;
+  color:#334155;
+  white-space:nowrap;
+}
+.work-table td:first-child,
+.work-table th:first-child {
+  position:sticky;
+  left:0;
+  z-index:2;
+  background:#f8fafc;
+  min-width:120px;
+}
+.work-table td:first-child {
+  font-weight:700;
+}
+.work-table input {
+  width:100%;
+  min-width:100px;
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  padding:8px 10px;
+  font-size:13px;
+}
+.work-header-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:14px;
+}
+.work-project-title {
+  font-size:20px;
+  font-weight:800;
+  color:#0f172a;
+  margin:4px 0 14px;
+}
+.work-info {
+  color:#64748b;
+  font-size:12px;
+  margin-bottom:14px;
+}
+
 @media (max-width: 920px) {
   .app { grid-template-columns:1fr; }
   .sidebar {
@@ -680,21 +685,17 @@ body {
     <div class="sheet-panel" data-index="11">
       <header class="sheet-header">
         <h1>작업배분표</h1>
-        <div class="sheet-tools">
-          <button class="action-btn allocation-admin-only hidden" onclick="createAllocationProject()">배분표 생성</button>
-          <button class="action-btn allocation-admin-only hidden" onclick="addAllocationColumn()">항목 추가</button>
-          <button class="action-btn allocation-admin-only hidden" onclick="saveAllocationData()">저장</button>
-          <button class="action-btn allocation-admin-only hidden" onclick="deleteAllocationProject()">프로젝트 삭제</button>
-        </div>
       </header>
       <section class="major-card">
-        <div class="major-title">작업배분표</div>
-        <div class="allocation-summary" id="allocationSummary">프로젝트를 선택하세요.</div>
-        <div class="project-badge-wrap" id="allocationProjectBadges"></div>
-        <div id="allocationTableArea"></div>
+        <div class="work-toolbar">
+          <button class="action-btn" onclick="createProjectPrompt()">배분표 생성</button>
+          <button class="action-btn" onclick="saveAllocationData()">저장</button>
+        </div>
+
+        <div class="work-badges" id="workProjectBadges"></div>
+        <div id="workAllocationBody"></div>
       </section>
     </div>
-
 
   </main>
 </div>
@@ -725,7 +726,7 @@ body {
 <div class="modal-backdrop" id="menuModal">
   <div class="modal large">
     <div class="modal-title">메뉴 수정</div>
-    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 초록 메뉴입니다. iframe 메뉴는 URL을 넣으면 됩니다.</div>
+    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. iframe 메뉴는 URL을 넣으면 됩니다.</div>
     <table class="menu-table">
       <thead>
         <tr>
@@ -748,7 +749,6 @@ body {
     </div>
   </div>
 </div>
-
 
 <div class="modal-backdrop" id="contentModal">
   <div class="modal large">
@@ -811,10 +811,29 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+const settingsRef = doc(db, "sharedPages", "mainSettings");
+const allocationRef = doc(db, "sharedPages", "workAllocation");
+
+const fixedMembers = [
+  "남기범", "김학년", "이중근", "이동훈", "임기철",
+  "우창균", "정동춘", "김현경", "김소라", "손성민", "심아영"
+];
+
 let currentUser = null;
 let currentContentPanelKey = null;
 let noticeEditor = null;
 let contentEditor = null;
+let menuData = [];
+let noticeData = {
+  title: "공지 제목",
+  date: "",
+  html: "<li>공지 내용이 없습니다.</li>"
+};
+let allocationData = {
+  members: [...fixedMembers],
+  projects: []
+};
+let selectedProjectId = null;
 
 const defaultMenus = [
   { title: "청현 공지사항", panelIndex: 0, location: "top", kind: "panel" },
@@ -920,40 +939,21 @@ const defaultPageContents = {
   }
 };
 
-const DEFAULT_ALLOCATION_MEMBERS = [
-  "남기범",
-  "김학년",
-  "이중근",
-  "이동훈",
-  "임기철",
-  "우창균",
-  "정동춘",
-  "김현경",
-  "김소라",
-  "손성민",
-  "심아영"
-];
-
-function createEmptyAllocationData() {
-  return {
-    members: [...DEFAULT_ALLOCATION_MEMBERS],
-    projects: []
-  };
-}
-
-let allocationData = createEmptyAllocationData();
-let selectedAllocationProjectId = null;
-
-let menuData = [...defaultMenus];
-let noticeData = {
-  title: "공지 제목",
-  date: "",
-  html: "<li>공지 내용이 없습니다.</li>"
-};
 let pageContents = structuredClone(defaultPageContents);
 
-const settingsRef = doc(db, "sharedPages", "mainSettings");
-const allocationRef = doc(db, "sharedPages", "workAllocation");
+function removeUndefinedDeep(value) {
+  if (Array.isArray(value)) {
+    return value.map(removeUndefinedDeep);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, removeUndefinedDeep(v)])
+    );
+  }
+  return value;
+}
 
 function isAdmin(user) {
   return !!(user && ADMIN_EMAILS.includes((user.email || "").toLowerCase()));
@@ -969,8 +969,6 @@ function updateAdminUI() {
   document.getElementById("menuEditBtn").classList.toggle("hidden", !admin);
   document.getElementById("noticeEditBtn").classList.toggle("hidden", !admin);
   document.querySelectorAll(".panel-edit-btn").forEach(btn => btn.classList.toggle("hidden", !admin));
-  document.querySelectorAll(".allocation-admin-only").forEach(btn => btn.classList.toggle("hidden", !admin));
-  renderAllocationPanel();
 }
 
 function escapeHtml(value) {
@@ -991,216 +989,36 @@ function showSheet(index, title = "") {
 }
 window.showSheet = showSheet;
 
-
-function normalizeAllocationData(data) {
-  const normalized = createEmptyAllocationData();
-  const members = Array.isArray(data?.members) && data.members.length ? data.members : [...DEFAULT_ALLOCATION_MEMBERS];
-  normalized.members = members;
-
-  const incomingProjects = Array.isArray(data?.projects) ? data.projects : [];
-  normalized.projects = incomingProjects.map((project, projectIndex) => {
-    const safeColumns = Array.isArray(project?.columns)
-      ? project.columns.map(v => String(v || "").trim()).filter(Boolean)
-      : [];
-
-    const rowMap = new Map(
-      Array.isArray(project?.rows)
-        ? project.rows.map(row => [String(row?.name || ""), row])
-        : []
-    );
-
-    const rows = normalized.members.map(name => {
-      const srcRow = rowMap.get(name) || {};
-      const values = {};
-      safeColumns.forEach(column => {
-        values[column] = srcRow?.values && Object.prototype.hasOwnProperty.call(srcRow.values, column)
-          ? String(srcRow.values[column] ?? "")
-          : "";
-      });
-      return { name, values };
+function ensureWorkMenu() {
+  const exists = menuData.some(m => Number(m.panelIndex) === 11);
+  if (!exists) {
+    menuData.push({
+      title: "작업배분표",
+      panelIndex: 11,
+      location: "bottom",
+      kind: "panel",
+      theme: "red"
     });
-
-    return {
-      id: project?.id || `allocation_project_${Date.now()}_${projectIndex}`,
-      name: String(project?.name || `프로젝트 ${projectIndex + 1}`).trim(),
-      columns: safeColumns,
-      rows
-    };
-  });
-
-  return normalized;
-}
-
-function getSelectedAllocationProject() {
-  if (!allocationData.projects.length) return null;
-  let project = allocationData.projects.find(p => p.id === selectedAllocationProjectId);
-  if (!project) {
-    project = allocationData.projects[0];
-    selectedAllocationProjectId = project.id;
-  }
-  return project;
-}
-
-function escapeAttr(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function escapeJsString(value) {
-  return String(value || "")
-    .replaceAll("\\", "\\\\")
-    .replaceAll("'", "\\'")
-    .replaceAll('"', '&quot;')
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-function renderAllocationPanel() {
-  const badgeWrap = document.getElementById("allocationProjectBadges");
-  const summary = document.getElementById("allocationSummary");
-  const tableArea = document.getElementById("allocationTableArea");
-
-  if (!badgeWrap || !summary || !tableArea) return;
-
-  const admin = isAdmin(currentUser);
-  badgeWrap.innerHTML = "";
-
-  allocationData.projects.forEach(project => {
-    const btn = document.createElement("button");
-    btn.className = "project-badge";
-    if (project.id === selectedAllocationProjectId) btn.classList.add("active");
-    btn.textContent = project.name;
-    btn.addEventListener("click", () => {
-      selectedAllocationProjectId = project.id;
-      renderAllocationPanel();
+  } else {
+    menuData = menuData.map(menu => {
+      if (Number(menu.panelIndex) === 11 || menu.title === "작업배분표") {
+        return {
+          ...menu,
+          title: "작업배분표",
+          panelIndex: 11,
+          location: "bottom",
+          kind: "panel",
+          theme: "red"
+        };
+      }
+      return menu;
     });
-    badgeWrap.appendChild(btn);
-  });
-
-  const project = getSelectedAllocationProject();
-
-  if (!project) {
-    summary.textContent = admin
-      ? "프로젝트가 없습니다. ‘배분표 생성’ 버튼으로 첫 프로젝트를 만들어주세요."
-      : "등록된 프로젝트가 없습니다.";
-    tableArea.innerHTML = '<div class="allocation-empty">표시할 작업배분표가 없습니다.</div>';
-    return;
   }
-
-  summary.textContent = `현재 프로젝트: ${project.name} · 인원 ${allocationData.members.length}명 · 항목 ${project.columns.length}개`;
-
-  const headerCells = ['<th class="allocation-name-cell">이름</th>']
-    .concat(project.columns.map(column => `<th>${escapeHtml(column)}</th>`))
-    .join("");
-
-  const bodyRows = project.rows.map((row, rowIndex) => {
-    const valueCells = project.columns.map(column => {
-      const value = row.values?.[column] ?? "";
-      const readonly = admin ? "" : "readonly";
-      return `<td><input class="allocation-input" ${readonly} value="${escapeAttr(value)}" oninput="updateAllocationCell('${escapeJsString(project.id)}', ${rowIndex}, '${escapeJsString(column)}', this.value)"></td>`;
-    }).join("");
-
-    return `<tr><td class="allocation-name-cell">${escapeHtml(row.name)}</td>${valueCells}</tr>`;
-  }).join("");
-
-  tableArea.innerHTML = `
-    <div class="allocation-table-wrap">
-      <table class="allocation-table">
-        <thead><tr>${headerCells}</tr></thead>
-        <tbody>${bodyRows}</tbody>
-      </table>
-    </div>
-  `;
 }
-
-window.createAllocationProject = function() {
-  if (!isAdmin(currentUser)) return alert("관리자만 생성할 수 있습니다.");
-  const projectName = prompt("프로젝트 이름을 입력하세요.");
-  if (!projectName) return;
-
-  const trimmedName = projectName.trim();
-  if (!trimmedName) return alert("프로젝트 이름을 입력해주세요.");
-
-  if (allocationData.projects.some(project => project.name === trimmedName)) {
-    return alert("같은 이름의 프로젝트가 이미 있습니다.");
-  }
-
-  const project = {
-    id: "allocation_project_" + Date.now(),
-    name: trimmedName,
-    columns: [],
-    rows: allocationData.members.map(name => ({
-      name,
-      values: {}
-    }))
-  };
-
-  allocationData.projects.push(project);
-  selectedAllocationProjectId = project.id;
-  renderAllocationPanel();
-};
-
-window.addAllocationColumn = function() {
-  if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
-  const project = getSelectedAllocationProject();
-  if (!project) return alert("먼저 프로젝트를 생성해주세요.");
-
-  const columnName = prompt("추가할 항목 이름을 입력하세요.");
-  if (!columnName) return;
-
-  const trimmedName = columnName.trim();
-  if (!trimmedName) return alert("항목 이름을 입력해주세요.");
-
-  if (project.columns.includes(trimmedName)) {
-    return alert("같은 이름의 항목이 이미 있습니다.");
-  }
-
-  project.columns.push(trimmedName);
-  project.rows.forEach(row => {
-    row.values[trimmedName] = "";
-  });
-
-  renderAllocationPanel();
-};
-
-window.updateAllocationCell = function(projectId, rowIndex, columnName, value) {
-  const project = allocationData.projects.find(p => p.id === projectId);
-  if (!project) return;
-  if (!project.rows[rowIndex]) return;
-  if (!project.rows[rowIndex].values) project.rows[rowIndex].values = {};
-  project.rows[rowIndex].values[columnName] = value;
-};
-
-window.deleteAllocationProject = function() {
-  if (!isAdmin(currentUser)) return alert("관리자만 삭제할 수 있습니다.");
-  const project = getSelectedAllocationProject();
-  if (!project) return alert("삭제할 프로젝트가 없습니다.");
-
-  if (!confirm(`'${project.name}' 프로젝트를 삭제할까요?`)) return;
-
-  allocationData.projects = allocationData.projects.filter(item => item.id !== project.id);
-  selectedAllocationProjectId = allocationData.projects[0]?.id || null;
-  renderAllocationPanel();
-};
-
-window.saveAllocationData = async function() {
-  try {
-    if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
-    allocationData = normalizeAllocationData(allocationData);
-    await setDoc(allocationRef, allocationData, { merge: true });
-    renderAllocationPanel();
-    alert("작업배분표가 저장되었습니다.");
-  } catch (error) {
-    console.error("작업배분표 저장 실패:", error);
-    alert("작업배분표 저장 실패: " + (error.message || error));
-  }
-};
-
 
 function renderMenus() {
+  ensureWorkMenu();
+
   const topNav = document.getElementById("topNav");
   const bottomNav = document.getElementById("bottomNav");
   topNav.innerHTML = "";
@@ -1211,7 +1029,11 @@ function renderMenus() {
     btn.className = "nav-item";
 
     if (menu.location === "bottom") {
-      btn.classList.add(menu.theme === "red" ? "nav-item-red" : "nav-item-green");
+      if (menu.theme === "red") {
+        btn.classList.add("nav-item-red");
+      } else {
+        btn.classList.add("nav-item-green");
+      }
     }
 
     btn.textContent = menu.title || "메뉴";
@@ -1223,6 +1045,9 @@ function renderMenus() {
       }
 
       renderAllContents();
+      if (Number(menu.panelIndex) === 11) {
+        renderAllocationUI();
+      }
       showSheet(Number(menu.panelIndex || 0), menu.title);
     });
 
@@ -1231,7 +1056,6 @@ function renderMenus() {
   });
 
   renderAllContents();
-  showSheet(0, menuData.find(m => Number(m.panelIndex) === 0)?.title || "");
 }
 
 function renderNotice() {
@@ -1241,72 +1065,27 @@ function renderNotice() {
   list.innerHTML = noticeData.html || '<li>공지 내용이 없습니다.</li>';
 }
 
-function renderSection(targetId, config, normalWeight = false) {
-  const el = document.getElementById(targetId);
-  if (!el) return;
-  const majorClass = normalWeight ? "major-title normal-weight" : "major-title";
-  el.innerHTML = `<div class="${majorClass}">${escapeHtml(config.majorTitle || "")}</div><div class="rich-preview">${config.html || ""}</div>`;
-}
-
 function renderAllContents() {
-  const main = document.querySelector(".main");
+  const renderMap = {
+    rent: "content-rent",
+    wage: "content-wage",
+    tax: "content-tax",
+    tenantqa: "content-tenantqa",
+    guaranteeqa: "content-guaranteeqa",
+    securedqa: "content-securedqa",
+    saleqa: "content-saleqa",
+    browseqa: "content-browseqa",
+    machineqa: "content-machineqa"
+  };
 
-  menuData.forEach(menu => {
-    if (menu.kind !== "panel") return;
-
-    const key = menu.title;
-    const panelIndex = Number(menu.panelIndex || 0);
-
-    if (panelIndex === 0 || panelIndex === 10 || panelIndex === 11) return;
-
-    let panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
-
-    if (!panel) {
-      panel = document.createElement("div");
-      panel.className = "sheet-panel";
-      panel.setAttribute("data-index", panelIndex);
-
-      panel.innerHTML = `
-        <header class="sheet-header">
-          <h1>${key}</h1>
-          <div class="sheet-tools">
-            <button class="action-btn panel-edit-btn" onclick="openContentEditor('${key}')">내용 수정</button>
-          </div>
-        </header>
-        <section class="major-card"></section>
-      `;
-
-      main.appendChild(panel);
-    }
-
-    const section = panel.querySelector("section.major-card");
-
-    if (!pageContents[key]) {
-      pageContents[key] = {
-        majorTitle: key,
-        html: `<p class="body-line">내용을 입력하세요.</p>`
-      };
-    }
-
-    section.innerHTML = `
-      <div class="major-title">${pageContents[key].majorTitle || key}</div>
-      <div class="rich-preview">${pageContents[key].html || ""}</div>
-    `;
-
-    const h1 = panel.querySelector("h1");
-    if (h1) h1.textContent = key;
+  Object.entries(renderMap).forEach(([key, targetId]) => {
+    const el = document.getElementById(targetId);
+    const config = pageContents[key];
+    if (!el || !config) return;
+    el.innerHTML = `<div class="major-title">${escapeHtml(config.majorTitle || "")}</div><div class="rich-preview">${config.html || ""}</div>`;
   });
 
-  // 🔥 이거 추가
-  const activeMenu = menuData.find(m =>
-    document.querySelector('.nav-item.active')?.textContent.trim() === m.title
-  );
-
-  if (activeMenu) {
-    showSheet(Number(activeMenu.panelIndex), activeMenu.title);
-  }
-
-  renderAllocationPanel();
+  renderAllocationUI();
 }
 
 function initEditors() {
@@ -1360,67 +1139,84 @@ window.closeMenuEditor = function() { closeModal("menuModal"); };
 function renderMenuTable() {
   const tbody = document.getElementById("menuTableBody");
   tbody.innerHTML = "";
+  ensureWorkMenu();
+
   menuData.forEach((menu, index) => {
     const tr = document.createElement("tr");
+    const isWork = Number(menu.panelIndex) === 11 || menu.title === "작업배분표";
     tr.innerHTML = `
-      <td><input data-field="location" data-index="${index}" value="${escapeHtml(menu.location || "top")}" placeholder="top/bottom"></td>
-      <td><input data-field="title" data-index="${index}" value="${escapeHtml(menu.title || "")}" placeholder="메뉴 제목"></td>
-      <td><input data-field="panelIndex" data-index="${index}" value="${escapeHtml(menu.panelIndex ?? "")}" placeholder="0~10"></td>
-      <td><input data-field="url" data-index="${index}" value="${escapeHtml(menu.url || "")}" placeholder="iframe일 때만 입력"></td>
-      <td><div class="menu-row-actions"><button class="small-btn danger" onclick="removeMenuRow(${index})">삭제</button></div></td>
+      <td><input data-field="location" data-index="${index}" value="${escapeHtml(isWork ? "bottom" : (menu.location || "top"))}" placeholder="top/bottom" ${isWork ? "readonly" : ""}></td>
+      <td><input data-field="title" data-index="${index}" value="${escapeHtml(isWork ? "작업배분표" : (menu.title || ""))}" placeholder="메뉴 제목" ${isWork ? "readonly" : ""}></td>
+      <td><input data-field="panelIndex" data-index="${index}" value="${escapeHtml(isWork ? 11 : (menu.panelIndex ?? ""))}" placeholder="0~11" ${isWork ? "readonly" : ""}></td>
+      <td><input data-field="url" data-index="${index}" value="${escapeHtml(isWork ? "" : (menu.url || ""))}" placeholder="iframe일 때만 입력" ${isWork ? "readonly" : ""}></td>
+      <td><div class="menu-row-actions">${isWork ? '<span class="note">고정메뉴</span>' : `<button class="small-btn danger" onclick="removeMenuRow(${index})">삭제</button>`}</div></td>
     `;
     tbody.appendChild(tr);
   });
 }
+
 window.addMenuRow = function(location) {
   menuData.push({ title: "", panelIndex: 0, location: location || "top", kind: location === "bottom" ? "iframe" : "panel", url: "" });
   renderMenuTable();
 };
+
 window.removeMenuRow = function(index) {
+  const target = menuData[index];
+  if (!target) return;
+  if (Number(target.panelIndex) === 11 || target.title === "작업배분표") {
+    alert("작업배분표 메뉴는 삭제할 수 없습니다.");
+    return;
+  }
   menuData.splice(index, 1);
   renderMenuTable();
 };
+
 function syncMenuDataFromTable() {
   const rows = Array.from(document.querySelectorAll("#menuTableBody tr"));
   const previousMenus = [...menuData];
+
   menuData = rows.map((row, index) => {
     const getVal = (field) => row.querySelector(`[data-field="${field}"][data-index="${index}"]`)?.value?.trim() || "";
     const title = getVal("title") || `메뉴 ${index+1}`;
     const location = getVal("location") || "top";
     const url = getVal("url");
     const existingMenu = previousMenus[index] || {};
-    const isWorkAllocation = title === "작업배분표";
-    return {
-      title,
-      panelIndex: Number(getVal("panelIndex") || 0),
-      location,
-      kind: url ? "iframe" : (isWorkAllocation ? "panel" : (location === "bottom" ? "iframe" : "panel")),
-      url,
-      theme: isWorkAllocation ? "red" : existingMenu.theme
+    const isWorkAllocation = title === "작업배분표" || Number(getVal("panelIndex") || 0) === 11;
+
+    const item = {
+      title: isWorkAllocation ? "작업배분표" : title,
+      panelIndex: isWorkAllocation ? 11 : Number(getVal("panelIndex") || 0),
+      location: isWorkAllocation ? "bottom" : location,
+      kind: url ? "iframe" : (isWorkAllocation ? "panel" : (location === "bottom" ? "iframe" : "panel"))
     };
+
+    if (url && !isWorkAllocation) item.url = url;
+    if (isWorkAllocation) {
+      item.theme = "red";
+    } else if (existingMenu.theme) {
+      item.theme = existingMenu.theme;
+    }
+
+    return item;
   });
+
+  ensureWorkMenu();
 }
+
 window.saveMenusToFirebase = async function() {
   if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
-syncMenuDataFromTable();
 
-menuData.forEach(menu => {
-  if (menu.kind === "panel") {
-    const key = menu.title;
+  syncMenuDataFromTable();
 
-    if (!pageContents[key]) {
-      pageContents[key] = {
-        majorTitle: key,
-        html: `<p class="body-line">내용을 입력하세요.</p>`
-      };
-    }
-  }
-});
+  await setDoc(
+    settingsRef,
+    removeUndefinedDeep({ menus: menuData, notice: noticeData, pageContents }),
+    { merge: true }
+  );
 
-await setDoc(settingsRef, { menus: menuData, notice: noticeData, pageContents }, { merge: true });
-renderMenus();
-closeModal("menuModal");
-alert("메뉴가 저장되었습니다.");
+  renderMenus();
+  closeModal("menuModal");
+  alert("메뉴가 저장되었습니다.");
 };
 
 function getPanelTitleByKey(panelKey) {
@@ -1454,7 +1250,13 @@ window.saveContentToFirebase = async function() {
   try {
     if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
     syncContentFromEditor();
-    await setDoc(settingsRef, { pageContents, menus: menuData, notice: noticeData }, { merge: true });
+
+    await setDoc(
+      settingsRef,
+      removeUndefinedDeep({ pageContents, menus: menuData, notice: noticeData }),
+      { merge: true }
+    );
+
     renderAllContents();
     closeModal("contentModal");
     alert("내용이 저장되었습니다.");
@@ -1474,7 +1276,13 @@ window.saveNoticeToFirebase = async function() {
       date: date || "",
       html: noticeEditor.root.innerHTML
     };
-    await setDoc(settingsRef, { notice: noticeData, menus: menuData, pageContents }, { merge: true });
+
+    await setDoc(
+      settingsRef,
+      removeUndefinedDeep({ notice: noticeData, menus: menuData, pageContents }),
+      { merge: true }
+    );
+
     renderNotice();
     closeModal("noticeModal");
     alert("공지사항이 저장되었습니다.");
@@ -1507,20 +1315,197 @@ async function ensureInitialData() {
   try {
     const snap = await getDoc(settingsRef);
     if (!snap.exists()) {
-      await setDoc(settingsRef, {
+      await setDoc(settingsRef, removeUndefinedDeep({
         menus: defaultMenus,
         notice: { title: "공지 제목", date: "", html: "<li>공지 내용이 없습니다.</li>" },
         pageContents: defaultPageContents
-      });
-    }
-
-    const allocationSnap = await getDoc(allocationRef);
-    if (!allocationSnap.exists()) {
-      await setDoc(allocationRef, createEmptyAllocationData());
+      }));
     }
   } catch (error) {
     console.error("초기 데이터 생성 실패:", error);
   }
+
+  try {
+    const allocationSnap = await getDoc(allocationRef);
+    if (!allocationSnap.exists()) {
+      await setDoc(allocationRef, removeUndefinedDeep({
+        members: fixedMembers,
+        projects: []
+      }));
+    }
+  } catch (error) {
+    console.error("작업배분표 초기 데이터 생성 실패:", error);
+  }
+}
+
+/* 작업배분표 */
+function getSelectedProject() {
+  return allocationData.projects.find(p => p.id === selectedProjectId) || null;
+}
+
+function createEmptyProject(name) {
+  return {
+    id: "project_" + Date.now(),
+    name,
+    columns: [],
+    rows: fixedMembers.map(member => ({
+      name: member,
+      values: {}
+    }))
+  };
+}
+
+window.createProjectPrompt = function() {
+  if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
+  const name = prompt("프로젝트 이름을 입력하세요.");
+  if (!name || !name.trim()) return;
+
+  const trimmed = name.trim();
+  const duplicate = allocationData.projects.some(p => p.name === trimmed);
+  if (duplicate) {
+    alert("같은 프로젝트명이 이미 있습니다.");
+    return;
+  }
+
+  const newProject = createEmptyProject(trimmed);
+  allocationData.projects.push(newProject);
+  selectedProjectId = newProject.id;
+  renderAllocationUI();
+};
+
+window.addColumnPrompt = function() {
+  if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
+  const project = getSelectedProject();
+  if (!project) return alert("먼저 프로젝트를 선택하세요.");
+
+  const columnName = prompt("항목명을 입력하세요.");
+  if (!columnName || !columnName.trim()) return;
+
+  const trimmed = columnName.trim();
+  if (project.columns.includes(trimmed)) {
+    alert("같은 항목명이 이미 있습니다.");
+    return;
+  }
+
+  project.columns.push(trimmed);
+  project.rows.forEach(row => {
+    row.values[trimmed] = "";
+  });
+
+  renderAllocationUI();
+};
+
+window.deleteSelectedProject = function() {
+  if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
+  const project = getSelectedProject();
+  if (!project) return;
+
+  if (!confirm(`"${project.name}" 프로젝트를 삭제하시겠습니까?`)) return;
+
+  allocationData.projects = allocationData.projects.filter(p => p.id !== project.id);
+  selectedProjectId = allocationData.projects[0]?.id || null;
+  renderAllocationUI();
+};
+
+window.selectProject = function(projectId) {
+  selectedProjectId = projectId;
+  renderAllocationUI();
+};
+
+window.updateAllocationCell = function(projectId, rowIndex, columnName, value) {
+  const project = allocationData.projects.find(p => p.id === projectId);
+  if (!project) return;
+  if (!project.rows[rowIndex]) return;
+  project.rows[rowIndex].values[columnName] = value;
+};
+
+window.saveAllocationData = async function() {
+  try {
+    if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
+    await setDoc(
+      allocationRef,
+      removeUndefinedDeep(allocationData),
+      { merge: true }
+    );
+    alert("작업배분표가 저장되었습니다.");
+  } catch (error) {
+    console.error("작업배분표 저장 실패:", error);
+    alert("작업배분표 저장 실패: " + (error.message || error));
+  }
+};
+
+function renderAllocationUI() {
+  const badgeWrap = document.getElementById("workProjectBadges");
+  const body = document.getElementById("workAllocationBody");
+  if (!badgeWrap || !body) return;
+
+  badgeWrap.innerHTML = "";
+
+  if (!allocationData.projects.length) {
+    body.innerHTML = `
+      <div class="work-empty">
+        생성된 프로젝트가 없습니다.<br>
+        상단의 <strong>배분표 생성</strong> 버튼으로 프로젝트를 먼저 만드세요.
+      </div>
+    `;
+    return;
+  }
+
+  if (!selectedProjectId || !allocationData.projects.some(p => p.id === selectedProjectId)) {
+    selectedProjectId = allocationData.projects[0].id;
+  }
+
+  allocationData.projects.forEach(project => {
+    const btn = document.createElement("button");
+    btn.className = "work-badge" + (project.id === selectedProjectId ? " active" : "");
+    btn.textContent = project.name;
+    btn.onclick = () => window.selectProject(project.id);
+    badgeWrap.appendChild(btn);
+  });
+
+  const project = getSelectedProject();
+  if (!project) {
+    body.innerHTML = `<div class="work-empty">선택된 프로젝트가 없습니다.</div>`;
+    return;
+  }
+
+  const headers = project.columns.map(col => `<th>${escapeHtml(col)}</th>`).join("");
+  const rowsHtml = project.rows.map((row, rowIndex) => {
+    const cells = project.columns.map(col => {
+      const value = row.values?.[col] ?? "";
+      return `<td><input type="text" value="${escapeHtml(value)}" ${isAdmin(currentUser) ? "" : "readonly"} oninput="updateAllocationCell('${project.id}', ${rowIndex}, '${escapeHtml(col)}', this.value)"></td>`;
+    }).join("");
+
+    return `
+      <tr>
+        <td>${escapeHtml(row.name)}</td>
+        ${cells}
+      </tr>
+    `;
+  }).join("");
+
+  body.innerHTML = `
+    <div class="work-project-title">${escapeHtml(project.name)}</div>
+    <div class="work-info">첫 번째 열은 이름 고정이며, 두 번째 열부터 항목 추가로 생성됩니다.</div>
+    <div class="work-header-actions">
+      <button class="action-btn" onclick="addColumnPrompt()">항목 추가</button>
+      <button class="action-btn" onclick="saveAllocationData()">저장</button>
+      <button class="action-btn" onclick="deleteSelectedProject()">프로젝트 삭제</button>
+    </div>
+    <div class="work-table-wrap">
+      <table class="work-table">
+        <thead>
+          <tr>
+            <th>이름</th>
+            ${headers}
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 onAuthStateChanged(auth, async user => {
@@ -1529,36 +1514,48 @@ onAuthStateChanged(auth, async user => {
 
   if (isAdmin(user)) {
     await ensureInitialData();
+  } else {
+    renderAllocationUI();
   }
 });
 
 onSnapshot(settingsRef, snap => {
   const data = snap.data() || {};
   menuData = Array.isArray(data.menus) && data.menus.length ? data.menus : [...defaultMenus];
+  ensureWorkMenu();
+
   noticeData = data.notice || { title: "공지 제목", date: "", html: "<li>공지 내용이 없습니다.</li>" };
   pageContents = data.pageContents ? data.pageContents : structuredClone(defaultPageContents);
+
   renderMenus();
   renderNotice();
   renderAllContents();
+
+  const activeTitle = document.querySelector(".nav-item.active")?.textContent?.trim();
+  if (!activeTitle) {
+    showSheet(0, "청현 공지사항");
+  }
 });
 
-
 onSnapshot(allocationRef, snap => {
-  const data = snap.data() || createEmptyAllocationData();
-  allocationData = normalizeAllocationData(data);
-  if (!selectedAllocationProjectId && allocationData.projects.length) {
-    selectedAllocationProjectId = allocationData.projects[0].id;
+  const data = snap.data() || {};
+  allocationData = {
+    members: Array.isArray(data.members) && data.members.length ? data.members : [...fixedMembers],
+    projects: Array.isArray(data.projects) ? data.projects : []
+  };
+
+  if (!selectedProjectId || !allocationData.projects.some(p => p.id === selectedProjectId)) {
+    selectedProjectId = allocationData.projects[0]?.id || null;
   }
-  if (selectedAllocationProjectId && !allocationData.projects.some(project => project.id === selectedAllocationProjectId)) {
-    selectedAllocationProjectId = allocationData.projects[0]?.id || null;
-  }
-  renderAllocationPanel();
+
+  renderAllocationUI();
 });
 
 initEditors();
 renderMenus();
 renderNotice();
 renderAllContents();
+showSheet(0, "청현 공지사항");
 </script>
 </body>
 </html>
