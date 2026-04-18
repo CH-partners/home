@@ -769,7 +769,7 @@ body {
 
     <div class="sheet-panel" data-index="11">
       <header class="sheet-header">
-        <h1>Project분배표</h1>
+        <h1>Project 분배표</h1>
       </header>
       <section class="major-card">
         <div class="work-toolbar">
@@ -809,7 +809,7 @@ body {
 <div class="modal-backdrop" id="menuModal">
   <div class="modal large">
     <div class="modal-title">메뉴 수정</div>
-    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. Project분배표는 고정 메뉴이며 항상 panelIndex 11입니다. Q&A는 화면에서 자동 그룹 처리됩니다.</div>
+    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. Project 분배표는 고정 메뉴이며 항상 panelIndex 11입니다. Q&A는 화면에서 자동 그룹 처리됩니다.</div>
     <table class="menu-table">
       <thead>
         <tr>
@@ -932,7 +932,7 @@ const defaultMenus = [
   { title: "열람자료Q&A", panelIndex: 8, location: "top", kind: "panel" },
   { title: "기계기구Q&A", panelIndex: 9, location: "top", kind: "panel" },
   { title: "주택·상가 소액 조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" },
-  { title: "Project분배표", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" }
+  { title: "Project 분배표", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" }
 ];
 
 const defaultPageContents = {
@@ -1050,7 +1050,7 @@ function getDynamicPanelKey(menu) {
 
 function ensureWorkMenu() {
   const fixedWorkMenu = {
-    title: "Project분배표",
+    title: "Project 분배표",
     panelIndex: 11,
     location: "bottom",
     kind: "panel",
@@ -1059,7 +1059,7 @@ function ensureWorkMenu() {
 
   menuData = menuData.filter(menu => {
     const title = (menu.title || "").trim();
-    if (title === "Project분배표" && Number(menu.panelIndex) !== 11) return false;
+    if (title === "Project 분배표" && Number(menu.panelIndex) !== 11) return false;
     return true;
   });
 
