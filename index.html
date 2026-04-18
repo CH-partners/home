@@ -1128,43 +1128,49 @@ function renderMenus() {
   bottomNav.innerHTML = "";
 
   const topMenus = menuData.filter(menu => menu.location !== "bottom");
-  const bottomMenus = menuData.filter(menu => menu.location === "bottom");
+const bottomMenus = menuData.filter(menu => menu.location === "bottom");
 
-  const qnaMenus = topMenus.filter(menu => isQnaMenu(menu));
-  let normalTopMenus = topMenus.filter(menu => !isQnaMenu(menu));
+const qnaMenus = topMenus.filter(menu => isQnaMenu(menu));
+let normalTopMenus = topMenus.filter(menu => !isQnaMenu(menu));
 
-  normalTopMenus.sort((a, b) => getTopMenuPriority(a) - getTopMenuPriority(b));
+normalTopMenus.sort((a, b) => getTopMenuPriority(a) - getTopMenuPriority(b));
 
-  normalTopMenus.forEach(menu => {
-    topNav.appendChild(createMenuButton(menu));
+// 1. 하단 메뉴 2개를 맨 위로
+bottomMenus.forEach(menu => {
+  topNav.appendChild(createMenuButton(menu));
+});
+
+// 2. 그다음 Q&A
+if (qnaMenus.length) {
+  const isExpanded = !!navGroupState.qna;
+
+  const groupToggle = document.createElement("button");
+  groupToggle.className = "nav-group-toggle" + (isExpanded ? " expanded" : "");
+  groupToggle.type = "button";
+  groupToggle.innerHTML = `
+    <span class="nav-group-label"><span>Q&A</span></span>
+    <span class="nav-group-arrow">▶</span>
+  `;
+  groupToggle.onclick = () => window.toggleNavGroup("qna");
+  topNav.appendChild(groupToggle);
+
+  const groupWrap = document.createElement("div");
+  groupWrap.className = "nav-sub-group" + (isExpanded ? "" : " collapsed");
+
+  qnaMenus.forEach(menu => {
+    groupWrap.appendChild(createMenuButton(menu, true));
   });
 
-  if (qnaMenus.length) {
-    const isExpanded = !!navGroupState.qna;
+  topNav.appendChild(groupWrap);
+}
 
-    const groupToggle = document.createElement("button");
-    groupToggle.className = "nav-group-toggle" + (isExpanded ? " expanded" : "");
-    groupToggle.type = "button";
-    groupToggle.innerHTML = `
-      <span class="nav-group-label"><span>Q&A</span></span>
-      <span class="nav-group-arrow">▶</span>
-    `;
-    groupToggle.onclick = () => window.toggleNavGroup("qna");
-    topNav.appendChild(groupToggle);
+// 3. 마지막에 나머지 메뉴
+normalTopMenus.forEach(menu => {
+  topNav.appendChild(createMenuButton(menu));
+});
 
-    const groupWrap = document.createElement("div");
-    groupWrap.className = "nav-sub-group" + (isExpanded ? "" : " collapsed");
-
-    qnaMenus.forEach(menu => {
-      groupWrap.appendChild(createMenuButton(menu, true));
-    });
-
-    topNav.appendChild(groupWrap);
-  }
-
-  bottomMenus.forEach(menu => {
-    bottomNav.appendChild(createMenuButton(menu));
-  });
+// bottomNav는 더 이상 안 씀
+bottomNav.innerHTML = "";
 
   renderAllContents();
 }
