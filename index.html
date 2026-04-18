@@ -69,6 +69,29 @@ body {
 }
 .nav-item:hover { background:#eff6ff; color:#1d4ed8; }
 .nav-item.active { background:#dbeafe; color:#1d4ed8; font-weight:700; }
+
+.nav-group-title {
+  margin-top:12px;
+  margin-bottom:4px;
+  padding:6px 10px 2px;
+  font-size:12px;
+  font-weight:800;
+  color:#64748b;
+  letter-spacing:0.2px;
+}
+.nav-sub-group {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:8px;
+}
+.nav-sub-item {
+  margin-left:12px;
+  padding-left:16px;
+  font-size:13px;
+  background:#f8fafc;
+}
+
 .nav-bottom {
   margin-top:auto;
   padding-top:18px;
@@ -83,17 +106,17 @@ body {
 .nav-item-green:hover { background:#bbf7d0; color:#166534; }
 .nav-item-green.active { background:#22c55e; color:#fff; }
 
-.nav-item-red {
+.nav-item-purple {
   width:100%;
   background:#f3e8ff;
   color:#7c3aed;
   font-weight:700;
 }
-.nav-item-red:hover {
+.nav-item-purple:hover {
   background:#e9d5ff;
   color:#6d28d9;
 }
-.nav-item-red.active {
+.nav-item-purple.active {
   background:#c084fc;
   color:#fff;
 }
@@ -234,14 +257,6 @@ body {
   white-space:pre-wrap;
 }
 .note { color:#6b7280; font-size:13px; margin-top:6px; }
-.notice-head {
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:12px;
-  margin-bottom:12px;
-}
-.notice-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .action-btn {
   border:1px solid #cbd5e1;
   background:#fff;
@@ -349,23 +364,22 @@ body {
   cursor:pointer;
   font-weight:700;
 }
-.menu-table, .content-table {
+.menu-table {
   width:100%;
   border-collapse:collapse;
   margin-top:8px;
 }
-.menu-table th, .menu-table td,
-.content-table th, .content-table td {
+.menu-table th, .menu-table td {
   border:1px solid #e2e8f0;
   padding:10px;
   vertical-align:top;
 }
-.menu-table th, .content-table th {
+.menu-table th {
   background:#f8fafc;
   text-align:left;
   font-size:13px;
 }
-.menu-table input, .content-table input, .content-table textarea, .content-table select {
+.menu-table input {
   width:100%;
   border:1px solid #cbd5e1;
   border-radius:10px;
@@ -373,11 +387,7 @@ body {
   font-size:13px;
   font-family:inherit;
 }
-.content-table textarea {
-  min-height:90px;
-  resize:vertical;
-}
-.menu-row-actions, .content-row-actions {
+.menu-row-actions {
   display:flex;
   gap:6px;
 }
@@ -396,16 +406,11 @@ body {
   border-color:#fecaca;
   background:#fff5f5;
 }
-.panel-hint {
-  font-size:12px;
-  color:#64748b;
-  margin-top:8px;
-}
 
 .ql-editor {
-  min-height: 180px;
-  font-size: 14px;
-  line-height: 1.7;
+  min-height:180px;
+  font-size:14px;
+  line-height:1.7;
 }
 .ql-toolbar.ql-snow,
 .ql-container.ql-snow {
@@ -468,9 +473,9 @@ body {
   border-color:#bfdbfe;
 }
 .work-badge.active {
-  background:#dbeafe;
-  color:#1d4ed8;
-  border-color:#93c5fd;
+  background:#ede9fe;
+  color:#6d28d9;
+  border-color:#c4b5fd;
 }
 .work-empty {
   padding:24px;
@@ -553,10 +558,6 @@ body {
   .major-card { padding:18px; border-radius:18px; }
   .tool-frame { height:80vh; min-height:700px; }
 }
-@media (max-width: 640px) {
-  .notice-head { align-items:flex-start; flex-direction:column; }
-  .notice-actions { width:100%; }
-}
 </style>
 </head>
 <body>
@@ -604,7 +605,7 @@ body {
     <div class="sheet-panel" data-index="1">
       <header class="sheet-header">
         <h1>임대차</h1>
-        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="rent" onclick="openContentEditor('rent')">내용 수정</button></div>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" onclick="openContentEditor('rent')">내용 수정</button></div>
       </header>
       <section class="major-card" id="content-rent"></section>
     </div>
@@ -612,7 +613,7 @@ body {
     <div class="sheet-panel" data-index="2">
       <header class="sheet-header">
         <h1>임금</h1>
-        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="wage" onclick="openContentEditor('wage')">내용 수정</button></div>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" onclick="openContentEditor('wage')">내용 수정</button></div>
       </header>
       <section class="major-card" id="content-wage"></section>
     </div>
@@ -620,7 +621,7 @@ body {
     <div class="sheet-panel" data-index="3">
       <header class="sheet-header">
         <h1>조세</h1>
-        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="tax" onclick="openContentEditor('tax')">내용 수정</button></div>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" onclick="openContentEditor('tax')">내용 수정</button></div>
       </header>
       <section class="major-card" id="content-tax"></section>
     </div>
@@ -628,7 +629,7 @@ body {
     <div class="sheet-panel" data-index="4">
       <header class="sheet-header">
         <h1>선순위임차인Q&amp;A</h1>
-        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="tenantqa" onclick="openContentEditor('tenantqa')">내용 수정</button></div>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" onclick="openContentEditor('tenantqa')">내용 수정</button></div>
       </header>
       <section class="major-card" id="content-tenantqa"></section>
     </div>
@@ -636,7 +637,7 @@ body {
     <div class="sheet-panel" data-index="5">
       <header class="sheet-header">
         <h1>보증서Q&amp;A</h1>
-        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="guaranteeqa" onclick="openContentEditor('guaranteeqa')">내용 수정</button></div>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" onclick="openContentEditor('guaranteeqa')">내용 수정</button></div>
       </header>
       <section class="major-card" id="content-guaranteeqa"></section>
     </div>
@@ -644,7 +645,7 @@ body {
     <div class="sheet-panel" data-index="6">
       <header class="sheet-header">
         <h1>피담보채무Q&amp;A</h1>
-        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="securedqa" onclick="openContentEditor('securedqa')">내용 수정</button></div>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" onclick="openContentEditor('securedqa')">내용 수정</button></div>
       </header>
       <section class="major-card" id="content-securedqa"></section>
     </div>
@@ -652,7 +653,7 @@ body {
     <div class="sheet-panel" data-index="7">
       <header class="sheet-header">
         <h1>매각대상여부Q&amp;A</h1>
-        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="saleqa" onclick="openContentEditor('saleqa')">내용 수정</button></div>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" onclick="openContentEditor('saleqa')">내용 수정</button></div>
       </header>
       <section class="major-card" id="content-saleqa"></section>
     </div>
@@ -660,7 +661,7 @@ body {
     <div class="sheet-panel" data-index="8">
       <header class="sheet-header">
         <h1>열람자료Q&amp;A</h1>
-        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="browseqa" onclick="openContentEditor('browseqa')">내용 수정</button></div>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" onclick="openContentEditor('browseqa')">내용 수정</button></div>
       </header>
       <section class="major-card" id="content-browseqa"></section>
     </div>
@@ -668,7 +669,7 @@ body {
     <div class="sheet-panel" data-index="9">
       <header class="sheet-header">
         <h1>기계기구Q&amp;A</h1>
-        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="machineqa" onclick="openContentEditor('machineqa')">내용 수정</button></div>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" onclick="openContentEditor('machineqa')">내용 수정</button></div>
       </header>
       <section class="major-card" id="content-machineqa"></section>
     </div>
@@ -712,7 +713,7 @@ body {
       <input id="noticeFormDate" type="date">
     </div>
     <div class="form-row">
-      <label for="noticeFormItems">내용</label>
+      <label>내용</label>
       <div id="noticeEditor" style="height:220px;"></div>
       <div class="help-text">굵게, 색상, 목록을 바로 적용할 수 있습니다.</div>
     </div>
@@ -726,7 +727,7 @@ body {
 <div class="modal-backdrop" id="menuModal">
   <div class="modal large">
     <div class="modal-title">메뉴 수정</div>
-    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. iframe 메뉴는 URL을 넣으면 됩니다.</div>
+    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. 작업배분표는 고정 메뉴입니다.</div>
     <table class="menu-table">
       <thead>
         <tr>
@@ -807,6 +808,11 @@ const ADMIN_EMAILS = [
   "eastspring1979@gmail.com"
 ].map(v => v.toLowerCase());
 
+const fixedMembers = [
+  "남기범", "김학년", "이중근", "이동훈", "임기철",
+  "우창균", "정동춘", "김현경", "김소라", "손성민", "심아영"
+];
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -814,15 +820,11 @@ const db = getFirestore(app);
 const settingsRef = doc(db, "sharedPages", "mainSettings");
 const allocationRef = doc(db, "sharedPages", "workAllocation");
 
-const fixedMembers = [
-  "남기범", "김학년", "이중근", "이동훈", "임기철",
-  "우창균", "정동춘", "김현경", "김소라", "손성민", "심아영"
-];
-
 let currentUser = null;
 let currentContentPanelKey = null;
 let noticeEditor = null;
 let contentEditor = null;
+
 let menuData = [];
 let noticeData = {
   title: "공지 제목",
@@ -847,7 +849,7 @@ const defaultMenus = [
   { title: "열람자료Q&A", panelIndex: 8, location: "top", kind: "panel" },
   { title: "기계기구Q&A", panelIndex: 9, location: "top", kind: "panel" },
   { title: "주택·상가 소액 조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" },
-  { title: "작업배분표", panelIndex: 11, location: "bottom", kind: "panel", theme: "red" }
+  { title: "작업배분표", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" }
 ];
 
 const defaultPageContents = {
@@ -862,23 +864,6 @@ const defaultPageContents = {
           <li>전입세대확인서 상 전입인 소유자로 미반영 / (상가) - 상가건물임대차현황서 상 등록내역 없어 미반영</li>
         </ul>
       </div>
-      <div class="status-card">
-        <div class="badge blue">배당요구종기일(진행중)</div>
-        <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 배당요구종기일(2025-10-10) 현재(현황조사서 미제출 중으로)</p>
-        <ul class="clean-list">
-          <li>등재 임차인 홍길동(전입 2002-02-02) 후순위이나 임대차 관련자료 없어 주택소액 20백만원 추정 반영</li>
-          <li>등재 임차인 홍길동(전입 2002-02-02, 확정 미상, 보증금 10백만원) 후순위이나 보호내로 주택소액 10백만원 반영</li>
-          <li>임차인 홍길동(사업 2002-02-02, 확정 2002-02-01, 보증금 10백만원, 월차임 70만원) 후순위 및 보호한도 초과로 미반영</li>
-        </ul>
-      </div>
-      <div class="status-card">
-        <div class="badge red">배당요구종기일(경과)</div>
-        <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 배당요구종기일 (2025-01-01) 경과한 현재</p>
-        <ul class="clean-list">
-          <li>등재 임차인 홍길동 종기내 권리신고 없어 미반영</li>
-          <li>권리신고한 임차인 홍길동(전입 2002-02-02, 확정 미상, 보증금 10백만원) 선순위로 주택임차보증금 10백만원 반영</li>
-        </ul>
-      </div>
     `
   },
   wage: {
@@ -887,55 +872,37 @@ const defaultPageContents = {
       <div class="group-title">개인</div>
       <div class="sub-title">- 종기 내</div>
       <p class="body-line">소유자 개인이며, 임금채권자로 추정되는 가압류권자 없어 미반영</p>
-      <div class="sub-title">- 종기 후</div>
-      <p class="body-line">소유자 개인이며, 임금채권자로 추정되는 가압류권자 및 종기 내 권리신고한 임금채권자 없어 미반영</p>
     `
   },
   tax: {
     majorTitle: "조세",
     html: `
       <p class="body-line">경매열람시 교부청구 순서대로 기입(재산세, 종부세 등 선순위 반영 분 먼저 기재)</p>
-      <p class="body-line">서부산세무서- 종합소득세 1,693,680원(법정기일 2023-11-014) 선순위 조세채권으로 반영</p>
     `
   },
   tenantqa: {
     majorTitle: "선순위임차인Q&A",
-    html: `
-      <div class="group-title">전입 선순위</div>
-      <p class="body-line">전입세대확인서 상 선순위 전입인 존재하는 바, 현재 유효한 임차인 여부 및 취급 시 임대차 관련자료 송부 부탁 드립니다.</p>
-    `
+    html: `<p class="body-line">전입세대확인서 상 선순위 전입인 존재하는 바, 현재 유효한 임차인 여부 및 취급 시 임대차 관련자료 송부 부탁 드립니다.</p>`
   },
   guaranteeqa: {
-    majorTitle: "보증서 Q&A",
-    html: `
-      <p class="body-line">담보로 제시한 보증서 4건 관련 대위변제 및 일부이전 여부 확인 후 관련자료 송부 부탁 드립니다.</p>
-    `
+    majorTitle: "보증서Q&A",
+    html: `<p class="body-line">담보로 제시한 보증서 관련 자료 송부 부탁 드립니다.</p>`
   },
   securedqa: {
     majorTitle: "피담보채무Q&A",
-    html: `
-      <ul class="clean-list">
-        <li>매각대상채권 상 피담보채무범위에 포함되는 각 물건별(1~2) 계좌일련번호 구분 확인 부탁 드립니다.</li>
-      </ul>
-    `
+    html: `<p class="body-line">피담보채무범위 확인 부탁 드립니다.</p>`
   },
   saleqa: {
     majorTitle: "매각대상여부Q&A",
-    html: `
-      <p class="body-line">IRF 내 채무자 소유의 타 부동산에 대한 하나은행 근저당 존재하는 바, 매각대상 여부 확인 부탁 드립니다.</p>
-    `
+    html: `<p class="body-line">매각대상 여부 확인 부탁 드립니다.</p>`
   },
   browseqa: {
     majorTitle: "열람자료Q&A",
-    html: `
-      <p class="body-line">대법원 경매내역 상 현황조사서 및 감정평가서 제출되었고, 다수의 임차인 존재하나 관련자료 없사오니 경매열람자료 송부 부탁 드립니다.</p>
-    `
+    html: `<p class="body-line">경매열람자료 송부 부탁 드립니다.</p>`
   },
   machineqa: {
     majorTitle: "기계기구Q&A",
-    html: `
-      <p class="body-line">주간사DD 상 기계기구 1점으로 기재되었으나, 기계기구 등본 확인 결과 3점으로 확인되오니 재 검토 부탁 드립니다.</p>
-    `
+    html: `<p class="body-line">기계기구 수량 재검토 부탁 드립니다.</p>`
   }
 };
 
@@ -959,6 +926,19 @@ function isAdmin(user) {
   return !!(user && ADMIN_EMAILS.includes((user.email || "").toLowerCase()));
 }
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function isQnaMenu(menu) {
+  const qnaPanelIndexes = [4, 5, 6, 7, 8, 9];
+  return qnaPanelIndexes.includes(Number(menu.panelIndex));
+}
+
 function updateAdminUI() {
   const admin = isAdmin(currentUser);
   document.getElementById("adminStatus").textContent = admin
@@ -969,14 +949,6 @@ function updateAdminUI() {
   document.getElementById("menuEditBtn").classList.toggle("hidden", !admin);
   document.getElementById("noticeEditBtn").classList.toggle("hidden", !admin);
   document.querySelectorAll(".panel-edit-btn").forEach(btn => btn.classList.toggle("hidden", !admin));
-}
-
-function escapeHtml(value) {
-  return String(value || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
 }
 
 function showSheet(index, title = "") {
@@ -997,7 +969,7 @@ function ensureWorkMenu() {
       panelIndex: 11,
       location: "bottom",
       kind: "panel",
-      theme: "red"
+      theme: "purple"
     });
   } else {
     menuData = menuData.map(menu => {
@@ -1008,12 +980,41 @@ function ensureWorkMenu() {
           panelIndex: 11,
           location: "bottom",
           kind: "panel",
-          theme: "red"
+          theme: "purple"
         };
       }
       return menu;
     });
   }
+}
+
+function createMenuButton(menu, isChild = false) {
+  const btn = document.createElement("button");
+  btn.className = "nav-item";
+
+  if (isChild) btn.classList.add("nav-sub-item");
+
+  if (menu.location === "bottom") {
+    if (menu.theme === "purple") {
+      btn.classList.add("nav-item-purple");
+    } else {
+      btn.classList.add("nav-item-green");
+    }
+  }
+
+  btn.textContent = menu.title || "메뉴";
+
+  btn.addEventListener("click", () => {
+    if (menu.kind === "iframe" && menu.url) {
+      const frame = document.querySelector('.sheet-panel[data-index="10"] iframe');
+      if (frame) frame.src = menu.url;
+    }
+    renderAllContents();
+    if (Number(menu.panelIndex) === 11) renderAllocationUI();
+    showSheet(Number(menu.panelIndex || 0), menu.title);
+  });
+
+  return btn;
 }
 
 function renderMenus() {
@@ -1024,35 +1025,34 @@ function renderMenus() {
   topNav.innerHTML = "";
   bottomNav.innerHTML = "";
 
-  menuData.forEach((menu) => {
-    const btn = document.createElement("button");
-    btn.className = "nav-item";
+  const topMenus = menuData.filter(menu => menu.location !== "bottom");
+  const bottomMenus = menuData.filter(menu => menu.location === "bottom");
 
-    if (menu.location === "bottom") {
-      if (menu.theme === "red") {
-        btn.classList.add("nav-item-red");
-      } else {
-        btn.classList.add("nav-item-green");
-      }
-    }
+  const qnaMenus = topMenus.filter(menu => isQnaMenu(menu));
+  const normalTopMenus = topMenus.filter(menu => !isQnaMenu(menu));
 
-    btn.textContent = menu.title || "메뉴";
+  normalTopMenus.forEach(menu => {
+    topNav.appendChild(createMenuButton(menu));
+  });
 
-    btn.addEventListener("click", () => {
-      if (menu.kind === "iframe" && menu.url) {
-        const frame = document.querySelector('.sheet-panel[data-index="10"] iframe');
-        if (frame) frame.src = menu.url;
-      }
+  if (qnaMenus.length) {
+    const groupTitle = document.createElement("div");
+    groupTitle.className = "nav-group-title";
+    groupTitle.textContent = "Q&A";
+    topNav.appendChild(groupTitle);
 
-      renderAllContents();
-      if (Number(menu.panelIndex) === 11) {
-        renderAllocationUI();
-      }
-      showSheet(Number(menu.panelIndex || 0), menu.title);
+    const groupWrap = document.createElement("div");
+    groupWrap.className = "nav-sub-group";
+
+    qnaMenus.forEach(menu => {
+      groupWrap.appendChild(createMenuButton(menu, true));
     });
 
-    if (menu.location === "bottom") bottomNav.appendChild(btn);
-    else topNav.appendChild(btn);
+    topNav.appendChild(groupWrap);
+  }
+
+  bottomMenus.forEach(menu => {
+    bottomNav.appendChild(createMenuButton(menu));
   });
 
   renderAllContents();
@@ -1061,8 +1061,7 @@ function renderMenus() {
 function renderNotice() {
   document.getElementById("noticeTitle").textContent = noticeData.title || "공지 제목";
   document.getElementById("noticeDate").textContent = "기준일: " + (noticeData.date || "-");
-  const list = document.getElementById("noticeItems");
-  list.innerHTML = noticeData.html || '<li>공지 내용이 없습니다.</li>';
+  document.getElementById("noticeItems").innerHTML = noticeData.html || "<li>공지 내용이 없습니다.</li>";
 }
 
 function renderAllContents() {
@@ -1089,27 +1088,27 @@ function renderAllContents() {
 }
 
 function initEditors() {
-  noticeEditor = new Quill('#noticeEditor', {
-    theme: 'snow',
+  noticeEditor = new Quill("#noticeEditor", {
+    theme: "snow",
     modules: {
       toolbar: [
-        ['bold', 'italic', 'underline'],
+        ["bold", "italic", "underline"],
         [{ color: [] }, { background: [] }],
-        [{ list: 'ordered' }, { list: 'bullet' }],
-        ['link', 'clean']
+        [{ list: "ordered" }, { list: "bullet" }],
+        ["link", "clean"]
       ]
     }
   });
 
-  contentEditor = new Quill('#contentEditor', {
-    theme: 'snow',
+  contentEditor = new Quill("#contentEditor", {
+    theme: "snow",
     modules: {
       toolbar: [
-        ['bold', 'italic', 'underline'],
+        ["bold", "italic", "underline"],
         [{ color: [] }, { background: [] }],
-        [{ list: 'ordered' }, { list: 'bullet' }],
+        [{ list: "ordered" }, { list: "bullet" }],
         [{ align: [] }],
-        ['link', 'clean']
+        ["link", "clean"]
       ]
     }
   });
@@ -1145,10 +1144,10 @@ function renderMenuTable() {
     const tr = document.createElement("tr");
     const isWork = Number(menu.panelIndex) === 11 || menu.title === "작업배분표";
     tr.innerHTML = `
-      <td><input data-field="location" data-index="${index}" value="${escapeHtml(isWork ? "bottom" : (menu.location || "top"))}" placeholder="top/bottom" ${isWork ? "readonly" : ""}></td>
-      <td><input data-field="title" data-index="${index}" value="${escapeHtml(isWork ? "작업배분표" : (menu.title || ""))}" placeholder="메뉴 제목" ${isWork ? "readonly" : ""}></td>
-      <td><input data-field="panelIndex" data-index="${index}" value="${escapeHtml(isWork ? 11 : (menu.panelIndex ?? ""))}" placeholder="0~11" ${isWork ? "readonly" : ""}></td>
-      <td><input data-field="url" data-index="${index}" value="${escapeHtml(isWork ? "" : (menu.url || ""))}" placeholder="iframe일 때만 입력" ${isWork ? "readonly" : ""}></td>
+      <td><input data-field="location" data-index="${index}" value="${escapeHtml(isWork ? "bottom" : (menu.location || "top"))}" ${isWork ? "readonly" : ""}></td>
+      <td><input data-field="title" data-index="${index}" value="${escapeHtml(isWork ? "작업배분표" : (menu.title || ""))}" ${isWork ? "readonly" : ""}></td>
+      <td><input data-field="panelIndex" data-index="${index}" value="${escapeHtml(isWork ? 11 : (menu.panelIndex ?? ""))}" ${isWork ? "readonly" : ""}></td>
+      <td><input data-field="url" data-index="${index}" value="${escapeHtml(isWork ? "" : (menu.url || ""))}" ${isWork ? "readonly" : ""}></td>
       <td><div class="menu-row-actions">${isWork ? '<span class="note">고정메뉴</span>' : `<button class="small-btn danger" onclick="removeMenuRow(${index})">삭제</button>`}</div></td>
     `;
     tbody.appendChild(tr);
@@ -1177,7 +1176,7 @@ function syncMenuDataFromTable() {
 
   menuData = rows.map((row, index) => {
     const getVal = (field) => row.querySelector(`[data-field="${field}"][data-index="${index}"]`)?.value?.trim() || "";
-    const title = getVal("title") || `메뉴 ${index+1}`;
+    const title = getVal("title") || `메뉴 ${index + 1}`;
     const location = getVal("location") || "top";
     const url = getVal("url");
     const existingMenu = previousMenus[index] || {};
@@ -1191,11 +1190,8 @@ function syncMenuDataFromTable() {
     };
 
     if (url && !isWorkAllocation) item.url = url;
-    if (isWorkAllocation) {
-      item.theme = "red";
-    } else if (existingMenu.theme) {
-      item.theme = existingMenu.theme;
-    }
+    if (isWorkAllocation) item.theme = "purple";
+    else if (existingMenu.theme) item.theme = existingMenu.theme;
 
     return item;
   });
@@ -1205,15 +1201,8 @@ function syncMenuDataFromTable() {
 
 window.saveMenusToFirebase = async function() {
   if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
-
   syncMenuDataFromTable();
-
-  await setDoc(
-    settingsRef,
-    removeUndefinedDeep({ menus: menuData, notice: noticeData, pageContents }),
-    { merge: true }
-  );
-
+  await setDoc(settingsRef, removeUndefinedDeep({ menus: menuData, notice: noticeData, pageContents }), { merge: true });
   renderMenus();
   closeModal("menuModal");
   alert("메뉴가 저장되었습니다.");
@@ -1221,9 +1210,15 @@ window.saveMenusToFirebase = async function() {
 
 function getPanelTitleByKey(panelKey) {
   const map = {
-    rent: "임대차", wage: "임금", tax: "조세", tenantqa: "선순위임차인Q&A",
-    guaranteeqa: "보증서Q&A", securedqa: "피담보채무Q&A", saleqa: "매각대상여부Q&A",
-    browseqa: "열람자료Q&A", machineqa: "기계기구Q&A"
+    rent: "임대차",
+    wage: "임금",
+    tax: "조세",
+    tenantqa: "선순위임차인Q&A",
+    guaranteeqa: "보증서Q&A",
+    securedqa: "피담보채무Q&A",
+    saleqa: "매각대상여부Q&A",
+    browseqa: "열람자료Q&A",
+    machineqa: "기계기구Q&A"
   };
   return map[panelKey] || "내용";
 }
@@ -1237,7 +1232,6 @@ window.openContentEditor = function(panelKey) {
   contentEditor.root.innerHTML = config.html || "";
   openModal("contentModal");
 };
-
 window.closeContentEditor = function() { closeModal("contentModal"); };
 
 function syncContentFromEditor() {
@@ -1250,13 +1244,7 @@ window.saveContentToFirebase = async function() {
   try {
     if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
     syncContentFromEditor();
-
-    await setDoc(
-      settingsRef,
-      removeUndefinedDeep({ pageContents, menus: menuData, notice: noticeData }),
-      { merge: true }
-    );
-
+    await setDoc(settingsRef, removeUndefinedDeep({ pageContents, menus: menuData, notice: noticeData }), { merge: true });
     renderAllContents();
     closeModal("contentModal");
     alert("내용이 저장되었습니다.");
@@ -1269,20 +1257,12 @@ window.saveContentToFirebase = async function() {
 window.saveNoticeToFirebase = async function() {
   try {
     if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
-    const title = document.getElementById("noticeFormTitle").value.trim();
-    const date = document.getElementById("noticeFormDate").value;
     noticeData = {
-      title: title || "공지 제목",
-      date: date || "",
+      title: document.getElementById("noticeFormTitle").value.trim() || "공지 제목",
+      date: document.getElementById("noticeFormDate").value || "",
       html: noticeEditor.root.innerHTML
     };
-
-    await setDoc(
-      settingsRef,
-      removeUndefinedDeep({ notice: noticeData, menus: menuData, pageContents }),
-      { merge: true }
-    );
-
+    await setDoc(settingsRef, removeUndefinedDeep({ notice: noticeData, menus: menuData, pageContents }), { merge: true });
     renderNotice();
     closeModal("noticeModal");
     alert("공지사항이 저장되었습니다.");
@@ -1309,7 +1289,9 @@ window.loginAdmin = async function() {
   }
 };
 
-window.logoutAdmin = async function() { await signOut(auth); };
+window.logoutAdmin = async function() {
+  await signOut(auth);
+};
 
 async function ensureInitialData() {
   try {
@@ -1361,8 +1343,7 @@ window.createProjectPrompt = function() {
   if (!name || !name.trim()) return;
 
   const trimmed = name.trim();
-  const duplicate = allocationData.projects.some(p => p.name === trimmed);
-  if (duplicate) {
+  if (allocationData.projects.some(p => p.name === trimmed)) {
     alert("같은 프로젝트명이 이미 있습니다.");
     return;
   }
@@ -1401,7 +1382,6 @@ window.deleteSelectedProject = function() {
   if (!project) return;
 
   if (!confirm(`"${project.name}" 프로젝트를 삭제하시겠습니까?`)) return;
-
   allocationData.projects = allocationData.projects.filter(p => p.id !== project.id);
   selectedProjectId = allocationData.projects[0]?.id || null;
   renderAllocationUI();
@@ -1414,19 +1394,14 @@ window.selectProject = function(projectId) {
 
 window.updateAllocationCell = function(projectId, rowIndex, columnName, value) {
   const project = allocationData.projects.find(p => p.id === projectId);
-  if (!project) return;
-  if (!project.rows[rowIndex]) return;
+  if (!project || !project.rows[rowIndex]) return;
   project.rows[rowIndex].values[columnName] = value;
 };
 
 window.saveAllocationData = async function() {
   try {
     if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
-    await setDoc(
-      allocationRef,
-      removeUndefinedDeep(allocationData),
-      { merge: true }
-    );
+    await setDoc(allocationRef, removeUndefinedDeep(allocationData), { merge: true });
     alert("작업배분표가 저장되었습니다.");
   } catch (error) {
     console.error("작업배분표 저장 실패:", error);
@@ -1511,7 +1486,6 @@ function renderAllocationUI() {
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   updateAdminUI();
-
   if (isAdmin(user)) {
     await ensureInitialData();
   } else {
@@ -1523,7 +1497,6 @@ onSnapshot(settingsRef, snap => {
   const data = snap.data() || {};
   menuData = Array.isArray(data.menus) && data.menus.length ? data.menus : [...defaultMenus];
   ensureWorkMenu();
-
   noticeData = data.notice || { title: "공지 제목", date: "", html: "<li>공지 내용이 없습니다.</li>" };
   pageContents = data.pageContents ? data.pageContents : structuredClone(defaultPageContents);
 
@@ -1550,6 +1523,13 @@ onSnapshot(allocationRef, snap => {
 
   renderAllocationUI();
 });
+
+window.openContentEditor = window.openContentEditor;
+window.openMenuEditor = window.openMenuEditor;
+window.openNoticeEditor = window.openNoticeEditor;
+window.closeContentEditor = window.closeContentEditor;
+window.closeMenuEditor = window.closeMenuEditor;
+window.closeNoticeEditor = window.closeNoticeEditor;
 
 initEditors();
 renderMenus();
