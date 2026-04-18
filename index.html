@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+from pathlib import Path
+
+html = r'''<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
@@ -18,8 +20,6 @@ body {
   grid-template-columns:290px minmax(0,1fr);
   min-height:100vh;
 }
-
-/* sidebar */
 .sidebar {
   background:#fff;
   border-right:1px solid #e5e7eb;
@@ -54,11 +54,7 @@ body {
   margin-bottom:22px;
   text-align:center;
 }
-.nav {
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
+.nav { display:flex; flex-direction:column; gap:8px; }
 .nav-item {
   border:0;
   background:transparent;
@@ -71,15 +67,8 @@ body {
   line-height:1.4;
   transition:all .15s ease;
 }
-.nav-item:hover {
-  background:#eff6ff;
-  color:#1d4ed8;
-}
-.nav-item.active {
-  background:#dbeafe;
-  color:#1d4ed8;
-  font-weight:700;
-}
+.nav-item:hover { background:#eff6ff; color:#1d4ed8; }
+.nav-item.active { background:#dbeafe; color:#1d4ed8; font-weight:700; }
 .nav-bottom {
   margin-top:auto;
   padding-top:18px;
@@ -91,21 +80,10 @@ body {
   color:#166534;
   font-weight:700;
 }
-.nav-item-green:hover {
-  background:#bbf7d0;
-  color:#166534;
-}
-.nav-item-green.active {
-  background:#22c55e;
-  color:#ffffff;
-}
+.nav-item-green:hover { background:#bbf7d0; color:#166534; }
+.nav-item-green.active { background:#22c55e; color:#fff; }
 
 .admin-box {
-  margin-top:14px;
-  border-top:1px solid #e5e7eb;
-  padding-top:14px;
-}
-.admin-box-top {
   margin-top:0;
   margin-bottom:14px;
   padding-top:0;
@@ -147,30 +125,23 @@ body {
   color:#fff;
   border-color:#1d4ed8;
 }
-.admin-btn.primary:hover {
-  background:#1e40af;
-  color:#fff;
-}
+.admin-btn.primary:hover { background:#1e40af; color:#fff; }
 
-/* main */
-.main {
-  padding:34px 36px 48px;
-}
-.sheet-panel {
-  display:none;
-  max-width:1120px;
-}
-.sheet-panel.active {
-  display:block;
-}
-.sheet-header {
-  margin-bottom:18px;
-}
+.main { padding:34px 36px 48px; }
+.sheet-panel { display:none; max-width:1120px; }
+.sheet-panel.active { display:block; }
+.sheet-header { margin-bottom:18px; }
 .sheet-header h1 {
   margin:0;
   font-size:32px;
   font-weight:800;
   color:#0f172a;
+}
+.sheet-tools {
+  margin-top:10px;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
 }
 .major-card {
   background:#fff;
@@ -189,7 +160,6 @@ body {
   border-bottom:1px solid #eef2f7;
 }
 .major-title.normal-weight { font-weight:500; }
-
 .status-card {
   border:1px solid #edf2f7;
   border-radius:18px;
@@ -210,7 +180,6 @@ body {
 .badge.blue { background:#dbeafe; color:#1d4ed8; }
 .badge.red { background:#fee2e2; color:#b91c1c; }
 .badge.green { background:#dcfce7; color:#1f2937; }
-
 .group-title {
   font-size:16px;
   font-weight:700;
@@ -249,13 +218,7 @@ body {
   color:#374151;
   white-space:pre-wrap;
 }
-.note {
-  color:#6b7280;
-  font-size:13px;
-  margin-top:6px;
-}
-
-/* notice actions */
+.note { color:#6b7280; font-size:13px; margin-top:6px; }
 .notice-head {
   display:flex;
   justify-content:space-between;
@@ -263,11 +226,7 @@ body {
   gap:12px;
   margin-bottom:12px;
 }
-.notice-actions {
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-}
+.notice-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .action-btn {
   border:1px solid #cbd5e1;
   background:#fff;
@@ -284,15 +243,9 @@ body {
   color:#1d4ed8;
   border-color:#bfdbfe;
 }
-.hidden {
-  display:none !important;
-}
+.hidden { display:none !important; }
 
-/* iframe */
-.iframe-card {
-  padding:0;
-  overflow:hidden;
-}
+.iframe-card { padding:0; overflow:hidden; }
 .tool-frame {
   width:100%;
   height:calc(100vh - 180px);
@@ -302,7 +255,6 @@ body {
   background:#fff;
 }
 
-/* modal */
 .modal-backdrop {
   display:none;
   position:fixed;
@@ -313,28 +265,24 @@ body {
   justify-content:center;
   padding:20px;
 }
-.modal-backdrop.show {
-  display:flex;
-}
+.modal-backdrop.show { display:flex; }
 .modal {
   width:min(760px, 100%);
+  max-height:90vh;
+  overflow:auto;
   background:#fff;
   border-radius:20px;
   padding:22px;
   box-shadow:0 20px 60px rgba(15,23,42,0.25);
 }
-.modal.large {
-  width:min(900px, 100%);
-}
+.modal.large { width:min(980px, 100%); }
 .modal-title {
   font-size:22px;
   font-weight:800;
   color:#0f172a;
   margin-bottom:16px;
 }
-.form-row {
-  margin-bottom:14px;
-}
+.form-row { margin-bottom:14px; }
 .form-row label {
   display:block;
   font-size:14px;
@@ -343,7 +291,8 @@ body {
   margin-bottom:6px;
 }
 .form-row input,
-.form-row textarea {
+.form-row textarea,
+.form-row select {
   width:100%;
   border:1px solid #cbd5e1;
   border-radius:12px;
@@ -385,31 +334,35 @@ body {
   cursor:pointer;
   font-weight:700;
 }
-
-.menu-table {
+.menu-table, .content-table {
   width:100%;
   border-collapse:collapse;
   margin-top:8px;
 }
-.menu-table th,
-.menu-table td {
+.menu-table th, .menu-table td,
+.content-table th, .content-table td {
   border:1px solid #e2e8f0;
   padding:10px;
-  vertical-align:middle;
+  vertical-align:top;
 }
-.menu-table th {
+.menu-table th, .content-table th {
   background:#f8fafc;
   text-align:left;
   font-size:13px;
 }
-.menu-table input {
+.menu-table input, .content-table input, .content-table textarea, .content-table select {
   width:100%;
   border:1px solid #cbd5e1;
   border-radius:10px;
   padding:9px 10px;
   font-size:13px;
+  font-family:inherit;
 }
-.menu-row-actions {
+.content-table textarea {
+  min-height:90px;
+  resize:vertical;
+}
+.menu-row-actions, .content-row-actions {
   display:flex;
   gap:6px;
 }
@@ -428,8 +381,11 @@ body {
   border-color:#fecaca;
   background:#fff5f5;
 }
-
-/* responsive */
+.panel-hint {
+  font-size:12px;
+  color:#64748b;
+  margin-top:8px;
+}
 @media (max-width: 920px) {
   .app { grid-template-columns:1fr; }
   .sidebar {
@@ -441,19 +397,11 @@ body {
   .main { padding:18px 16px 36px; }
   .sheet-header h1 { font-size:26px; }
   .major-card { padding:18px; border-radius:18px; }
-  .tool-frame {
-    height:80vh;
-    min-height:700px;
-  }
+  .tool-frame { height:80vh; min-height:700px; }
 }
 @media (max-width: 640px) {
-  .notice-head {
-    align-items:flex-start;
-    flex-direction:column;
-  }
-  .notice-actions {
-    width:100%;
-  }
+  .notice-head { align-items:flex-start; flex-direction:column; }
+  .notice-actions { width:100%; }
 }
 </style>
 </head>
@@ -465,7 +413,7 @@ body {
     </div>
     <div class="logo-sub">문구통합 문서 뷰어</div>
 
-    <div class="admin-box admin-box-top">
+    <div class="admin-box">
       <p class="admin-status" id="adminStatus">관리자 로그인 전</p>
       <div class="admin-actions">
         <button class="admin-btn primary" id="loginBtn" onclick="openLoginModal()">관리자 로그인</button>
@@ -475,7 +423,6 @@ body {
     </div>
 
     <div class="nav" id="topNav"></div>
-
     <div class="nav-bottom" id="bottomNav"></div>
   </aside>
 
@@ -484,19 +431,13 @@ body {
     <div class="sheet-panel active" data-index="0">
       <header class="sheet-header">
         <h1>청현 공지사항</h1>
+        <div class="sheet-tools">
+          <button class="action-btn hidden" id="noticeEditBtn" onclick="openNoticeEditor()">공지 수정</button>
+        </div>
       </header>
-
       <section class="major-card">
         <div class="major-title">공지사항</div>
-
         <div class="status-card">
-          <div class="notice-head">
-            <div class="badge blue" style="margin-bottom:0;">공지</div>
-            <div class="notice-actions">
-              <button class="action-btn" id="noticeEditBtn" onclick="openNoticeEditor()">공지 수정</button>
-            </div>
-          </div>
-
           <p class="lead-line" id="noticeTitle">공지 불러오는 중...</p>
           <div class="note" id="noticeDate">기준일: -</div>
           <ul class="clean-list" id="noticeItems">
@@ -507,110 +448,75 @@ body {
     </div>
 
     <div class="sheet-panel" data-index="1">
-      <header class="sheet-header"><h1>임대차</h1></header>
-      <section class="major-card">
-        <div class="major-title">임대차</div>
-
-        <div class="status-card">
-          <div class="badge gray">미진행</div>
-          <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 경매미진행건으로</p>
-          <ul class="clean-list">
-            <li>등본 상 소유자 거주로 추정되어 미반영 / (상가) - 임대차 관련자료 없어 미반영</li>
-            <li>전입세대확인서 상 전입인 소유자로 미반영 / (상가) - 상가건물임대차현황서 상 등록내역 없어 미반영</li>
-          </ul>
-        </div>
-
-        <div class="status-card">
-          <div class="badge blue">배당요구종기일(진행중)</div>
-          <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 배당요구종기일(2025-10-10) 현재(현황조사서 미제출 중으로)</p>
-          <ul class="clean-list">
-            <li>등재 임차인 홍길동(전입 2002-02-02) 후순위이나 임대차 관련자료 없어 주택소액 20백만원 추정 반영</li>
-            <li>등재 임차인 홍길동(전입 2002-02-02, 확정 미상, 보증금 10백만원) 후순위이나 보호내로 주택소액 10백만원 반영</li>
-            <li>임차인 홍길동(사업 2002-02-02, 확정 2002-02-01, 보증금 10백만원, 월차임 70만원) 후순위 및 보호한도 초과로 미반영</li>
-          </ul>
-        </div>
-
-        <div class="status-card">
-          <div class="badge red">배당요구종기일(경과)</div>
-          <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 배당요구종기일 (2025-01-01) 경과한 현재</p>
-          <ul class="clean-list">
-            <li>등재 임차인 홍길동 종기내 권리신고 없어 미반영</li>
-            <li>권리신고한 임차인 홍길동(전입 2002-02-02, 확정 미상, 보증금 10백만원) 선순위로 주택임차보증금 10백만원 반영</li>
-          </ul>
-        </div>
-      </section>
+      <header class="sheet-header">
+        <h1>임대차</h1>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="rent" onclick="openContentEditor('rent')">내용 수정</button></div>
+      </header>
+      <section class="major-card" id="content-rent"></section>
     </div>
 
     <div class="sheet-panel" data-index="2">
-      <header class="sheet-header"><h1>임금</h1></header>
-      <section class="major-card">
-        <div class="major-title">임금</div>
-        <div class="group-title">개인</div>
-        <div class="sub-title">- 종기 내</div>
-        <p class="body-line">소유자 개인이며, 임금채권자로 추정되는 가압류권자 없어 미반영</p>
-        <div class="sub-title">- 종기 후</div>
-        <p class="body-line">소유자 개인이며, 임금채권자로 추정되는 가압류권자 및 종기 내 권리신고한 임금채권자 없어 미반영</p>
-      </section>
+      <header class="sheet-header">
+        <h1>임금</h1>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="wage" onclick="openContentEditor('wage')">내용 수정</button></div>
+      </header>
+      <section class="major-card" id="content-wage"></section>
     </div>
 
     <div class="sheet-panel" data-index="3">
-      <header class="sheet-header"><h1>조세</h1></header>
-      <section class="major-card">
-        <div class="major-title normal-weight">조세</div>
-        <p class="body-line">경매열람시 교부청구 순서대로 기입(재산세, 종부세 등 선순위 반영 분 먼저 기재)</p>
-        <p class="body-line">서부산세무서- 종합소득세 1,693,680원(법정기일 2023-11-014) 선순위 조세채권으로 반영</p>
-      </section>
+      <header class="sheet-header">
+        <h1>조세</h1>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="tax" onclick="openContentEditor('tax')">내용 수정</button></div>
+      </header>
+      <section class="major-card" id="content-tax"></section>
     </div>
 
     <div class="sheet-panel" data-index="4">
-      <header class="sheet-header"><h1>선순위임차인Q&amp;A</h1></header>
-      <section class="major-card">
-        <div class="major-title">선순위임차인Q&amp;A</div>
-        <div class="group-title">전입 선순위</div>
-        <p class="body-line">전입세대확인서 상 선순위 전입인 존재하는 바, 현재 유효한 임차인 여부 및 취급 시 임대차 관련자료 송부 부탁 드립니다.</p>
-      </section>
+      <header class="sheet-header">
+        <h1>선순위임차인Q&amp;A</h1>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="tenantqa" onclick="openContentEditor('tenantqa')">내용 수정</button></div>
+      </header>
+      <section class="major-card" id="content-tenantqa"></section>
     </div>
 
     <div class="sheet-panel" data-index="5">
-      <header class="sheet-header"><h1>보증서Q&amp;A</h1></header>
-      <section class="major-card">
-        <div class="major-title">보증서 Q&amp;A</div>
-        <p class="body-line">담보로 제시한 보증서 4건 관련 대위변제 및 일부이전 여부 확인 후 관련자료 송부 부탁 드립니다.</p>
-      </section>
+      <header class="sheet-header">
+        <h1>보증서Q&amp;A</h1>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="guaranteeqa" onclick="openContentEditor('guaranteeqa')">내용 수정</button></div>
+      </header>
+      <section class="major-card" id="content-guaranteeqa"></section>
     </div>
 
     <div class="sheet-panel" data-index="6">
-      <header class="sheet-header"><h1>피담보채무Q&amp;A</h1></header>
-      <section class="major-card">
-        <div class="major-title normal-weight">피담보채무Q&amp;A</div>
-        <ul class="clean-list">
-          <li>매각대상채권 상 피담보채무범위에 포함되는 각 물건별(1~2) 계좌일련번호 구분 확인 부탁 드립니다.</li>
-        </ul>
-      </section>
+      <header class="sheet-header">
+        <h1>피담보채무Q&amp;A</h1>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="securedqa" onclick="openContentEditor('securedqa')">내용 수정</button></div>
+      </header>
+      <section class="major-card" id="content-securedqa"></section>
     </div>
 
     <div class="sheet-panel" data-index="7">
-      <header class="sheet-header"><h1>매각대상여부Q&amp;A</h1></header>
-      <section class="major-card">
-        <div class="major-title">매각대상여부Q&amp;A</div>
-        <p class="body-line">IRF 내 채무자 소유의 타 부동산에 대한 하나은행 근저당 존재하는 바, 매각대상 여부 확인 부탁 드립니다.</p>
-      </section>
+      <header class="sheet-header">
+        <h1>매각대상여부Q&amp;A</h1>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="saleqa" onclick="openContentEditor('saleqa')">내용 수정</button></div>
+      </header>
+      <section class="major-card" id="content-saleqa"></section>
     </div>
 
     <div class="sheet-panel" data-index="8">
-      <header class="sheet-header"><h1>열람자료Q&amp;A</h1></header>
-      <section class="major-card">
-        <div class="major-title normal-weight">열람자료Q&amp;A</div>
-        <p class="body-line">대법원 경매내역 상 현황조사서 및 감정평가서 제출되었고, 다수의 임차인 존재하나 관련자료 없사오니 경매열람자료 송부 부탁 드립니다.</p>
-      </section>
+      <header class="sheet-header">
+        <h1>열람자료Q&amp;A</h1>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="browseqa" onclick="openContentEditor('browseqa')">내용 수정</button></div>
+      </header>
+      <section class="major-card" id="content-browseqa"></section>
     </div>
 
     <div class="sheet-panel" data-index="9">
-      <header class="sheet-header"><h1>기계기구Q&amp;A</h1></header>
-      <section class="major-card">
-        <div class="major-title">기계기구Q&amp;A</div>
-        <p class="body-line">주간사DD 상 기계기구 1점으로 기재되었으나, 기계기구 등본 확인 결과 3점으로 확인되오니 재 검토 부탁 드립니다.</p>
-      </section>
+      <header class="sheet-header">
+        <h1>기계기구Q&amp;A</h1>
+        <div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-panel="machineqa" onclick="openContentEditor('machineqa')">내용 수정</button></div>
+      </header>
+      <section class="major-card" id="content-machineqa"></section>
     </div>
 
     <div class="sheet-panel" data-index="10">
@@ -618,11 +524,7 @@ body {
         <h1>주택·상가 소액 조회</h1>
       </header>
       <section class="major-card iframe-card">
-        <iframe
-          class="tool-frame"
-          src="주택상가 소액.html"
-          title="주택·상가 소액 조회">
-        </iframe>
+        <iframe class="tool-frame" src="주택상가 소액.html" title="주택·상가 소액 조회"></iframe>
       </section>
     </div>
 
@@ -632,23 +534,19 @@ body {
 <div class="modal-backdrop" id="noticeModal">
   <div class="modal">
     <div class="modal-title">공지 수정</div>
-
     <div class="form-row">
       <label for="noticeFormTitle">제목</label>
       <input id="noticeFormTitle" type="text" placeholder="공지 제목 입력">
     </div>
-
     <div class="form-row">
       <label for="noticeFormDate">기준일</label>
       <input id="noticeFormDate" type="date">
     </div>
-
     <div class="form-row">
       <label for="noticeFormItems">내용</label>
       <textarea id="noticeFormItems" placeholder="한 줄에 하나씩 입력"></textarea>
       <div class="help-text">줄바꿈 기준으로 공지 목록이 생성됩니다.</div>
     </div>
-
     <div class="modal-actions">
       <button class="secondary-btn" onclick="closeNoticeEditor()">닫기</button>
       <button class="primary-btn" onclick="saveNoticeToFirebase()">저장</button>
@@ -659,11 +557,7 @@ body {
 <div class="modal-backdrop" id="menuModal">
   <div class="modal large">
     <div class="modal-title">메뉴 수정</div>
-
-    <div class="help-text" style="margin-bottom:12px;">
-      top 은 상단 메뉴, bottom 은 하단 초록 메뉴입니다. iframe 메뉴는 URL을 넣으면 됩니다.
-    </div>
-
+    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 초록 메뉴입니다. iframe 메뉴는 URL을 넣으면 됩니다.</div>
     <table class="menu-table">
       <thead>
         <tr>
@@ -676,12 +570,10 @@ body {
       </thead>
       <tbody id="menuTableBody"></tbody>
     </table>
-
     <div style="margin-top:12px; display:flex; gap:8px;">
       <button class="small-btn" onclick="addMenuRow('top')">상단 메뉴 추가</button>
       <button class="small-btn" onclick="addMenuRow('bottom')">하단 메뉴 추가</button>
     </div>
-
     <div class="modal-actions">
       <button class="secondary-btn" onclick="closeMenuEditor()">닫기</button>
       <button class="primary-btn" onclick="saveMenusToFirebase()">저장</button>
@@ -689,24 +581,36 @@ body {
   </div>
 </div>
 
+<div class="modal-backdrop" id="contentModal">
+  <div class="modal large">
+    <div class="modal-title" id="contentModalTitle">내용 수정</div>
+    <div class="panel-hint">카드형 메뉴는 배지/요약문/목록을 수정합니다. 텍스트형 메뉴는 그룹/소제목/본문을 수정합니다.</div>
+    <table class="content-table">
+      <thead id="contentEditorHead"></thead>
+      <tbody id="contentEditorBody"></tbody>
+    </table>
+    <div style="margin-top:12px; display:flex; gap:8px;">
+      <button class="small-btn" onclick="addContentRow()">행 추가</button>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary-btn" onclick="closeContentEditor()">닫기</button>
+      <button class="primary-btn" onclick="saveContentToFirebase()">저장</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="loginModal">
   <div class="modal">
     <div class="modal-title">관리자 로그인</div>
-
     <div class="form-row">
       <label for="loginEmail">이메일</label>
       <input id="loginEmail" type="email" placeholder="admin@example.com">
     </div>
-
     <div class="form-row">
       <label for="loginPassword">비밀번호</label>
       <input id="loginPassword" type="password" placeholder="비밀번호 입력">
     </div>
-
-    <div class="help-text">
-      Firebase Authentication 의 Email/Password 계정만 로그인 가능합니다.
-    </div>
-
+    <div class="help-text">Firebase Authentication 의 Email/Password 계정만 로그인 가능합니다.</div>
     <div class="modal-actions">
       <button class="secondary-btn" onclick="closeLoginModal()">닫기</button>
       <button class="primary-btn" onclick="loginAdmin()">로그인</button>
@@ -716,21 +620,11 @@ body {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-import {
-  getAuth,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc,
-  onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot }
+from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
-/* 여기에 Firebase 설정값 넣기 */
 const firebaseConfig = {
   apiKey: "AIzaSyDr_SfWtjfRPqfguJ6yvwBo-e3r8bGAs_M",
   authDomain: "ch-partners-71452.firebaseapp.com",
@@ -741,9 +635,8 @@ const firebaseConfig = {
   measurementId: "G-DFL4DRH7L6"
 };
 
-/* 수정 가능한 관리자 이메일 */
 const ADMIN_EMAILS = [
-  "admin1@admin.com",
+  "admin@admin.com",
   "eastspring1979@gmail.com"
 ].map(v => v.toLowerCase());
 
@@ -752,6 +645,8 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 let currentUser = null;
+let currentContentPanelKey = null;
+let currentContentEditorType = "cards";
 
 const defaultMenus = [
   { title: "청현 공지사항", panelIndex: 0, location: "top", kind: "panel" },
@@ -767,12 +662,105 @@ const defaultMenus = [
   { title: "주택·상가 소액 조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" }
 ];
 
+const defaultPageContents = {
+  rent: {
+    type: "cards",
+    majorTitle: "임대차",
+    rows: [
+      {
+        badgeText: "미진행", badgeColor: "gray",
+        lead: "1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 경매미진행건으로",
+        items: [
+          "등본 상 소유자 거주로 추정되어 미반영 / (상가) - 임대차 관련자료 없어 미반영",
+          "전입세대확인서 상 전입인 소유자로 미반영 / (상가) - 상가건물임대차현황서 상 등록내역 없어 미반영"
+        ]
+      },
+      {
+        badgeText: "배당요구종기일(진행중)", badgeColor: "blue",
+        lead: "1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 배당요구종기일(2025-10-10) 현재(현황조사서 미제출 중으로)",
+        items: [
+          "등재 임차인 홍길동(전입 2002-02-02) 후순위이나 임대차 관련자료 없어 주택소액 20백만원 추정 반영",
+          "등재 임차인 홍길동(전입 2002-02-02, 확정 미상, 보증금 10백만원) 후순위이나 보호내로 주택소액 10백만원 반영",
+          "임차인 홍길동(사업 2002-02-02, 확정 2002-02-01, 보증금 10백만원, 월차임 70만원) 후순위 및 보호한도 초과로 미반영"
+        ]
+      },
+      {
+        badgeText: "배당요구종기일(경과)", badgeColor: "red",
+        lead: "1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 배당요구종기일 (2025-01-01) 경과한 현재",
+        items: [
+          "등재 임차인 홍길동 종기내 권리신고 없어 미반영",
+          "권리신고한 임차인 홍길동(전입 2002-02-02, 확정 미상, 보증금 10백만원) 선순위로 주택임차보증금 10백만원 반영"
+        ]
+      }
+    ]
+  },
+  wage: {
+    type: "textRows",
+    majorTitle: "임금",
+    rows: [
+      { groupTitle: "개인", subTitle: "종기 내", body: "소유자 개인이며, 임금채권자로 추정되는 가압류권자 없어 미반영" },
+      { groupTitle: "개인", subTitle: "종기 후", body: "소유자 개인이며, 임금채권자로 추정되는 가압류권자 및 종기 내 권리신고한 임금채권자 없어 미반영" }
+    ]
+  },
+  tax: {
+    type: "plainParagraphs",
+    majorTitle: "조세",
+    rows: [
+      { body: "경매열람시 교부청구 순서대로 기입(재산세, 종부세 등 선순위 반영 분 먼저 기재)" },
+      { body: "서부산세무서- 종합소득세 1,693,680원(법정기일 2023-11-014) 선순위 조세채권으로 반영" }
+    ]
+  },
+  tenantqa: {
+    type: "textRows",
+    majorTitle: "선순위임차인Q&A",
+    rows: [
+      { groupTitle: "전입 선순위", subTitle: "", body: "전입세대확인서 상 선순위 전입인 존재하는 바, 현재 유효한 임차인 여부 및 취급 시 임대차 관련자료 송부 부탁 드립니다." }
+    ]
+  },
+  guaranteeqa: {
+    type: "plainParagraphs",
+    majorTitle: "보증서 Q&A",
+    rows: [
+      { body: "담보로 제시한 보증서 4건 관련 대위변제 및 일부이전 여부 확인 후 관련자료 송부 부탁 드립니다." }
+    ]
+  },
+  securedqa: {
+    type: "bullets",
+    majorTitle: "피담보채무Q&A",
+    rows: [
+      { body: "매각대상채권 상 피담보채무범위에 포함되는 각 물건별(1~2) 계좌일련번호 구분 확인 부탁 드립니다." }
+    ]
+  },
+  saleqa: {
+    type: "plainParagraphs",
+    majorTitle: "매각대상여부Q&A",
+    rows: [
+      { body: "IRF 내 채무자 소유의 타 부동산에 대한 하나은행 근저당 존재하는 바, 매각대상 여부 확인 부탁 드립니다." }
+    ]
+  },
+  browseqa: {
+    type: "plainParagraphs",
+    majorTitle: "열람자료Q&A",
+    rows: [
+      { body: "대법원 경매내역 상 현황조사서 및 감정평가서 제출되었고, 다수의 임차인 존재하나 관련자료 없사오니 경매열람자료 송부 부탁 드립니다." }
+    ]
+  },
+  machineqa: {
+    type: "plainParagraphs",
+    majorTitle: "기계기구Q&A",
+    rows: [
+      { body: "주간사DD 상 기계기구 1점으로 기재되었으나, 기계기구 등본 확인 결과 3점으로 확인되오니 재 검토 부탁 드립니다." }
+    ]
+  }
+};
+
 let menuData = [...defaultMenus];
 let noticeData = {
   title: "공지 제목",
   date: "",
   items: ["공지 내용이 없습니다."]
 };
+let pageContents = structuredClone(defaultPageContents);
 
 const settingsRef = doc(db, "sharedPages", "mainSettings");
 
@@ -785,11 +773,11 @@ function updateAdminUI() {
   document.getElementById("adminStatus").textContent = admin
     ? `관리자 로그인됨: ${currentUser.email}`
     : "관리자 로그인 전";
-
   document.getElementById("loginBtn").classList.toggle("hidden", admin);
   document.getElementById("logoutBtn").classList.toggle("hidden", !admin);
   document.getElementById("menuEditBtn").classList.toggle("hidden", !admin);
   document.getElementById("noticeEditBtn").classList.toggle("hidden", !admin);
+  document.querySelectorAll(".panel-edit-btn").forEach(btn => btn.classList.toggle("hidden", !admin));
 }
 
 function escapeHtml(value) {
@@ -800,20 +788,26 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+function showSheet(index, title = "") {
+  document.querySelectorAll(".sheet-panel").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+  const panel = document.querySelector('.sheet-panel[data-index="' + index + '"]');
+  if (panel) panel.classList.add("active");
+  const matchedButton = Array.from(document.querySelectorAll(".nav-item")).find(btn => btn.textContent.trim() === title);
+  if (matchedButton) matchedButton.classList.add("active");
+}
+window.showSheet = showSheet;
+
 function renderMenus() {
   const topNav = document.getElementById("topNav");
   const bottomNav = document.getElementById("bottomNav");
   topNav.innerHTML = "";
   bottomNav.innerHTML = "";
-
   menuData.forEach((menu) => {
     const btn = document.createElement("button");
     btn.className = "nav-item";
-    if (menu.location === "bottom") {
-      btn.classList.add("nav-item-green");
-    }
+    if (menu.location === "bottom") btn.classList.add("nav-item-green");
     btn.textContent = menu.title || "메뉴";
-
     btn.addEventListener("click", () => {
       if (menu.kind === "iframe" && menu.url) {
         const frame = document.querySelector('.sheet-panel[data-index="10"] iframe');
@@ -821,30 +815,22 @@ function renderMenus() {
       }
       showSheet(Number(menu.panelIndex || 0), menu.title);
     });
-
-    if (menu.location === "bottom") {
-      bottomNav.appendChild(btn);
-    } else {
-      topNav.appendChild(btn);
-    }
+    if (menu.location === "bottom") bottomNav.appendChild(btn);
+    else topNav.appendChild(btn);
   });
-
   showSheet(0, menuData.find(m => Number(m.panelIndex) === 0)?.title || "");
 }
 
 function renderNotice() {
   document.getElementById("noticeTitle").textContent = noticeData.title || "공지 제목";
   document.getElementById("noticeDate").textContent = "기준일: " + (noticeData.date || "-");
-
   const list = document.getElementById("noticeItems");
   list.innerHTML = "";
-
   (noticeData.items || []).forEach(item => {
     const li = document.createElement("li");
     li.textContent = item;
     list.appendChild(li);
   });
-
   if (!noticeData.items || noticeData.items.length === 0) {
     const li = document.createElement("li");
     li.textContent = "공지 내용이 없습니다.";
@@ -852,158 +838,275 @@ function renderNotice() {
   }
 }
 
-window.showSheet = function(index, title = "") {
-  document.querySelectorAll(".sheet-panel").forEach(el => el.classList.remove("active"));
-  document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
-
-  const panel = document.querySelector('.sheet-panel[data-index="' + index + '"]');
-  if (panel) panel.classList.add("active");
-
-  const matchedButton = Array.from(document.querySelectorAll(".nav-item"))
-    .find(btn => btn.textContent.trim() === title);
-
-  if (matchedButton) {
-    matchedButton.classList.add("active");
-  }
-};
-
-function openModal(id) {
-  document.getElementById(id).classList.add("show");
+function renderCardsSection(targetId, config) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  let html = `<div class="major-title">${escapeHtml(config.majorTitle || "")}</div>`;
+  (config.rows || []).forEach(row => {
+    html += `<div class="status-card">`;
+    if (row.badgeText) {
+      html += `<div class="badge ${escapeHtml(row.badgeColor || "gray")}">${escapeHtml(row.badgeText)}</div>`;
+    }
+    if (row.lead) {
+      html += `<p class="lead-line">${escapeHtml(row.lead)}</p>`;
+    }
+    if (row.items && row.items.length) {
+      html += `<ul class="clean-list">`;
+      row.items.forEach(item => { html += `<li>${escapeHtml(item)}</li>`; });
+      html += `</ul>`;
+    }
+    html += `</div>`;
+  });
+  el.innerHTML = html;
 }
-function closeModal(id) {
-  document.getElementById(id).classList.remove("show");
+
+function renderTextRowsSection(targetId, config, normalWeight=false) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  let html = `<div class="major-title ${normalWeight ? "normal-weight" : ""}">${escapeHtml(config.majorTitle || "")}</div>`;
+  let prevGroup = null;
+  (config.rows || []).forEach(row => {
+    if (row.groupTitle && row.groupTitle !== prevGroup) {
+      html += `<div class="group-title">${escapeHtml(row.groupTitle)}</div>`;
+      prevGroup = row.groupTitle;
+    }
+    if (row.subTitle) html += `<div class="sub-title">- ${escapeHtml(row.subTitle)}</div>`;
+    if (row.body) html += `<p class="body-line">${escapeHtml(row.body)}</p>`;
+  });
+  el.innerHTML = html;
 }
 
+function renderPlainParagraphsSection(targetId, config, normalWeight=false) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  let html = `<div class="major-title ${normalWeight ? "normal-weight" : ""}">${escapeHtml(config.majorTitle || "")}</div>`;
+  (config.rows || []).forEach(row => {
+    html += `<p class="body-line">${escapeHtml(row.body || "")}</p>`;
+  });
+  el.innerHTML = html;
+}
+
+function renderBulletsSection(targetId, config, normalWeight=false) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  let html = `<div class="major-title ${normalWeight ? "normal-weight" : ""}">${escapeHtml(config.majorTitle || "")}</div><ul class="clean-list">`;
+  (config.rows || []).forEach(row => {
+    html += `<li>${escapeHtml(row.body || "")}</li>`;
+  });
+  html += `</ul>`;
+  el.innerHTML = html;
+}
+
+function renderAllContents() {
+  renderCardsSection("content-rent", pageContents.rent);
+  renderTextRowsSection("content-wage", pageContents.wage);
+  renderPlainParagraphsSection("content-tax", pageContents.tax, true);
+  renderTextRowsSection("content-tenantqa", pageContents.tenantqa);
+  renderPlainParagraphsSection("content-guaranteeqa", pageContents.guaranteeqa);
+  renderBulletsSection("content-securedqa", pageContents.securedqa, true);
+  renderPlainParagraphsSection("content-saleqa", pageContents.saleqa);
+  renderPlainParagraphsSection("content-browseqa", pageContents.browseqa, true);
+  renderPlainParagraphsSection("content-machineqa", pageContents.machineqa);
+}
+
+function openModal(id) { document.getElementById(id).classList.add("show"); }
+function closeModal(id) { document.getElementById(id).classList.remove("show"); }
 window.openLoginModal = () => openModal("loginModal");
 window.closeLoginModal = () => closeModal("loginModal");
 
 window.openNoticeEditor = function() {
-  if (!isAdmin(currentUser)) {
-    alert("관리자만 수정할 수 있습니다.");
-    return;
-  }
+  if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
   document.getElementById("noticeFormTitle").value = noticeData.title || "";
   document.getElementById("noticeFormDate").value = noticeData.date || "";
   document.getElementById("noticeFormItems").value = (noticeData.items || []).join("\n");
   openModal("noticeModal");
 };
-
-window.closeNoticeEditor = function() {
-  closeModal("noticeModal");
-};
+window.closeNoticeEditor = function() { closeModal("noticeModal"); };
 
 window.openMenuEditor = function() {
-  if (!isAdmin(currentUser)) {
-    alert("관리자만 수정할 수 있습니다.");
-    return;
-  }
+  if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
   renderMenuTable();
   openModal("menuModal");
 };
-
-window.closeMenuEditor = function() {
-  closeModal("menuModal");
-};
+window.closeMenuEditor = function() { closeModal("menuModal"); };
 
 function renderMenuTable() {
   const tbody = document.getElementById("menuTableBody");
   tbody.innerHTML = "";
-
   menuData.forEach((menu, index) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>
-        <input data-field="location" data-index="${index}" value="${escapeHtml(menu.location || "top")}" placeholder="top/bottom">
-      </td>
-      <td>
-        <input data-field="title" data-index="${index}" value="${escapeHtml(menu.title || "")}" placeholder="메뉴 제목">
-      </td>
-      <td>
-        <input data-field="panelIndex" data-index="${index}" value="${escapeHtml(menu.panelIndex ?? "")}" placeholder="0~10">
-      </td>
-      <td>
-        <input data-field="url" data-index="${index}" value="${escapeHtml(menu.url || "")}" placeholder="iframe일 때만 입력">
-      </td>
-      <td>
-        <div class="menu-row-actions">
-          <button class="small-btn danger" onclick="removeMenuRow(${index})">삭제</button>
-        </div>
-      </td>
+      <td><input data-field="location" data-index="${index}" value="${escapeHtml(menu.location || "top")}" placeholder="top/bottom"></td>
+      <td><input data-field="title" data-index="${index}" value="${escapeHtml(menu.title || "")}" placeholder="메뉴 제목"></td>
+      <td><input data-field="panelIndex" data-index="${index}" value="${escapeHtml(menu.panelIndex ?? "")}" placeholder="0~10"></td>
+      <td><input data-field="url" data-index="${index}" value="${escapeHtml(menu.url || "")}" placeholder="iframe일 때만 입력"></td>
+      <td><div class="menu-row-actions"><button class="small-btn danger" onclick="removeMenuRow(${index})">삭제</button></div></td>
     `;
     tbody.appendChild(tr);
   });
 }
-
 window.addMenuRow = function(location) {
-  menuData.push({
-    title: "",
-    panelIndex: 0,
-    location: location || "top",
-    kind: location === "bottom" ? "iframe" : "panel",
-    url: ""
-  });
+  menuData.push({ title: "", panelIndex: 0, location: location || "top", kind: location === "bottom" ? "iframe" : "panel", url: "" });
   renderMenuTable();
 };
-
 window.removeMenuRow = function(index) {
   menuData.splice(index, 1);
   renderMenuTable();
 };
-
 function syncMenuDataFromTable() {
   const rows = Array.from(document.querySelectorAll("#menuTableBody tr"));
   menuData = rows.map((row, index) => {
     const getVal = (field) => row.querySelector(`[data-field="${field}"][data-index="${index}"]`)?.value?.trim() || "";
     const location = getVal("location") || "top";
     const url = getVal("url");
-    return {
-      title: getVal("title") || `메뉴 ${index + 1}`,
-      panelIndex: Number(getVal("panelIndex") || 0),
-      location,
-      kind: url ? "iframe" : (location === "bottom" ? "iframe" : "panel"),
-      url
-    };
+    return { title: getVal("title") || `메뉴 ${index+1}`, panelIndex: Number(getVal("panelIndex") || 0), location, kind: url ? "iframe" : (location === "bottom" ? "iframe" : "panel"), url };
   });
 }
-
 window.saveMenusToFirebase = async function() {
-  if (!isAdmin(currentUser)) {
-    alert("관리자만 저장할 수 있습니다.");
-    return;
-  }
+  if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
   syncMenuDataFromTable();
-  await setDoc(settingsRef, { menus: menuData, notice: noticeData }, { merge: true });
+  await setDoc(settingsRef, { menus: menuData, notice: noticeData, pageContents }, { merge: true });
   renderMenus();
-  closeMenuEditor();
+  closeModal("menuModal");
   alert("메뉴가 저장되었습니다.");
 };
 
-window.saveNoticeToFirebase = async function() {
-  if (!isAdmin(currentUser)) {
-    alert("관리자만 저장할 수 있습니다.");
-    return;
-  }
+function getPanelTitleByKey(panelKey) {
+  const map = {
+    rent: "임대차", wage: "임금", tax: "조세", tenantqa: "선순위임차인Q&A",
+    guaranteeqa: "보증서Q&A", securedqa: "피담보채무Q&A", saleqa: "매각대상여부Q&A",
+    browseqa: "열람자료Q&A", machineqa: "기계기구Q&A"
+  };
+  return map[panelKey] || "내용";
+}
 
+window.openContentEditor = function(panelKey) {
+  if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
+  currentContentPanelKey = panelKey;
+  const config = pageContents[panelKey];
+  currentContentEditorType = config.type;
+  document.getElementById("contentModalTitle").textContent = `${getPanelTitleByKey(panelKey)} 내용 수정`;
+  renderContentEditorTable(config);
+  openModal("contentModal");
+};
+
+window.closeContentEditor = function() { closeModal("contentModal"); };
+
+function renderContentEditorTable(config) {
+  const head = document.getElementById("contentEditorHead");
+  const body = document.getElementById("contentEditorBody");
+  head.innerHTML = "";
+  body.innerHTML = "";
+
+  if (config.type === "cards") {
+    head.innerHTML = `<tr><th style="width:140px;">배지</th><th style="width:120px;">색상</th><th>요약문</th><th>목록(줄바꿈)</th><th style="width:90px;">삭제</th></tr>`;
+    config.rows.forEach((row, idx) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input data-field="badgeText" data-index="${idx}" value="${escapeHtml(row.badgeText || "")}"></td>
+        <td>
+          <select data-field="badgeColor" data-index="${idx}">
+            <option value="gray" ${row.badgeColor === "gray" ? "selected" : ""}>gray</option>
+            <option value="blue" ${row.badgeColor === "blue" ? "selected" : ""}>blue</option>
+            <option value="red" ${row.badgeColor === "red" ? "selected" : ""}>red</option>
+            <option value="green" ${row.badgeColor === "green" ? "selected" : ""}>green</option>
+          </select>
+        </td>
+        <td><textarea data-field="lead" data-index="${idx}">${escapeHtml(row.lead || "")}</textarea></td>
+        <td><textarea data-field="items" data-index="${idx}">${escapeHtml((row.items || []).join("\n"))}</textarea></td>
+        <td><div class="content-row-actions"><button class="small-btn danger" onclick="removeContentRow(${idx})">삭제</button></div></td>
+      `;
+      body.appendChild(tr);
+    });
+  } else if (config.type === "textRows") {
+    head.innerHTML = `<tr><th style="width:160px;">그룹제목</th><th style="width:160px;">소제목</th><th>본문</th><th style="width:90px;">삭제</th></tr>`;
+    config.rows.forEach((row, idx) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input data-field="groupTitle" data-index="${idx}" value="${escapeHtml(row.groupTitle || "")}"></td>
+        <td><input data-field="subTitle" data-index="${idx}" value="${escapeHtml(row.subTitle || "")}"></td>
+        <td><textarea data-field="body" data-index="${idx}">${escapeHtml(row.body || "")}</textarea></td>
+        <td><div class="content-row-actions"><button class="small-btn danger" onclick="removeContentRow(${idx})">삭제</button></div></td>
+      `;
+      body.appendChild(tr);
+    });
+  } else {
+    head.innerHTML = `<tr><th>본문</th><th style="width:90px;">삭제</th></tr>`;
+    config.rows.forEach((row, idx) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><textarea data-field="body" data-index="${idx}">${escapeHtml(row.body || "")}</textarea></td>
+        <td><div class="content-row-actions"><button class="small-btn danger" onclick="removeContentRow(${idx})">삭제</button></div></td>
+      `;
+      body.appendChild(tr);
+    });
+  }
+}
+
+window.addContentRow = function() {
+  const config = pageContents[currentContentPanelKey];
+  if (config.type === "cards") config.rows.push({ badgeText: "", badgeColor: "gray", lead: "", items: [] });
+  else if (config.type === "textRows") config.rows.push({ groupTitle: "", subTitle: "", body: "" });
+  else config.rows.push({ body: "" });
+  renderContentEditorTable(config);
+};
+
+window.removeContentRow = function(index) {
+  pageContents[currentContentPanelKey].rows.splice(index, 1);
+  renderContentEditorTable(pageContents[currentContentPanelKey]);
+};
+
+function syncContentFromTable() {
+  const config = pageContents[currentContentPanelKey];
+  const rows = Array.from(document.querySelectorAll("#contentEditorBody tr"));
+  if (config.type === "cards") {
+    config.rows = rows.map((row, idx) => ({
+      badgeText: row.querySelector(`[data-field="badgeText"][data-index="${idx}"]`)?.value?.trim() || "",
+      badgeColor: row.querySelector(`[data-field="badgeColor"][data-index="${idx}"]`)?.value || "gray",
+      lead: row.querySelector(`[data-field="lead"][data-index="${idx}"]`)?.value?.trim() || "",
+      items: (row.querySelector(`[data-field="items"][data-index="${idx}"]`)?.value || "").split("\n").map(v => v.trim()).filter(Boolean)
+    }));
+  } else if (config.type === "textRows") {
+    config.rows = rows.map((row, idx) => ({
+      groupTitle: row.querySelector(`[data-field="groupTitle"][data-index="${idx}"]`)?.value?.trim() || "",
+      subTitle: row.querySelector(`[data-field="subTitle"][data-index="${idx}"]`)?.value?.trim() || "",
+      body: row.querySelector(`[data-field="body"][data-index="${idx}"]`)?.value?.trim() || ""
+    }));
+  } else {
+    config.rows = rows.map((row, idx) => ({
+      body: row.querySelector(`[data-field="body"][data-index="${idx}"]`)?.value?.trim() || ""
+    }));
+  }
+}
+
+window.saveContentToFirebase = async function() {
+  if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
+  syncContentFromTable();
+  await setDoc(settingsRef, { pageContents, menus: menuData, notice: noticeData }, { merge: true });
+  renderAllContents();
+  closeModal("contentModal");
+  alert("내용이 저장되었습니다.");
+};
+
+window.saveNoticeToFirebase = async function() {
+  if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
   const title = document.getElementById("noticeFormTitle").value.trim();
   const date = document.getElementById("noticeFormDate").value;
   const itemsRaw = document.getElementById("noticeFormItems").value;
-
   noticeData = {
     title: title || "공지 제목",
     date: date || "",
     items: itemsRaw.split("\n").map(v => v.trim()).filter(Boolean)
   };
-
-  await setDoc(settingsRef, { notice: noticeData, menus: menuData }, { merge: true });
+  await setDoc(settingsRef, { notice: noticeData, menus: menuData, pageContents }, { merge: true });
   renderNotice();
-  closeNoticeEditor();
+  closeModal("noticeModal");
   alert("공지사항이 저장되었습니다.");
 };
 
 window.loginAdmin = async function() {
   const email = document.getElementById("loginEmail").value.trim();
   const password = document.getElementById("loginPassword").value;
-
   try {
     const cred = await signInWithEmailAndPassword(auth, email, password);
     if (!isAdmin(cred.user)) {
@@ -1011,27 +1114,22 @@ window.loginAdmin = async function() {
       alert("등록된 관리자 계정이 아닙니다.");
       return;
     }
-    closeLoginModal();
+    closeModal("loginModal");
     document.getElementById("loginPassword").value = "";
   } catch (e) {
     alert("로그인 실패: " + (e.message || e));
   }
 };
 
-window.logoutAdmin = async function() {
-  await signOut(auth);
-};
+window.logoutAdmin = async function() { await signOut(auth); };
 
 async function ensureInitialData() {
   const snap = await getDoc(settingsRef);
   if (!snap.exists()) {
     await setDoc(settingsRef, {
       menus: defaultMenus,
-      notice: {
-        title: "공지 제목",
-        date: "",
-        items: ["공지 내용이 없습니다."]
-      }
+      notice: { title: "공지 제목", date: "", items: ["공지 내용이 없습니다."] },
+      pageContents: defaultPageContents
     });
   }
 }
@@ -1044,18 +1142,22 @@ onAuthStateChanged(auth, user => {
 onSnapshot(settingsRef, snap => {
   const data = snap.data() || {};
   menuData = Array.isArray(data.menus) && data.menus.length ? data.menus : [...defaultMenus];
-  noticeData = data.notice || {
-    title: "공지 제목",
-    date: "",
-    items: ["공지 내용이 없습니다."]
-  };
+  noticeData = data.notice || { title: "공지 제목", date: "", items: ["공지 내용이 없습니다."] };
+  pageContents = data.pageContents ? data.pageContents : structuredClone(defaultPageContents);
   renderMenus();
   renderNotice();
+  renderAllContents();
 });
 
 await ensureInitialData();
 renderMenus();
 renderNotice();
+renderAllContents();
 </script>
 </body>
 </html>
+'''
+
+out = Path('/mnt/data/문구통합_B안_전체상세수정_firebase.html')
+out.write_text(html, encoding='utf-8')
+print(out)
