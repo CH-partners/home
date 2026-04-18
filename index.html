@@ -837,21 +837,32 @@ function renderMenus() {
   const bottomNav = document.getElementById("bottomNav");
   topNav.innerHTML = "";
   bottomNav.innerHTML = "";
+
   menuData.forEach((menu) => {
     const btn = document.createElement("button");
     btn.className = "nav-item";
-    if (menu.location === "bottom") btn.classList.add("nav-item-green");
+
+    if (menu.location === "bottom") {
+      btn.classList.add("nav-item-green");
+    }
+
     btn.textContent = menu.title || "메뉴";
+
     btn.addEventListener("click", () => {
       if (menu.kind === "iframe" && menu.url) {
         const frame = document.querySelector('.sheet-panel[data-index="10"] iframe');
         if (frame) frame.src = menu.url;
       }
+
+      renderAllContents();
       showSheet(Number(menu.panelIndex || 0), menu.title);
     });
+
     if (menu.location === "bottom") bottomNav.appendChild(btn);
     else topNav.appendChild(btn);
   });
+
+  renderAllContents();
   showSheet(0, menuData.find(m => Number(m.panelIndex) === 0)?.title || "");
 }
 
@@ -870,17 +881,63 @@ function renderSection(targetId, config, normalWeight = false) {
 }
 
 function renderAllContents() {
-  renderSection("content-rent", pageContents.rent);
-  renderSection("content-wage", pageContents.wage);
-  renderSection("content-tax", pageContents.tax, true);
-  renderSection("content-tenantqa", pageContents.tenantqa);
-  renderSection("content-guaranteeqa", pageContents.guaranteeqa);
-  renderSection("content-securedqa", pageContents.securedqa, true);
-  renderSection("content-saleqa", pageContents.saleqa);
-  renderSection("content-browseqa", pageContents.browseqa, true);
-  renderSection("content-machineqa", pageContents.machineqa);
-}
+  const main = document.querySelector(".main");
 
+  menuData.forEach(menu => {
+    if (menu.kind !== "panel") return;
+
+    const key = menu.title;
+    const panelIndex = Number(menu.panelIndex || 0);
+
+    if (panelIndex === 0 || panelIndex === 10) return;
+
+    let panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
+
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.className = "sheet-panel";
+      panel.setAttribute("data-index", panelIndex);
+
+      panel.innerHTML = `
+        <header class="sheet-header">
+          <h1>${key}</h1>
+          <div class="sheet-tools">
+            <button class="action-btn panel-edit-btn" onclick="openContentEditor('${key}')">내용 수정</button>
+          </div>
+        </header>
+        <section class="major-card"></section>
+      `;
+
+      main.appendChild(panel);
+    }
+
+    const section = panel.querySelector("section.major-card");
+
+    if (!pageContents[key]) {
+      pageContents[key] = {
+        majorTitle: key,
+        html: `<p class="body-line">내용을 입력하세요.</p>`
+      };
+    }
+
+    section.innerHTML = `
+      <div class="major-title">${pageContents[key].majorTitle || key}</div>
+      <div class="rich-preview">${pageContents[key].html || ""}</div>
+    `;
+
+    const h1 = panel.querySelector("h1");
+    if (h1) h1.textContent = key;
+  });
+
+  // 🔥 이거 추가
+  const activeMenu = menuData.find(m =>
+    document.querySelector('.nav-item.active')?.textContent.trim() === m.title
+  );
+
+  if (activeMenu) {
+    showSheet(Number(activeMenu.panelIndex), activeMenu.title);
+  }
+}
 
 function initEditors() {
   noticeEditor = new Quill('#noticeEditor', {
@@ -964,11 +1021,25 @@ function syncMenuDataFromTable() {
 }
 window.saveMenusToFirebase = async function() {
   if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
-  syncMenuDataFromTable();
-  await setDoc(settingsRef, { menus: menuData, notice: noticeData, pageContents }, { merge: true });
-  renderMenus();
-  closeModal("menuModal");
-  alert("메뉴가 저장되었습니다.");
+syncMenuDataFromTable();
+
+menuData.forEach(menu => {
+  if (menu.kind === "panel") {
+    const key = menu.title;
+
+    if (!pageContents[key]) {
+      pageContents[key] = {
+        majorTitle: key,
+        html: `<p class="body-line">내용을 입력하세요.</p>`
+      };
+    }
+  }
+});
+
+await setDoc(settingsRef, { menus: menuData, notice: noticeData, pageContents }, { merge: true });
+renderMenus();
+closeModal("menuModal");
+alert("메뉴가 저장되었습니다.");
 };
 
 function getPanelTitleByKey(panelKey) {
