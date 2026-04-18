@@ -1,99 +1,409 @@
-```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>문구통합 문서 뷰어</title>
-
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@900&display=swap" rel="stylesheet">
 <style>
-body { margin:0; font-family:sans-serif; }
-.app { display:grid; grid-template-columns:260px 1fr; min-height:100vh; }
-
-/* 📌 사이드바 */
-.sidebar { border-right:1px solid #ddd; padding:20px; }
+* { box-sizing: border-box; }
+html, body { margin:0; padding:0; }
+body {
+  font-family: "Pretendard", "Noto Sans KR", sans-serif;
+  background:#f7f9fc;
+  color:#1f2937;
+}
+.app { display:grid; grid-template-columns:290px minmax(0,1fr); min-height:100vh; }
+.sidebar {
+  background:#fff; border-right:1px solid #e5e7eb; padding:26px 18px 22px;
+  position:sticky; top:0; height:100vh; overflow:auto;
+}
+.logo {
+  text-align: center;
+  font-family: "Noto Serif KR", serif;
+  font-size: 30px;
+  font-weight: 900;
+  color: #1e3a8a;
+  letter-spacing: 1.5px;
+  text-shadow: 0 1px 1px rgba(0,0,0,0.08);
+  margin-bottom: 6px;
+}
+.logo-small {
+  font-family: "Noto Serif KR", serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e3a8a;
+  margin-right: 2px;
+}
+.logo-sub { font-size:13px; color:#6b7280; margin-bottom:22px; text-align: center;}
+.nav { display:flex; flex-direction:column; gap:8px; }
 .nav-item {
-  display:block; width:100%;
-  padding:10px;
-  border:0;
-  background:none;
-  cursor:pointer;
-  text-align:left;
+  border:0; background:transparent; color:#334155; text-align:left;
+  padding:12px 14px; border-radius:12px; cursor:pointer; font-size:14px; line-height:1.4;
 }
-.nav-item.active {
-  background:#e0f2fe;
-  font-weight:bold;
-}
-
-/* 📌 메인 */
-.main { padding:20px; }
-
-/* 🔥 핵심 (이거 때문에 안되던거 해결) */
-.sheet-panel { display:none; }
+.nav-item:hover { background:#eff6ff; color:#1d4ed8; }
+.nav-item.active { background:#dbeafe; color:#1d4ed8; font-weight:700; }
+.main { padding:34px 36px 48px; }
+.sheet-panel { display:none; max-width:1120px; }
 .sheet-panel.active { display:block; }
-
+.sheet-header { margin-bottom:18px; }
+.sheet-header h1 { margin:0; font-size:32px; font-weight:800; color:#0f172a; }
+.major-card {
+  background:#fff; border:1px solid #e9eef5; border-radius:22px;
+  padding:24px 26px; margin-bottom:18px; box-shadow:0 10px 30px rgba(15,23,42,0.04);
+}
+.major-title {
+  font-size:22px; font-weight:700; color:#0f172a;
+  margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid #eef2f7;
+}
+.major-title.normal-weight { font-weight:500; }
+.status-card {
+  border:1px solid #edf2f7; border-radius:18px; padding:18px 18px 8px;
+  margin:0 0 14px 0; background:#fcfdff;
+}
+.badge {
+  display:inline-flex; align-items:center; padding:5px 11px; border-radius:999px;
+  font-size:12px; font-weight:700; margin-bottom:12px;
+}
+.badge.gray { background:#f1f5f9; color:#475569; }
+.badge.blue { background:#dbeafe; color:#1d4ed8; }
+.badge.red { background:#fee2e2; color:#b91c1c; }
+.badge.green { background:#dcfce7; color:#1f2937; }
+.group-title {
+  font-size:16px; font-weight:700; color:#334155; margin:16px 0 8px;
+}
+.sub-title {
+  font-size:14px; font-weight:700; color:#475569; margin:10px 0 6px;
+}
+.body-line {
+  margin:7px 0; line-height:1.85; font-size:15px; color:#374151;
+  white-space:pre-wrap; word-break:break-word;
+}
+.lead-line {
+  margin:8px 0 10px; line-height:1.85; font-size:15px; color:#0f172a;
+  white-space:pre-wrap; word-break:break-word;
+}
+.clean-list { margin:8px 0 12px 0; padding-left:20px; }
+.clean-list li { margin:7px 0 10px 0; line-height:1.8; color:#374151; white-space:pre-wrap; }
+.note { color:#6b7280; font-size:13px; margin-top:6px; }
+@media (max-width: 920px) {
+  .app { grid-template-columns:1fr; }
+  .sidebar { position:relative; height:auto; border-right:0; border-bottom:1px solid #e5e7eb; }
+  .main { padding:18px 16px 36px; }
+  .sheet-header h1 { font-size:26px; }
+  .major-card { padding:18px; border-radius:18px; }
+}
+.body-line {
+  margin-bottom: 12px;
+  line-height: 1.7;
+}
 </style>
 </head>
-
 <body>
-
 <div class="app">
-
-  <!-- 📌 사이드바 -->
   <aside class="sidebar">
-
-    <h2>淸賢</h2>
+    <div class="logo">
+      <span class="logo-small">法務法人</span> 淸賢
+    </div>
+    <div class="logo-sub">문구통합 문서 뷰어</div>
 
     <div class="nav">
       <button class="nav-item active" onclick="showSheet(0)">청현 공지사항</button>
       <button class="nav-item" onclick="showSheet(1)">임대차</button>
       <button class="nav-item" onclick="showSheet(2)">임금</button>
       <button class="nav-item" onclick="showSheet(3)">조세</button>
-      <button class="nav-item" onclick="showSheet(4)">선순위임차인Q&A</button>
-      <button class="nav-item" onclick="showSheet(5)">보증서Q&A</button>
-      <button class="nav-item" onclick="showSheet(6)">피담보채무Q&A</button>
-      <button class="nav-item" onclick="showSheet(7)">매각대상여부Q&A</button>
-      <button class="nav-item" onclick="showSheet(8)">열람자료Q&A</button>
-      <button class="nav-item" onclick="showSheet(9)">기계기구Q&A</button>
+      <button class="nav-item" onclick="showSheet(4)">선순위임차인Q&amp;A</button>
+      <button class="nav-item" onclick="showSheet(5)">보증서Q&amp;A</button>
+      <button class="nav-item" onclick="showSheet(6)">피담보채무Q&amp;A</button>
+      <button class="nav-item" onclick="showSheet(7)">매각대상여부Q&amp;A</button>
+      <button class="nav-item" onclick="showSheet(8)">열람자료Q&amp;A</button>
+      <button class="nav-item" onclick="showSheet(9)">기계기구Q&amp;A</button>
     </div>
-
   </aside>
 
-  <!-- 📌 메인 -->
   <main class="main">
 
-    <!-- 0 -->
+    <!-- 청현 공지사항 -->
     <div class="sheet-panel active" data-index="0">
-      <h1>청현 공지사항</h1>
-      <p>여기에 공지사항을 작성하세요.</p>
+      <header class="sheet-header">
+        <h1>청현 공지사항</h1>
+      </header>
+      <section class="major-card">
+        <div class="major-title">공지사항</div>
+
+        <div class="status-card">
+          <div class="badge blue">공지</div>
+          <p class="lead-line">문구통합 문서 뷰어 안내</p>
+          <ul class="clean-list">
+            <li>좌측 메뉴에서 문구 카테고리를 선택하여 확인할 수 있습니다.</li>
+            <li>공지사항은 첫 화면으로 표시됩니다.</li>
+            <li>여기에 최신 업데이트, 배포 안내, 유의사항을 작성하면 됩니다.</li>
+          </ul>
+        </div>
+
+        <div class="status-card">
+          <div class="badge gray">메모</div>
+          <p class="lead-line">공지사항 작성 예시</p>
+          <ul class="clean-list">
+            <li>신규 문구 추가</li>
+            <li>기존 문구 수정</li>
+            <li>검토 필요 항목 안내</li>
+          </ul>
+        </div>
+      </section>
     </div>
 
-    <!-- 1 -->
+    <!-- 임대차 -->
     <div class="sheet-panel" data-index="1">
-      <h1>임대차</h1>
-      <p>임대차 내용</p>
+      <header class="sheet-header"><h1>임대차</h1></header>
+      <section class="major-card">
+        <div class="major-title">임대차</div>
+
+        <div class="status-card">
+          <div class="badge gray">미진행</div>
+          <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 경매미진행건으로</p>
+          <ul class="clean-list">
+            <li>등본 상 소유자 거주로 추정되어 미반영 / (상가) - 임대차 관련자료 없어 미반영</li>
+            <li>전입세대확인서 상 전입인 소유자로 미반영    /  (상가) - 상가건물임대차현황서 상 등록내역 없어 미반영</li>
+          </ul>
+        </div>
+
+        <div class="status-card">
+          <div class="badge blue">배당요구종기일(진행중)</div>
+          <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 배당요구종기일(2025-10-10) 현재(현황조사서 미제출 중으로)</p>
+          <ul class="clean-list">
+            <li>등재 임차인 홍길동(전입 2002-02-02) 후순위이나 임대차 관련자료 없어 주택소액  20백만원 추정 반영</li>
+            <li>등재 임차인 홍길동(전입 2002-02-02, 확정 미상, 보증금 10백만원) 후순위이나 보호내로 주택소액 10백만원 반영</li>
+            <li>임차인 홍길동(사업 2002-02-02, 확정 2002-02-01, 보증금 10백만원, 월차임 70만원) 후순위 및 보호한도 초과로 미반영</li>
+          </ul>
+        </div>
+
+        <div class="status-card">
+          <div class="badge red">배당요구종기일(경과)</div>
+          <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 배당요구종기일 (2025-01-01) 경과한 현재</p>
+          <ul class="clean-list">
+            <li>등재 임차인 홍길동 종기내 권리신고 없어 미반영</li>
+            <li>권리신고한 임차인 홍길동(전입 2002-02-02, 확정 미상, 보증금 10백만원) 선순위로 주택임차보증금 10백만원 반영</li>
+          </ul>
+        </div>
+
+        <div class="status-card">
+          <div class="badge green">낙찰자 인수분</div>
+          <ul class="clean-list">
+            <li>취급 시 101호 임차인 홍**(계약일 2020-01-01, 보증금 100백만원, 월차임 100백만원) 계약일 기준 선순위이나</li>
+            <li>관련자료 없어 선순위 상가임차보증금 100백만원 추정 반영</li>
+            <li>취급 시 101호 임차인 홍**(계약일 2020-01-01, 보증금 100백만원, 월차임 100백만원) 계약일 기준 선순위이나</li>
+            <li>상가건물임대차현황서 상 등록내역 없어 낙찰자인수분 100백만원 추정 반영</li>
+          </ul>
+        </div>
+      </section>
     </div>
 
-    <!-- 2 -->
+    <!-- 임금 -->
     <div class="sheet-panel" data-index="2">
-      <h1>임금</h1>
+      <header class="sheet-header"><h1>임금</h1></header>
+      <section class="major-card">
+        <div class="major-title">임금</div>
+
+        <div class="group-title">개인</div>
+        <div class="sub-title">- 종기 내</div>
+        <p class="body-line">소유자 개인이며, 임금채권자로 추정되는 가압류권자 없어 미반영</p>
+        <div class="sub-title">- 종기 후</div>
+        <p class="body-line">소유자 개인이며, 임금채권자로 추정되는 가압류권자 및 종기 내 권리신고한 임금채권자 없어 미반영</p>
+
+        <div class="group-title">법인</div>
+        <div class="sub-title">- 종기 내</div>
+        <p class="body-line">차주사 2017년 12월 디스플레이, 컴퓨터주변기기 제조업을 목적으로 설립된 중소법인이며, 임금채권자로 추정되는 가압류권자 및 2021년말(임금 69,187천원) 외 최근 체불임금 관련자료 없어 미반영</p>
+        <div class="sub-title">- 종기 내</div>
+        <p class="body-line">차주사 1996년 02월 간판 및 광고물 제조업을 목적으로 설립된 중소법인이며, 임금채권자로 추정되는 가압류권자 및 체불임금 관련자료 없어 미반영(제조업 법인이나 KISLINE 등 자료 없는 경우)</p>
+        <div class="sub-title">- 종기 후</div>
+        <p class="body-line">임금채권자로 추정되는 가압류권자 및 종기 내 권리신고한 임금채권자 없어 미반영</p>
+        <div class="sub-title">- 종기 내</div>
+        <p class="body-line">① 차주사 2013-06-01 설립되어 전기공사업을 영위하는 2023년 12월말 현재 종업원 13명 규모의 중소법인이며, 임금채권자로 추정되는 가압류권자 없음</p>
+        <p class="body-line">② 2023년말 손익계산서 상 인건비 250,778천원을 기준으로 산출한 125,389천원 선순위 임금채권으로 추정 반영[250,778÷12×6=125,389천원]</p>
+
+        <div class="group-title">- 소규모, 종업원 수, 업종, 일용직</div>
+        <p class="body-line">1. 소규모-  ① 차주사 2017년 12월 디스플레이, 컴퓨터주변기기 제조업을 목적으로 설립된 중소법인이며, 임금채권으로 추정되는 가압류권자 없음</p>
+        <p class="body-line">② 2022년말 급여 43,800천원의 소규모 업체로 체불임금 없을 것으로 판단되어 미반영</p>
+        <p class="body-line">2. 종업원 수- ② 2022년말 손익계산서 및 제조원가명세서 상 375,862천원이나, 2023-07월 원천징수이행상황신고서 상 종업원 2명으로 체불임금 없을 것으로 판단되어 미반영</p>
+        <p class="body-line">3. 업종- ① 차주사 2017년 04월 설립되어 부동산개발 및 공급업 등을 영위하는 종업원수 4명인 중소법인이며, 임금채권으로 추정되는 가압류권자 없음</p>
+        <p class="body-line">② 2022년말 손익계산서 및 제조원가명세서 상 14,100천원으로, 최근자료 없고 업종특성 상 체불임금 없을 것으로 판단되어 미반영</p>
+        <p class="body-line">4. 일용직- ① 차주사 주택건설 및 보수업, 건축공사업을 영위하는 2019년 11월 설립한 중소법인이며, 임금채권자로 추정되는 가압류권자 없음</p>
+        <p class="body-line">② 2020년도 손익계산서 상 인건비 180,059,000원 대부분 일용직 인건비로 판단되며, 최근 체불임금 관련자료 없어 미반영</p>
+
+        <div class="group-title">- 안분대상</div>
+        <p class="body-line">하기 R-014-02 와 안분대상이나 감정가 대비 소액으로 일괄 반영</p>
+
+        <div class="group-title">- 원천징수이행상황신고서</div>
+        <p class="body-line">① 차주사 1986년 03월 설립되어 건물 건설업 등을 영위하는 중소법인이며, 임금채권자로 추정되는 가압류권자 없음</p>
+        <p class="body-line">② 추가자료로 제공된 2022년 원천징수이행상황신고서 상 근로자 21명, 중도퇴사 2명, 일용직 44명 확인되며, 이 외 퇴직급여 충당금 추계액 명세서 등 존재하나 2022년도 자료인 점 감안,</p>
+        <p class="body-line">2023년말 손익계산서 상 급료와 임금(664,530천원)을 기준으로 산출한 332,265천원 선순위 임금채권으로 추정 반영(664,630천원/12*3*2=332,265천원)</p>
+
+        <div class="group-title">- 종기내 체당금 및 선순위 최우선임금</div>
+        <p class="body-line">권리신고한 임금채권 가압류권자 근로복지공단(가압류 금액 62,348,311원) 강복심 등 7명에 대한 체당금 62,348,240원 선순위 임금채권으로 반영하고, 종기일 미경과로 대지급금 지급내역 상 체당금 제외한 최우선 임금 6,967,220원 추정 반영</p>
+        <p class="body-line">- 위 합계 69,315,460원 선순위 임금채권으로 반영</p>
+
+        <div class="group-title">- 1/2 반영</div>
+        <p class="body-line">① 차주사 2015년 10월 자동화장비제조업을 목적으로 설립된 2023년말 현재 종업원 62명 규모의 중소법인이며, 임금채권자로 추정되는 가압류권자 없음</p>
+        <p class="body-line">② 2022년말 손익계산서(232,509천원) 및 제조원가명세(1,810,675천원) 상 임금 2,043,184천원으로 산정하면 1,021,592천원이나 2022년 자료인 점 감안 산정된 금액의 1/2인 510,796천원 선순위 임금채권으로 추정 반영[(2,043,184천원÷12×6)/2=510,796천원]</p>
+
+        <div class="group-title">- 회생계획안</div>
+        <p class="body-line">① 차주사 1999년 05월 감, 귤 가공식품 제조업을 목적으로 설립된 중소법인이며, 2019년 외 관련자료 없음</p>
+        <p class="body-line">② 임금채권자로 추정되는 가압류권자 근로복지공단(가압류 금액 5,555,810원) 존재</p>
+        <p class="body-line">③ 폐지된 2023-08-30 회생계획안 자료 상 미지급 임금채권 및 퇴직금 399,838,000원 확인되어 전액 선순위 임금채권으로 추정 반영</p>
+        <p class="body-line">(회생계획안 자료가 최근 1년 이내가 아닌 경우 기재하지 않음)</p>
+
+        <div class="group-title">- 안분</div>
+        <p class="body-line">① 차주사 2002년 05월 사업개시하여 자동차부품 제조업에 종사하는 개인사업자이며, 2022년 말(894,070천원) 외 관련 자료 없음</p>
+        <p class="body-line">② 임금채권으로 추정되는 가압류권자 근로복지공단(가압류 금액 53,811,890원) 가압류 금액을 R-015-03 담보물  NPL감정가와 안분한 28,102,013원 선순위 임금채권으로 추정 반영</p>
+        <p class="body-line">[53,811,890원×1,257백만원/2,407백만원=28,102,013원]</p>
+
+        <div class="group-title">- 체당금 포함</div>
+        <p class="body-line">권리신고한 임금채권자 윤**(850608-) 체당금 수령 후 잔액 1,328,676원(체당금 10백만원), 이미경(780627-) 체당금 수령 후 잔액 1,283,970원(체당금 7백만원),</p>
+        <p class="body-line">박**(550621-) 체당금 수령 후 잔액 7,546,443원(체당금 10백만원) 종기일 미경과로 근로복지공단 체당금 포함 합계 37,159,089원 선순위 임금채권으로 반영</p>
+
+        <div class="group-title">추가 문구</div>
+        <p class="body-line">3.임금 : 소유자 개인이며, 임금채권자로 추정되는 가압류권자 및 종기 내 권리신고한 임금채권자 없어 미반영</p>
+        <p class="body-line">- 차주사 2020년 06월 기타 전기장비 제조업을 목적으로 설립된 중소법인이며, 체불임금 관련자료 없어 미반영</p>
+        <p class="body-line">① 차주사 2014년 09월 위생용 종이제품 제조업을 목적으로 설립된 2024년 12월 말 현재 15명 규모의 중소법인이며</p>
+        <p class="body-line">임금채권자로 추정되는 가압류권자 없음</p>
+        <p class="body-line">① 차주사 2014년 09월 위생용 종이제품 제조업을 목적으로 설립된 중소법인이며</p>
+        <p class="body-line">임금채권자로 추정되는 가압류권자 없음(또는 가압류권자 홍길동 등 12명 존재)</p>
+        <p class="body-line">② 2023년 손익계산서 상 임금 86,200천원 및 제조원가명세서 상 임금 436,087천원, 합계 522,287천원을 기준으로</p>
+        <p class="body-line">산출하면 261,143천원이나 2023년도 자료인 점 감안, 1/2인 130,571천원(522,287천원*12/6=261,143천원/2)</p>
+        <p class="body-line">선순위 임금채권으로 추정 반영</p>
+        <p class="body-line">② 2024년 손익계산서 상 임금 638,452천원을 기준으로 산출한 319,225천원(638,452천원*12/6=319,225천원)</p>
+        <p class="body-line">선순위 임금채권으로 추정 반영</p>
+        <p class="body-line">☆ 임금안분</p>
+        <p class="body-line">2023년말 손익계산서(209,250천원) 및 제조원가명세(857,604천원) 상 임금 1,066,851천원으로 산정하면 533,425천원</p>
+        <p class="body-line">이나 2023년 자료인 점 감안 산정된 금액의 1/2인 266,712천원[ (1,066,851천원*12/6)/2=266,712천원]을 하기</p>
+        <p class="body-line">R-105-02~03 법원감정가와 안분한 167,663천원 선순위 반영(266,712천원*4,286백만원/6,818백만원=167,663천원)</p>
+      </section>
     </div>
 
-    <!-- 3 -->
+    <!-- 조세 -->
     <div class="sheet-panel" data-index="3">
-      <h1>조세</h1>
+      <header class="sheet-header"><h1>조세</h1></header>
+      <section class="major-card">
+        <div class="major-title normal-weight">조세</div>
+        <p class="body-line">경매열람시 교부청구 순서대로 기입(재산세, 종부세 등 선순위 반영 분 먼저 기재)</p>
+        <p class="body-line">서부산세무서- 박연심 분 종합소득세 1,693,680원(법정기일 2023-11-014) 교부청구 해재통지서 제출로 미반영</p>
+        <p class="body-line">국민건보 OO지사- 체납보험료 000,000원(납부기한 0000-00-00 이후) 후순위 미반영</p>
+        <p class="body-line">수정구청- 재산세 00원 당해세로 선순위 반영</p>
+        <p class="body-line">서부산세무서- 종합소득세 1,693,680원(법정기일 2023-11-014) 선순위 조세채권으로 반영</p>
+      </section>
     </div>
 
-    <!-- 나머지 -->
-    <div class="sheet-panel" data-index="4"><h1>선순위임차인Q&A</h1></div>
-    <div class="sheet-panel" data-index="5"><h1>보증서Q&A</h1></div>
-    <div class="sheet-panel" data-index="6"><h1>피담보채무Q&A</h1></div>
-    <div class="sheet-panel" data-index="7"><h1>매각대상여부Q&A</h1></div>
-    <div class="sheet-panel" data-index="8"><h1>열람자료Q&A</h1></div>
-    <div class="sheet-panel" data-index="9"><h1>기계기구Q&A</h1></div>
+    <!-- 선순위임차인Q&A -->
+    <div class="sheet-panel" data-index="4">
+      <header class="sheet-header"><h1>선순위임차인Q&amp;A</h1></header>
+      <section class="major-card">
+        <div class="major-title">선순위임차인Q&amp;A</div>
+        <div class="group-title">전입 선순위</div>
+        <p class="body-line">전입세대확인서 상 선순위 전입인 존재하는 바, 현재 유효한 임차인 여부 및 취급 시 임대차 관련자료 송부 부탁 드립니다.</p>
+        <div class="group-title">취급시 임차인</div>
+        <p class="body-line">취급시 임대차 사실확인서 상 70백만원 임대사실 있는 것으로 조사되었는 바, 현재 유효한 임차인 여부 및 최근 상가등록사항등의 현황서 등 관련자료 송부 부탁 드립니다.</p>
+        <p class="body-line">취급시 임대차 계약서 상(또는 상가건물임대차현황서)의 임차인 2명(①서림종합건설, 계약일 2018-09-01, 보증금 10백만원,  ② ㈜서림이공일이, 계약일 2018-09-01, 보증금 50백만원, 월차임 3백만원) 존재하는 바, 현재 유효한 임차인 여부 및 최근 상가등록사항등의 현황서 등 관련자료 송부 부탁 드립니다.</p>
+        <p class="body-line">취급시 상가건물임대차 현황서 상 선순위 임차인 김은주(사업 2018-03-15 확정 2018-10-12 보증금 50백만원 월차임 2.5백만원) 존재하는 바, 현재 유효한 임차인 여부 및 최근 상가등록사항등의 현황서 등  관련자료 송부 부탁 드립니다.</p>
+        <p class="body-line">본 담보물(물건 1~2) 단독주택으로 취급 시 다수의 임차인 존재하는 바, 현재 유효한 임차인 여부 및 최근 전입세대확인서 등 관련자료 송부 부탁 드립니다.</p>
+        <div class="group-title">관련자료 없음</div>
+        <p class="body-line">본 근린주택이며, 경매미진행건으로 임대차 관련자료 없사오니 관련 최근 전입세대 및 상가등록사항등의 현황서 등 임대차 관련자료 송부 부탁 드립니다.</p>
+      </section>
+    </div>
+
+    <!-- 보증서Q&A -->
+    <div class="sheet-panel" data-index="5">
+      <header class="sheet-header"><h1>보증서Q&amp;A</h1></header>
+      <section class="major-card">
+        <div class="major-title">보증서 Q&amp;A</div>
+        <div class="group-title">- 대위, 일부</div>
+        <p class="body-line">담보로 제시한 보증서 4건 관련 대위변제 및 일부이전 여부 확인 후 관련자료 송부 부탁 드립니다.</p>
+        <div class="group-title">- 대위,일부</div>
+        <p class="body-line">담보로 제시하지 않은 기술보증기금 보증서 7건(보증번호313202300418, 313202300419, 313202300486, 313202300487, 313202300488, 313202300489,313202200551) 관련 대위변제증서 존재하는 바, 일부이전 여부 확인 후 관련자료 송부 부탁 드립니다.</p>
+        <div class="group-title">- 담보보증서사본포함</div>
+        <p class="body-line">담보로 제시한 보증서 관련 대위변제 및 일부이전 여부 확인 후 보증서 사본 포함 관련자료 송부 부탁 드립니다.</p>
+        <div class="group-title">- 제시외보증서사본포함</div>
+        <p class="body-line">담보로 제시지 않은 기술보증기금 보증서(보증번호 12345678) 관련 대위변제 및 일부이전 여부 확인 후 보증서 사본 포함 관련자료 송부 부탁 드립니다.</p>
+        <div class="group-title">- 제시외 보증서</div>
+        <p class="body-line">담보로 제시하지 않은 기술보증기금 보증서(보증번호 12345678) 관련 대위변제 및 일부이전 여부 확인 후 관련자료 송부 부탁 드립니다.</p>
+        <div class="group-title">- 피담보계좌</div>
+        <p class="body-line">담보로 제시하지 않은 신용보증기금 보증서 3건(보증번호 TBA201801347, TBA202200254,TBA202200255) 관련 대위변제 및 일부이전 여부 확인 후 관련자료 송부 부탁 드리며, 아울러 관련 피담보계좌번호 확인 부탁 드립니다.</p>
+        <div class="group-title">- 근저당 일부이전</div>
+        <p class="body-line">농협은행 1순위 근저당권 관련 신용보증기금(보증번호 KPB201500078)으로 일부이전되었는 바, 관련 보증서, 대위변제증서, 일부이전계약서 등 관련자료 송부 부탁 드리며, 아울러 피담보계좌번호도 확인 부탁 드립니다.</p>
+        <div class="group-title">- 보증서 매각대상여부</div>
+        <p class="body-line">담보로 제시하지 않은 기술보증기금 보증서(보증번호 12345) 관련 자산확정일 이 후 대위변제(2024-04-18) 되었는 바, 담보 매각대상 여부 재 확인 부탁 드립니다.</p>
+      </section>
+    </div>
+
+    <!-- 피담보채무Q&A -->
+    <div class="sheet-panel" data-index="6">
+      <header class="sheet-header"><h1>피담보채무Q&amp;A</h1></header>
+      <section class="major-card">
+        <div class="major-title normal-weight">피담보채무Q&amp;A</div>
+        <ul class="clean-list">
+          <li>매각대상채권 상 피담보채무범위에 포함되는 각 물건별(1~2) 계좌일련번호 구분 확인 부탁 드립니다.</li>
+          <li>경매신청서 상 채권 2번 기업운전일반자금대출 대출잔액 71,000,000원의 경우 매각대상채권 내역에 포함되어 있지 않은 바, 포함하지 않은 사유 및 피담보채무범위에 포함되는지 여부 재 확인 부탁 드립니다.</li>
+          <li>우리은행 2순위 근저당권(채권최고액 120백만원) 관련 매각대상채권 상 피담보채권 없는 것으로 판단되오니 매각대상 여부 재 확인 부탁드리며, 매각대상인 경우 매각대상채권 상 피담보채무범위에 포함되는 계좌일련번호 확인 부탁 드립니다.</li>
+          <li>물건번호 2번 관련 매각대상채권 상 피담보채무범위에 포함되는 계좌일련번호 확인 부탁 드립니다(물건번호 1번과 함께 운용되는 계좌인지 여부 포함).</li>
+          <li>하나은행 1순위 근저당권 관련 설정계약서 사본 없으며, 매각대상채권 상 피담보채권 없는 것으로 판단되오니 매각대상 여부 재 확인 부탁 드립니다.</li>
+          <li>설정유형 한정, 대출과목 일반자금대출인 바, 매각대상채권 상 계좌일련번호 4번 농식품기업운전자금&lt;일반&gt;의 경우 피담보채무범위에 포함되는지 여부 확인 부탁 드립니다.</li>
+          <li>설정유형 한정, 대출과목 1순위 공란, 2순위 가계일반자금(주택담보대출)인 바, 매각대상채권 상 계좌일련번호 3번의 경우 피담보채무범위에 포함되는지 여부 및 해당 물건번호 확인 부탁 드립니다.</li>
+        </ul>
+
+        <div class="group-title">피담보 채권</div>
+        <ul class="clean-list">
+          <li>하나은행 1순위 근저당권 관련 설정계약서 사본 없으며, 매각대상채권 상 피담보채권 없는 것으로 판단되오니 매각대상 여부 재 확인 부탁 드립니다.</li>
+          <li>기업은행 1순위 근저당 관련 설정계약서 사본 없으며, 매각대상채권 상 피담보 채무범위에 포함되는 계좌 일련번호 확인 부탁드립니다.</li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- 매각대상여부Q&A -->
+    <div class="sheet-panel" data-index="7">
+      <header class="sheet-header"><h1>매각대상여부Q&amp;A</h1></header>
+      <section class="major-card">
+        <div class="major-title">매각대상여부Q&amp;A</div>
+
+        <p class="body-line">IRF 내 채무자 소유의 타 부동산(부산광역시 남구 용호동 176-30외 2필지 엘지메트로시티 제215동 제23층 제2303호)에 대한 하나은행 근저당 1~2순위 502백만원 존재하는 바, 매각대상 여부 확인 부탁 드립니다.</p>
+
+        <div class="group-title">주간사D.D와 상이</div>
+        <p class="body-line">주간사DD 상 타기관 선순위의 경우 타 채무자(부산은행) 4,680,000,000원만 기재되어 있으나, 등본 검토 결과 1순위 중소기업은행(채권최고액 4,620,000,000원), 2순위 신용보증기금(채권최고액 1,166,000,000원), 3순위 타채무자(부산은행) 4,680,000,000원으로 확인되오니 재 검토 부탁 드립니다.</p>
+        <p class="body-line">물건번호 4번 267-1(토지) 및 물건번호 3번 목록에 있는 763-1(토지)의 경우 주간사 DD 상 기재된 타기관 선순위 내역과 등본 상 선순위 내역이 상이하오니 재 검토 부탁 드립니다.</p>
+
+        <div class="group-title">선순위 근저당 매각대상여부</div>
+        <p class="body-line">담보물 중 47-15번지의 경우 최초 소유자인 이하섭의 근저당 설정에서 본 채무자에게 이전된 지분 포기를 위한 저당권 변경내역(일부포기) 없어 선순위 근저당권 존재하는 것으로 판단되오니 재 검토 부탁 드립니다.</p>
+
+        <div class="group-title">선순위 근저당 매각대상여부</div>
+        <p class="body-line">등본 상 선순위 근저당권의 경우 주간사DD 상 매각대상으로 기재한 사유 확인 부탁 드립니다.</p>
+      </section>
+    </div>
+
+    <!-- 열람자료Q&A -->
+    <div class="sheet-panel" data-index="8">
+      <header class="sheet-header"><h1>열람자료Q&amp;A</h1></header>
+      <section class="major-card">
+        <div class="major-title normal-weight">열람자료Q&amp;A</div>
+        <p class="body-line">대법원 경매내역 상 현황조사서 및 감정평가서 제출되었고, 다수의 임차인(권리신고중이나) 존재하나 관련자료 없사오니 경매열람자료 송부 부탁 드립니다.</p>
+        <p class="body-line">경매 열람일 이후 2002-02-02 임금채권자 이**, 채** 권리신고 하였으나 관련자료 없사오니 추가 경매열람자료 송부 부탁 드립니다.</p>
+        <p class="body-line">현재 유효한 임차인 여부 및 최근 전입세대확인서 등 최근 임대차 관련자료 송부 부탁 드립니다.</p>
+        <p class="body-line">현재 유효한 임차인 여부 및 최근 상가등록사항등의 현황서 등 관련자료 송부 부탁 드립니다.</p>
+      </section>
+    </div>
+
+    <!-- 기계기구Q&A -->
+    <div class="sheet-panel" data-index="9">
+      <header class="sheet-header"><h1>기계기구Q&amp;A</h1></header>
+      <section class="major-card">
+        <div class="major-title">기계기구Q&amp;A</div>
+        <p class="body-line">주간사DD 상 기계기구 1점으로 기재되었으나, 기계기구 등본 확인 결과 3점으로 확인되오니 재 검토 부탁 드립니다.</p>
+        <div class="group-title">기계기구 대체</div>
+        <p class="body-line">공장저당 설정 당시 사출성형기 1점(Model : EDIS450, 제작자 2014. 04) 포함 되었으나, 법원감정서 상  평가내역 없고 모델명이 상이한  사출성형기 Model : SPE-350 1점 제시외로 감정평가 되었는 바, 설정 당시 사출성형기 평가되지 아니한 사유 및 제시외로 평가된 사출성형기의 경우 공장저당 목록에 포함되는지 여부 확인 부탁 드립니다.</p>
+        <div class="group-title">동일기계여부</div>
+        <p class="body-line">법원감정서 기계기구 목록 상 일련번호 2)~5)번 기계기구 제시 목록(제조번호 20210805)과 일치하는 기계기구 부재로 평가 제외 하였고, 제시외 기계기구 4점(호이스트크레인 제조번호 20210801~4번, 감정가 63,300,000원) 소재하는 바, 본 제시외 기계기구와 소재불명으로 처리된 기계기구 동일성 여부 확인 부탁 드립니다.</p>
+      </section>
+    </div>
 
   </main>
-
 </div>
 
 <script>
@@ -101,11 +411,12 @@ function showSheet(index) {
   document.querySelectorAll('.sheet-panel').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
 
-  document.querySelector('.sheet-panel[data-index="'+index+'"]').classList.add('active');
-  document.querySelectorAll('.nav-item')[index].classList.add('active');
+  const panel = document.querySelector('.sheet-panel[data-index="' + index + '"]');
+  const nav = document.querySelectorAll('.nav-item')[index];
+
+  if (panel) panel.classList.add('active');
+  if (nav) nav.classList.add('active');
 }
 </script>
-
 </body>
 </html>
-```
