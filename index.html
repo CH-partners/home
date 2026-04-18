@@ -145,29 +145,26 @@ body {
 }
 
 .nav-bottom {
-  margin-top:auto;
-  padding-top:18px;
-  border-top:1px solid #e5e7eb;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  gap:10px;
-  flex-wrap:wrap;
+  display:none;
 }
 
-.nav-bottom .nav-item-green,
-.nav-bottom .nav-item-purple {
+.nav-item-green,
+.nav-item-purple {
   width:auto;
-  min-width:140px;
+  min-width:unset;
+  display:inline-flex;
+  justify-content:center;
+  align-items:center;
+  padding:8px 14px;
   text-align:center;
   white-space:nowrap;
+  border-radius:999px;
+  font-weight:700;
 }
-  
+
 .nav-item-green {
-  width:100%;
   background:#dcfce7;
   color:#166534;
-  font-weight:700;
 }
 .nav-item-green:hover {
   background:#bbf7d0;
@@ -179,10 +176,8 @@ body {
 }
 
 .nav-item-purple {
-  width:100%;
   background:#f3e8ff;
   color:#7c3aed;
-  font-weight:700;
 }
 .nav-item-purple:hover {
   background:#e9d5ff;
@@ -528,7 +523,7 @@ body {
   font-weight:700;
 }
 
-/* Project분배표 */
+/* Project 분배표 */
 .work-toolbar {
   display:flex;
   flex-wrap:wrap;
@@ -551,6 +546,9 @@ body {
   font-size:13px;
   font-weight:700;
   cursor:pointer;
+}
+.work-badges:hover {
+  background:#eff6ff;
 }
 .work-badge:hover {
   background:#eff6ff;
@@ -1059,19 +1057,23 @@ function ensureWorkMenu() {
 
   menuData = menuData.filter(menu => {
     const title = (menu.title || "").trim();
-    if (title === "Project 분배표" && Number(menu.panelIndex) !== 11) return false;
+    if ((title === "Project 분배표" || title === "Project분배표") && Number(menu.panelIndex) !== 11) {
+      return false;
+    }
     return true;
   });
 
-  const hasWorkMenu = menuData.some(menu =>
-    Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "Project분배표"
-  );
+  const hasWorkMenu = menuData.some(menu => {
+    const title = (menu.title || "").trim();
+    return Number(menu.panelIndex) === 11 || title === "Project 분배표" || title === "Project분배표";
+  });
 
   if (!hasWorkMenu) {
     menuData.push(fixedWorkMenu);
   } else {
     menuData = menuData.map(menu => {
-      if (Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "Project분배표") {
+      const title = (menu.title || "").trim();
+      if (Number(menu.panelIndex) === 11 || title === "Project 분배표" || title === "Project분배표") {
         return fixedWorkMenu;
       }
       return menu;
@@ -1124,53 +1126,79 @@ function renderMenus() {
 
   const topNav = document.getElementById("topNav");
   const bottomNav = document.getElementById("bottomNav");
+
   topNav.innerHTML = "";
   bottomNav.innerHTML = "";
 
   const topMenus = menuData.filter(menu => menu.location !== "bottom");
-const bottomMenus = menuData.filter(menu => menu.location === "bottom");
+  const bottomMenus = menuData.filter(menu => menu.location === "bottom");
 
-const qnaMenus = topMenus.filter(menu => isQnaMenu(menu));
-let normalTopMenus = topMenus.filter(menu => !isQnaMenu(menu));
+  const qnaMenus = topMenus.filter(menu => isQnaMenu(menu));
+  let normalMenus = topMenus.filter(menu => !isQnaMenu(menu));
 
-normalTopMenus.sort((a, b) => getTopMenuPriority(a) - getTopMenuPriority(b));
+  normalMenus.sort((a, b) => getTopMenuPriority(a) - getTopMenuPriority(b));
 
-// 1. 하단 메뉴 2개를 맨 위로
-bottomMenus.forEach(menu => {
-  topNav.appendChild(createMenuButton(menu));
-});
+  const noticeMenu = normalMenus.find(m => Number(m.panelIndex) === 0);
+  if (noticeMenu) {
+    topNav.appendChild(createMenuButton(noticeMenu));
+  }
 
-// 2. 그다음 Q&A
-if (qnaMenus.length) {
-  const isExpanded = !!navGroupState.qna;
+  const divider = document.createElement("div");
+  divider.style.height = "1px";
+  divider.style.background = "#e5e7eb";
+  divider.style.margin = "10px 0";
+  topNav.appendChild(divider);
 
-  const groupToggle = document.createElement("button");
-  groupToggle.className = "nav-group-toggle" + (isExpanded ? " expanded" : "");
-  groupToggle.type = "button";
-  groupToggle.innerHTML = `
-    <span class="nav-group-label"><span>Q&A</span></span>
-    <span class="nav-group-arrow">▶</span>
-  `;
-  groupToggle.onclick = () => window.toggleNavGroup("qna");
-  topNav.appendChild(groupToggle);
-
-  const groupWrap = document.createElement("div");
-  groupWrap.className = "nav-sub-group" + (isExpanded ? "" : " collapsed");
-
-  qnaMenus.forEach(menu => {
-    groupWrap.appendChild(createMenuButton(menu, true));
+  const orderedBottomMenus = [...bottomMenus].sort((a, b) => {
+    const order = {
+      "Project 분배표": 0,
+      "주택·상가 소액 조회": 1
+    };
+    const av = order[a.title] ?? 99;
+    const bv = order[b.title] ?? 99;
+    return av - bv;
   });
 
-  topNav.appendChild(groupWrap);
-}
+  const badgeWrap = document.createElement("div");
+  badgeWrap.style.display = "flex";
+  badgeWrap.style.gap = "10px";
+  badgeWrap.style.flexWrap = "wrap";
+  badgeWrap.style.justifyContent = "flex-start";
+  badgeWrap.style.marginBottom = "8px";
 
-// 3. 마지막에 나머지 메뉴
-normalTopMenus.forEach(menu => {
-  topNav.appendChild(createMenuButton(menu));
-});
+  orderedBottomMenus.forEach(menu => {
+    badgeWrap.appendChild(createMenuButton(menu));
+  });
+  topNav.appendChild(badgeWrap);
 
-// bottomNav는 더 이상 안 씀
-bottomNav.innerHTML = "";
+  if (qnaMenus.length) {
+    const isExpanded = !!navGroupState.qna;
+
+    const groupToggle = document.createElement("button");
+    groupToggle.className = "nav-group-toggle" + (isExpanded ? " expanded" : "");
+    groupToggle.innerHTML = `
+      <span class="nav-group-label"><span>Q&A</span></span>
+      <span class="nav-group-arrow">▶</span>
+    `;
+    groupToggle.onclick = () => window.toggleNavGroup("qna");
+
+    topNav.appendChild(groupToggle);
+
+    const groupWrap = document.createElement("div");
+    groupWrap.className = "nav-sub-group" + (isExpanded ? "" : " collapsed");
+
+    qnaMenus.forEach(menu => {
+      groupWrap.appendChild(createMenuButton(menu, true));
+    });
+
+    topNav.appendChild(groupWrap);
+  }
+
+  normalMenus
+    .filter(m => Number(m.panelIndex) !== 0)
+    .forEach(menu => {
+      topNav.appendChild(createMenuButton(menu));
+    });
 
   renderAllContents();
 }
@@ -1359,7 +1387,7 @@ function renderMenuTable() {
 
   menuData.forEach((menu, index) => {
     const tr = document.createElement("tr");
-    const isWork = Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "Project분배표";
+    const isWork = Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "Project 분배표";
 
     tr.innerHTML = `
       <td>
@@ -1369,7 +1397,7 @@ function renderMenuTable() {
       </td>
       <td>
         <input data-field="title" data-index="${index}"
-          value="${escapeHtml(isWork ? "Project분배표" : (menu.title || ""))}"
+          value="${escapeHtml(isWork ? "Project 분배표" : (menu.title || ""))}"
           ${isWork ? "readonly" : ""}>
       </td>
       <td>
@@ -1404,8 +1432,8 @@ window.addMenuRow = function(location) {
 window.removeMenuRow = function(index) {
   const target = menuData[index];
   if (!target) return;
-  if (Number(target.panelIndex) === 11 || (target.title || "").trim() === "Project분배표") {
-    alert("Project분배표 메뉴는 삭제할 수 없습니다.");
+  if (Number(target.panelIndex) === 11 || (target.title || "").trim() === "Project 분배표") {
+    alert("Project 분배표 메뉴는 삭제할 수 없습니다.");
     return;
   }
   menuData.splice(index, 1);
@@ -1428,12 +1456,12 @@ function syncMenuDataFromTable() {
     const rawUrl = getVal("url");
 
     const isWorkAllocation =
-      rawTitle === "Project분배표" ||
+      rawTitle === "Project 분배표" ||
       Number(rawPanelIndex) === 11 ||
-      (prev.title || "").trim() === "Project분배표";
+      (prev.title || "").trim() === "Project 분배표";
 
     const title = isWorkAllocation
-      ? "Project분배표"
+      ? "Project 분배표"
       : (rawTitle || prev.title || "");
 
     const panelIndex = isWorkAllocation
@@ -1605,11 +1633,11 @@ async function ensureInitialData() {
       }));
     }
   } catch (error) {
-    console.error("Project분배표 초기 데이터 생성 실패:", error);
+    console.error("Project 분배표 초기 데이터 생성 실패:", error);
   }
 }
 
-/* Project분배표 */
+/* Project 분배표 */
 function getSelectedProject() {
   return allocationData.projects.find(p => p.id === selectedProjectId) || null;
 }
@@ -1691,10 +1719,10 @@ window.saveAllocationData = async function() {
   try {
     if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
     await setDoc(allocationRef, removeUndefinedDeep(allocationData), { merge: true });
-    alert("Project분배표가 저장되었습니다.");
+    alert("Project 분배표가 저장되었습니다.");
   } catch (error) {
-    console.error("Project분배표 저장 실패:", error);
-    alert("Project분배표 저장 실패: " + (error.message || error));
+    console.error("Project 분배표 저장 실패:", error);
+    alert("Project 분배표 저장 실패: " + (error.message || error));
   }
 };
 
