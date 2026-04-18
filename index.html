@@ -528,7 +528,7 @@ body {
   font-weight:700;
 }
 
-/* 작업배분표 */
+/* 작업분배표 */
 .work-toolbar {
   display:flex;
   flex-wrap:wrap;
@@ -769,11 +769,11 @@ body {
 
     <div class="sheet-panel" data-index="11">
       <header class="sheet-header">
-        <h1>작업배분표</h1>
+        <h1>작업분배표</h1>
       </header>
       <section class="major-card">
         <div class="work-toolbar">
-          <button class="action-btn" onclick="createProjectPrompt()">배분표 생성</button>
+          <button class="action-btn" onclick="createProjectPrompt()">분배표 생성</button>
           <button class="action-btn" onclick="saveAllocationData()">저장</button>
         </div>
         <div class="work-badges" id="workProjectBadges"></div>
@@ -809,7 +809,7 @@ body {
 <div class="modal-backdrop" id="menuModal">
   <div class="modal large">
     <div class="modal-title">메뉴 수정</div>
-    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. 작업배분표는 고정 메뉴이며 항상 panelIndex 11입니다. Q&A는 화면에서 자동 그룹 처리됩니다.</div>
+    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. 작업분배표는 고정 메뉴이며 항상 panelIndex 11입니다. Q&A는 화면에서 자동 그룹 처리됩니다.</div>
     <table class="menu-table">
       <thead>
         <tr>
@@ -932,7 +932,7 @@ const defaultMenus = [
   { title: "열람자료Q&A", panelIndex: 8, location: "top", kind: "panel" },
   { title: "기계기구Q&A", panelIndex: 9, location: "top", kind: "panel" },
   { title: "주택·상가 소액 조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" },
-  { title: "작업배분표", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" }
+  { title: "작업분배표", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" }
 ];
 
 const defaultPageContents = {
@@ -1050,7 +1050,7 @@ function getDynamicPanelKey(menu) {
 
 function ensureWorkMenu() {
   const fixedWorkMenu = {
-    title: "작업배분표",
+    title: "작업분배표",
     panelIndex: 11,
     location: "bottom",
     kind: "panel",
@@ -1059,19 +1059,19 @@ function ensureWorkMenu() {
 
   menuData = menuData.filter(menu => {
     const title = (menu.title || "").trim();
-    if (title === "작업배분표" && Number(menu.panelIndex) !== 11) return false;
+    if (title === "작업분배표" && Number(menu.panelIndex) !== 11) return false;
     return true;
   });
 
   const hasWorkMenu = menuData.some(menu =>
-    Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "작업배분표"
+    Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "작업분배표"
   );
 
   if (!hasWorkMenu) {
     menuData.push(fixedWorkMenu);
   } else {
     menuData = menuData.map(menu => {
-      if (Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "작업배분표") {
+      if (Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "작업분배표") {
         return fixedWorkMenu;
       }
       return menu;
@@ -1359,7 +1359,7 @@ function renderMenuTable() {
 
   menuData.forEach((menu, index) => {
     const tr = document.createElement("tr");
-    const isWork = Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "작업배분표";
+    const isWork = Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "작업분배표";
 
     tr.innerHTML = `
       <td>
@@ -1369,7 +1369,7 @@ function renderMenuTable() {
       </td>
       <td>
         <input data-field="title" data-index="${index}"
-          value="${escapeHtml(isWork ? "작업배분표" : (menu.title || ""))}"
+          value="${escapeHtml(isWork ? "작업분배표" : (menu.title || ""))}"
           ${isWork ? "readonly" : ""}>
       </td>
       <td>
@@ -1404,8 +1404,8 @@ window.addMenuRow = function(location) {
 window.removeMenuRow = function(index) {
   const target = menuData[index];
   if (!target) return;
-  if (Number(target.panelIndex) === 11 || (target.title || "").trim() === "작업배분표") {
-    alert("작업배분표 메뉴는 삭제할 수 없습니다.");
+  if (Number(target.panelIndex) === 11 || (target.title || "").trim() === "작업분배표") {
+    alert("작업분배표 메뉴는 삭제할 수 없습니다.");
     return;
   }
   menuData.splice(index, 1);
@@ -1428,12 +1428,12 @@ function syncMenuDataFromTable() {
     const rawUrl = getVal("url");
 
     const isWorkAllocation =
-      rawTitle === "작업배분표" ||
+      rawTitle === "작업분배표" ||
       Number(rawPanelIndex) === 11 ||
-      (prev.title || "").trim() === "작업배분표";
+      (prev.title || "").trim() === "작업분배표";
 
     const title = isWorkAllocation
-      ? "작업배분표"
+      ? "작업분배표"
       : (rawTitle || prev.title || "");
 
     const panelIndex = isWorkAllocation
@@ -1605,11 +1605,11 @@ async function ensureInitialData() {
       }));
     }
   } catch (error) {
-    console.error("작업배분표 초기 데이터 생성 실패:", error);
+    console.error("작업분배표 초기 데이터 생성 실패:", error);
   }
 }
 
-/* 작업배분표 */
+/* 작업분배표 */
 function getSelectedProject() {
   return allocationData.projects.find(p => p.id === selectedProjectId) || null;
 }
@@ -1691,10 +1691,10 @@ window.saveAllocationData = async function() {
   try {
     if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
     await setDoc(allocationRef, removeUndefinedDeep(allocationData), { merge: true });
-    alert("작업배분표가 저장되었습니다.");
+    alert("작업분배표가 저장되었습니다.");
   } catch (error) {
-    console.error("작업배분표 저장 실패:", error);
-    alert("작업배분표 저장 실패: " + (error.message || error));
+    console.error("작업분배표 저장 실패:", error);
+    alert("작업분배표 저장 실패: " + (error.message || error));
   }
 };
 
@@ -1709,7 +1709,7 @@ function renderAllocationUI() {
     body.innerHTML = `
       <div class="work-empty">
         생성된 프로젝트가 없습니다.<br>
-        상단의 <strong>배분표 생성</strong> 버튼으로 프로젝트를 먼저 만드세요.
+        상단의 <strong>분배표 생성</strong> 버튼으로 프로젝트를 먼저 만드세요.
       </div>
     `;
     return;
