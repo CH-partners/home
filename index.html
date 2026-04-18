@@ -1003,7 +1003,7 @@ function escapeHtml(value) {
 
 function isQnaMenu(menu) {
   const title = (menu.title || "").trim();
-  if (title === "감정평가비고") return false;
+  if (title === "경매참고비고" || title === "감정평가비고") return false;
   const qnaPanelIndexes = [4, 5, 6, 7, 8, 9];
   return qnaPanelIndexes.includes(Number(menu.panelIndex));
 }
@@ -1031,10 +1031,6 @@ function showSheet(index, title = "") {
 window.showSheet = showSheet;
 
 function ensureWorkMenu() {
-  const existing = menuData.find(
-    m => Number(m.panelIndex) === 11 || (m.title || "").trim() === "작업배분표"
-  );
-
   const fixedWorkMenu = {
     title: "작업배분표",
     panelIndex: 11,
@@ -1043,18 +1039,24 @@ function ensureWorkMenu() {
     theme: "purple"
   };
 
-  menuData = menuData.filter(
-    m => !((m.title || "").trim() === "작업배분표" && Number(m.panelIndex) !== 11)
+  menuData = menuData.filter(menu => {
+    const title = (menu.title || "").trim();
+    if (title === "작업배분표" && Number(menu.panelIndex) !== 11) return false;
+    return true;
+  });
+
+  const hasWorkMenu = menuData.some(menu =>
+    Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "작업배분표"
   );
 
-  if (!existing) {
+  if (!hasWorkMenu) {
     menuData.push(fixedWorkMenu);
   } else {
-    menuData = menuData.map(m => {
-      if (Number(m.panelIndex) === 11 || (m.title || "").trim() === "작업배분표") {
+    menuData = menuData.map(menu => {
+      if (Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "작업배분표") {
         return fixedWorkMenu;
       }
-      return m;
+      return menu;
     });
   }
 }
@@ -1094,6 +1096,7 @@ function getTopMenuPriority(menu) {
   const title = (menu.title || "").trim();
   if (title === "조세") return 100;
   if (title === "당해세") return 101;
+  if (title === "경매참고비고") return 102;
   if (title === "감정평가비고") return 102;
   return 50;
 }
@@ -1287,10 +1290,13 @@ window.removeMenuRow = function(index) {
 
 function syncMenuDataFromTable() {
   const rows = Array.from(document.querySelectorAll("#menuTableBody tr"));
+  const previousMenus = [...menuData];
 
   menuData = rows.map((row, index) => {
     const getVal = (field) =>
       row.querySelector(`[data-field="${field}"][data-index="${index}"]`)?.value?.trim() || "";
+
+    const prev = previousMenus[index] || {};
 
     const rawTitle = getVal("title");
     const rawPanelIndex = getVal("panelIndex");
@@ -1298,14 +1304,21 @@ function syncMenuDataFromTable() {
     const rawUrl = getVal("url");
 
     const isWorkAllocation =
-      rawTitle === "작업배분표" || Number(rawPanelIndex) === 11;
+      rawTitle === "작업배분표" ||
+      Number(rawPanelIndex) === 11 ||
+      (prev.title || "").trim() === "작업배분표";
+
+    const title = isWorkAllocation
+      ? "작업배분표"
+      : (rawTitle || prev.title || "");
 
     const panelIndex = isWorkAllocation
       ? 11
-      : (rawPanelIndex === "" ? 0 : Number(rawPanelIndex));
+      : (rawPanelIndex === "" ? Number(prev.panelIndex || 0) : Number(rawPanelIndex));
 
-    const location = isWorkAllocation ? "bottom" : (rawLocation || "top");
-    const title = isWorkAllocation ? "작업배분표" : (rawTitle || `메뉴 ${index + 1}`);
+    const location = isWorkAllocation
+      ? "bottom"
+      : (rawLocation || prev.location || "top");
 
     const item = {
       title,
@@ -1318,14 +1331,18 @@ function syncMenuDataFromTable() {
 
     if (rawUrl && !isWorkAllocation) {
       item.url = rawUrl;
+    } else if (!rawUrl && prev.url && item.kind === "iframe") {
+      item.url = prev.url;
     }
 
     if (isWorkAllocation) {
       item.theme = "purple";
+    } else if (prev.theme) {
+      item.theme = prev.theme;
     }
 
     return item;
-  });
+  }).filter(menu => (menu.title || "").trim() !== "");
 
   ensureWorkMenu();
 }
