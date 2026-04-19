@@ -1255,8 +1255,6 @@ function renderMenus() {
   const qnaMenus = topMenus.filter(menu => isQnaMenu(menu));
   let normalMenus = topMenus.filter(menu => !isQnaMenu(menu));
 
-  normalMenus.sort((a, b) => getTopMenuPriority(a) - getTopMenuPriority(b));
-
   const noticeMenu = normalMenus.find(m => Number(m.panelIndex) === 0);
   if (noticeMenu) {
     topNav.appendChild(createMenuButton(noticeMenu));
@@ -1544,14 +1542,23 @@ function renderMenuTable() {
           ${isWork ? "readonly" : ""}>
       </td>
       <td>
-        <div class="menu-row-actions">
-          ${
-            isWork
-              ? '<span class="note">고정메뉴</span>'
-              : `<button class="small-btn danger" onclick="removeMenuRow(${index})">삭제</button>`
-          }
-        </div>
-      </td>
+  <div class="menu-row-actions">
+    ${
+      isWork
+        ? '<span class="note">고정메뉴</span>'
+        : (menu.location || "top") === "top"
+          ? `
+            <button class="small-btn" onclick="moveMenuUp(${index})">위</button>
+            <button class="small-btn" onclick="moveMenuDown(${index})">아래</button>
+            <button class="small-btn danger" onclick="removeMenuRow(${index})">삭제</button>
+          `
+          : `
+            <span class="note">하단메뉴</span>
+            <button class="small-btn danger" onclick="removeMenuRow(${index})">삭제</button>
+          `
+    }
+  </div>
+</td>
     `;
     tbody.appendChild(tr);
   });
@@ -1570,6 +1577,23 @@ window.removeMenuRow = function(index) {
     return;
   }
   menuData.splice(index, 1);
+  renderMenuTable();
+};
+  window.moveMenuUp = function(index) {
+  if (index <= 0) return;
+  if ((menuData[index].location || "top") !== "top") return;
+  if ((menuData[index - 1].location || "top") !== "top") return;
+
+  [menuData[index - 1], menuData[index]] = [menuData[index], menuData[index - 1]];
+  renderMenuTable();
+};
+
+window.moveMenuDown = function(index) {
+  if (index >= menuData.length - 1) return;
+  if ((menuData[index].location || "top") !== "top") return;
+  if ((menuData[index + 1].location || "top") !== "top") return;
+
+  [menuData[index + 1], menuData[index]] = [menuData[index], menuData[index + 1]];
   renderMenuTable();
 };
 
