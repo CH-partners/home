@@ -77,8 +77,11 @@
     @media (max-width:1000px){.form-grid{grid-template-columns:1fr 1fr} .cards{grid-template-columns:1fr} .summary-grid{grid-template-columns:1fr 1fr}}
     @media (max-width:640px){.form-grid,.summary-grid{grid-template-columns:1fr} .modal-head h2{font-size:24px} .metric .v{font-size:22px}}
     
-    .form-grid .field:last-child{
-  justify-self:start;
+     .form-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr 1fr;
+  gap:14px;
+  align-items:end;
 }
 
 .field{
@@ -90,26 +93,10 @@
   display:flex;
   gap:8px;
   align-items:center;
-  position:relative;
 }
 
-#settingDateText{
-  width:160px;
-  flex-shrink:0;
-}
-
-#settingDatePicker{
-  position:absolute;
-  width:1px;
-  height:1px;
-  opacity:0;
-  pointer-events:none;
-}
-
-.date-picker-btn{
-  width:54px;
-  height:54px;
-  flex-shrink:0;
+#settingDate{
+  width:100%;
 }
 
 #searchBtn{
@@ -171,25 +158,14 @@
     </div>
 
     <div class="field">
-      <label for="settingDateText">근저당권 설정일</label>
+      <label for="settingDate">근저당권 설정일</label>
       <div class="date-row">
         <input
           class="input"
-          id="settingDateText"
-          type="text"
-          inputmode="numeric"
-          placeholder="최초 설정일 입력칸에 날짜를 입력하세요"
-          value="2023-02-21"
-          autocomplete="off"
-        />
-        <input
-          id="settingDatePicker"
+          id="settingDate"
           type="date"
           value="2023-02-21"
-          tabindex="-1"
-          aria-hidden="true"
         />
-        <button type="button" class="date-picker-btn" id="openDatePicker">📅</button>
         <button class="btn" id="searchBtn" type="button">조회</button>
       </div>
     </div>
@@ -223,9 +199,7 @@
     const citySelect = document.getElementById("citySelect");
     const dongSelect = document.getElementById("dongSelect");
     
-    const settingDateText = document.getElementById("settingDateText");
-    const settingDatePicker = document.getElementById("settingDatePicker");
-    const openDatePickerBtn = document.getElementById("openDatePicker");
+    const settingDate = document.getElementById("settingDate");
     
     function formatDateValue(dateObj) {
       const y = dateObj.getFullYear();
@@ -266,18 +240,18 @@
     }
     
     function syncDateInputs(dateStr) {
-      settingDateText.value = dateStr;
-      settingDatePicker.value = dateStr;
+      settingDate.value = dateStr;
     }
     
     function normalizeMainDateInput() {
-      const normalized = normalizeDateInput(settingDateText.value);
+      const normalized = normalizeDateInput(settingDate.value);
       if (isValidDateString(normalized)) {
         syncDateInputs(normalized);
         return normalized;
       }
       return "";
     }
+    
     function openModal(html){ modalContent.innerHTML = html; modal.classList.add("open"); }
     function closeModal(){ modal.classList.remove("open"); }
     document.getElementById("closeModal").addEventListener("click", closeModal);
@@ -576,33 +550,7 @@
 
     metroSelect.addEventListener("change", populateCity);
     citySelect.addEventListener("change", populateDong);
-    
-    openDatePickerBtn.addEventListener("click", () => {
-      if (typeof settingDatePicker.showPicker === "function") {
-        settingDatePicker.showPicker();
-      } else {
-        settingDatePicker.focus();
-        settingDatePicker.click();
-      }
-    });
-    
-    settingDatePicker.addEventListener("change", () => {
-      if (settingDatePicker.value) {
-        syncDateInputs(settingDatePicker.value);
-      }
-    });
-    
-    settingDateText.addEventListener("blur", () => {
-      normalizeMainDateInput();
-    });
-    
-    settingDateText.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        const ok = normalizeMainDateInput();
-        if (ok) renderResult();
-      }
-    });
-    
+        
     document.getElementById("searchBtn").addEventListener("click", () => {
       const normalized = normalizeMainDateInput();
       if (!normalized) {
