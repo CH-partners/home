@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@900&display=swap" rel="stylesheet">
 <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
 <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
 <style>
 * { box-sizing: border-box; }
 html, body { margin:0; padding:0; }
@@ -209,7 +210,6 @@ body {
   color:#ffffff;
   border-color:#3b82f6;
 }
-  /* 🔥 분배표 / 소액 조회 공통 강조 */
 .nav-item-highlight {
   background:#f5f3ff;
   color:#6d28d9;
@@ -220,14 +220,10 @@ body {
   box-shadow:0 6px 16px rgba(109,40,217,0.08);
   margin-bottom:6px;
 }
-
-/* hover */
 .nav-item-highlight:hover {
   background:#ede9fe;
   color:#5b21b6;
 }
-
-/* active */
 .nav-item-highlight.active {
   background:#7c3aed;
   color:#ffffff;
@@ -619,7 +615,6 @@ body {
   font-weight:700;
 }
 
-/* Project 분배표 */
 .work-toolbar {
   display:flex;
   flex-wrap:wrap;
@@ -636,9 +631,9 @@ body {
 .work-badge {
   display:inline-flex;
   align-items:center;
-  justify-content:center;  /* 🔥 추가 */
+  justify-content:center;
   padding:8px 14px;
-  height:34px;             /* 🔥 핵심 */
+  height:34px;
   font-size:14px;
   border-radius:999px;
   font-weight:700;
@@ -722,6 +717,51 @@ body {
   color:#64748b;
   font-size:12px;
   margin-bottom:14px;
+}
+
+#calendar {
+  background:#fff;
+  border-radius:16px;
+  padding:12px;
+}
+.schedule-legend {
+  font-size:13px;
+  color:#64748b;
+  margin-bottom:12px;
+}
+.fc .fc-toolbar-title {
+  font-size:22px;
+  font-weight:800;
+  color:#0f172a;
+}
+.fc .fc-button {
+  border-radius:10px !important;
+  border:1px solid #cbd5e1 !important;
+  background:#ffffff !important;
+  color:#334155 !important;
+  box-shadow:none !important;
+}
+.fc .fc-button:hover {
+  background:#eff6ff !important;
+  color:#1d4ed8 !important;
+  border-color:#bfdbfe !important;
+}
+.fc .fc-button.fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background:#dbeafe !important;
+  color:#1d4ed8 !important;
+  border-color:#bfdbfe !important;
+}
+.fc .fc-daygrid-day-number,
+.fc .fc-col-header-cell-cushion {
+  color:#334155;
+  text-decoration:none;
+}
+.fc .fc-event {
+  cursor:pointer;
+  border-radius:8px;
+  padding:2px 4px;
+  font-weight:700;
 }
 
 @media (max-width: 920px) {
@@ -877,6 +917,19 @@ body {
         <div id="workAllocationBody"></div>
       </section>
     </div>
+
+    <div class="sheet-panel" data-index="12">
+      <header class="sheet-header">
+        <h1>스케줄</h1>
+        <div class="sheet-tools">
+          <button class="action-btn" onclick="openNewScheduleFromButton()">일정 추가</button>
+        </div>
+      </header>
+      <section class="major-card">
+        <div class="schedule-legend">날짜를 클릭하면 일정을 추가할 수 있고, 등록된 일정 클릭 시 수정/삭제할 수 있습니다.</div>
+        <div id="calendar"></div>
+      </section>
+    </div>
   </main>
 </div>
 
@@ -906,7 +959,7 @@ body {
 <div class="modal-backdrop" id="menuModal">
   <div class="modal large">
     <div class="modal-title">메뉴 수정</div>
-    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. Project 분배표는 고정 메뉴이며 항상 panelIndex 11입니다. Q&A는 화면에서 자동 그룹 처리됩니다.</div>
+    <div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. Project 분배표(panelIndex 11)와 스케줄(panelIndex 12)은 고정 메뉴입니다. Q&A는 화면에서 자동 그룹 처리됩니다.</div>
     <table class="menu-table">
       <thead>
         <tr>
@@ -965,12 +1018,46 @@ body {
   </div>
 </div>
 
+<div class="modal-backdrop" id="scheduleModal">
+  <div class="modal">
+    <div class="modal-title" id="scheduleModalTitle">일정 등록</div>
+    <div class="form-row">
+      <label for="scheduleFormTitle">제목</label>
+      <input id="scheduleFormTitle" type="text" placeholder="예: 팀 회의">
+    </div>
+    <div class="form-row">
+      <label for="scheduleFormDate">날짜</label>
+      <input id="scheduleFormDate" type="date">
+    </div>
+    <div class="form-row">
+      <label for="scheduleFormStart">시작 시간</label>
+      <input id="scheduleFormStart" type="time">
+    </div>
+    <div class="form-row">
+      <label for="scheduleFormEnd">종료 시간</label>
+      <input id="scheduleFormEnd" type="time">
+    </div>
+    <div class="form-row">
+      <label for="scheduleFormMemo">메모</label>
+      <textarea id="scheduleFormMemo" rows="4" placeholder="메모 입력"></textarea>
+    </div>
+    <div class="help-text">시간을 비워두면 종일 일정으로 저장됩니다.</div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="secondary-btn hidden" id="scheduleDeleteBtn" onclick="deleteScheduleEvent()">삭제</button>
+      <div style="display:flex; gap:10px; margin-left:auto;">
+        <button class="secondary-btn" onclick="closeScheduleEditor()">닫기</button>
+        <button class="primary-btn" onclick="saveScheduleEvent()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
-from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot }
-from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDr_SfWtjfRPqfguJ6yvwBo-e3r8bGAs_M",
@@ -998,11 +1085,15 @@ const db = getFirestore(app);
 
 const settingsRef = doc(db, "sharedPages", "mainSettings");
 const allocationRef = doc(db, "sharedPages", "workAllocation");
+const schedulesColRef = collection(db, "schedules");
 
 let currentUser = null;
 let currentContentPanelKey = null;
 let noticeEditor = null;
 let contentEditor = null;
+let calendar = null;
+let scheduleUnsubscribe = null;
+let currentScheduleEventId = null;
 
 let menuData = [];
 let noticeData = {
@@ -1016,6 +1107,7 @@ let allocationData = {
 };
 let selectedProjectId = null;
 let navGroupState = { qna: false };
+let scheduleEvents = [];
 
 const defaultMenus = [
   { title: "청현 공지사항", panelIndex: 0, location: "top", kind: "panel" },
@@ -1029,7 +1121,8 @@ const defaultMenus = [
   { title: "열람자료Q&A", panelIndex: 8, location: "top", kind: "panel" },
   { title: "기계기구Q&A", panelIndex: 9, location: "top", kind: "panel" },
   { title: "주택·상가 소액 조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" },
-  { title: "Project 분배표", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" }
+  { title: "Project 분배표", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" },
+  { title: "스케줄", panelIndex: 12, location: "bottom", kind: "panel", theme: "purple" }
 ];
 
 const defaultPageContents = {
@@ -1136,8 +1229,11 @@ function showSheet(index, title = "") {
   document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
   const panel = document.querySelector('.sheet-panel[data-index="' + index + '"]');
   if (panel) panel.classList.add("active");
-  const matchedButton = Array.from(document.querySelectorAll(".nav-item")).find(btn => btn.textContent.trim() === title);
+  const matchedButton = Array.from(document.querySelectorAll(".nav-item")).find(btn => btn.textContent.trim() === title || btn.textContent.trim().includes(title));
   if (matchedButton) matchedButton.classList.add("active");
+  if (Number(index) === 12 && calendar) {
+    requestAnimationFrame(() => calendar.updateSize());
+  }
 }
 window.showSheet = showSheet;
 
@@ -1145,7 +1241,7 @@ function getDynamicPanelKey(menu) {
   return `panel_${Number(menu.panelIndex)}`;
 }
 
-function ensureWorkMenu() {
+function ensureFixedMenus() {
   const fixedWorkMenu = {
     title: "Project 분배표",
     panelIndex: 11,
@@ -1153,28 +1249,40 @@ function ensureWorkMenu() {
     kind: "panel",
     theme: "purple"
   };
+  const fixedScheduleMenu = {
+    title: "스케줄",
+    panelIndex: 12,
+    location: "bottom",
+    kind: "panel",
+    theme: "purple"
+  };
 
   menuData = menuData.filter(menu => {
     const title = (menu.title || "").trim();
-    if ((title === "Project 분배표" || title === "Project분배표") && Number(menu.panelIndex) !== 11) {
-      return false;
-    }
+    if ((title === "Project 분배표" || title === "Project분배표") && Number(menu.panelIndex) !== 11) return false;
+    if (title === "스케줄" && Number(menu.panelIndex) !== 12) return false;
     return true;
   });
 
-  const hasWorkMenu = menuData.some(menu => {
-    const title = (menu.title || "").trim();
-    return Number(menu.panelIndex) === 11 || title === "Project 분배표" || title === "Project분배표";
-  });
+  const hasWorkMenu = menuData.some(menu => Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "Project 분배표");
+  const hasScheduleMenu = menuData.some(menu => Number(menu.panelIndex) === 12 || (menu.title || "").trim() === "스케줄");
 
   if (!hasWorkMenu) {
     menuData.push(fixedWorkMenu);
   } else {
     menuData = menuData.map(menu => {
       const title = (menu.title || "").trim();
-      if (Number(menu.panelIndex) === 11 || title === "Project 분배표" || title === "Project분배표") {
-        return fixedWorkMenu;
-      }
+      if (Number(menu.panelIndex) === 11 || title === "Project 분배표") return fixedWorkMenu;
+      return menu;
+    });
+  }
+
+  if (!hasScheduleMenu) {
+    menuData.push(fixedScheduleMenu);
+  } else {
+    menuData = menuData.map(menu => {
+      const title = (menu.title || "").trim();
+      if (Number(menu.panelIndex) === 12 || title === "스케줄") return fixedScheduleMenu;
       return menu;
     });
   }
@@ -1191,25 +1299,19 @@ function createMenuButton(menu, isChild = false) {
     else btn.classList.add("nav-item-green");
   }
 
-  // 🔥 공지사항
   if (Number(menu.panelIndex) === 0) {
     btn.classList.add("nav-item-notice");
     btn.textContent = "📢 " + (menu.title || "공지사항");
-  }
-
-  // 🔥 Project 분배표
-  else if (Number(menu.panelIndex) === 11) {
+  } else if (Number(menu.panelIndex) === 11) {
     btn.classList.add("nav-item-highlight");
     btn.textContent = "📊 " + (menu.title || "Project 분배표");
-  }
-
-  // 🔥 소액 조회
-  else if ((menu.title || "").includes("소액")) {
+  } else if (Number(menu.panelIndex) === 12) {
+    btn.classList.add("nav-item-highlight");
+    btn.textContent = "📅 " + (menu.title || "스케줄");
+  } else if ((menu.title || "").includes("소액")) {
     btn.classList.add("nav-item-highlight");
     btn.textContent = "🔍 " + (menu.title || "소액 조회");
-  }
-
-  else {
+  } else {
     btn.textContent = menu.title || "메뉴";
   }
 
@@ -1231,17 +1333,8 @@ window.toggleNavGroup = function(groupKey) {
   renderMenus();
 };
 
-function getTopMenuPriority(menu) {
-  const title = (menu.title || "").trim();
-  if (title === "조세") return 100;
-  if (title === "당해세") return 101;
-  if (title === "경매참고비고") return 102;
-  if (title === "감정평가비고") return 102;
-  return 50;
-}
-
 function renderMenus() {
-  ensureWorkMenu();
+  ensureFixedMenus();
 
   const topNav = document.getElementById("topNav");
   const bottomNav = document.getElementById("bottomNav");
@@ -1253,7 +1346,7 @@ function renderMenus() {
   const bottomMenus = menuData.filter(menu => menu.location === "bottom");
 
   const qnaMenus = topMenus.filter(menu => isQnaMenu(menu));
-  let normalMenus = topMenus.filter(menu => !isQnaMenu(menu));
+  const normalMenus = topMenus.filter(menu => !isQnaMenu(menu));
 
   const noticeMenu = normalMenus.find(m => Number(m.panelIndex) === 0);
   if (noticeMenu) {
@@ -1269,7 +1362,8 @@ function renderMenus() {
   const orderedBottomMenus = [...bottomMenus].sort((a, b) => {
     const order = {
       "Project 분배표": 0,
-      "주택·상가 소액 조회": 1
+      "스케줄": 1,
+      "주택·상가 소액 조회": 2
     };
     const av = order[a.title] ?? 99;
     const bv = order[b.title] ?? 99;
@@ -1346,7 +1440,7 @@ function ensureDynamicPanels() {
   const main = document.querySelector(".main");
   if (!main) return;
 
-  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11]);
+  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12]);
 
   menuData.forEach(menu => {
     const panelIndex = Number(menu.panelIndex);
@@ -1364,8 +1458,7 @@ function ensureDynamicPanels() {
         <header class="sheet-header">
           <h1>${escapeHtml(menu.title || "메뉴")}</h1>
           <div class="sheet-tools">
-            <button class="action-btn hidden panel-edit-btn dynamic-panel-edit-btn"
-              data-dynamic-key="${getDynamicPanelKey(menu)}">내용 수정</button>
+            <button class="action-btn hidden panel-edit-btn dynamic-panel-edit-btn" data-dynamic-key="${getDynamicPanelKey(menu)}">내용 수정</button>
           </div>
         </header>
         <section class="major-card"></section>
@@ -1407,8 +1500,7 @@ function ensureDynamicPanels() {
     };
   });
 }
-
-function renderAllContents() {
+  function renderAllContents() {
   const renderMap = {
     rent: "content-rent",
     wage: "content-wage",
@@ -1433,7 +1525,7 @@ function renderAllContents() {
 
   ensureDynamicPanels();
 
-  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11]);
+  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12]);
 
   menuData.forEach(menu => {
     const panelIndex = Number(menu.panelIndex);
@@ -1477,16 +1569,12 @@ function initEditors() {
 
   noticeEditor = new Quill("#noticeEditor", {
     theme: "snow",
-    modules: {
-      toolbar: fullToolbar
-    }
+    modules: { toolbar: fullToolbar }
   });
 
   contentEditor = new Quill("#contentEditor", {
     theme: "snow",
-    modules: {
-      toolbar: fullToolbar
-    }
+    modules: { toolbar: fullToolbar }
   });
 }
 
@@ -1514,46 +1602,38 @@ window.closeMenuEditor = function() { closeModal("menuModal"); };
 function renderMenuTable() {
   const tbody = document.getElementById("menuTableBody");
   tbody.innerHTML = "";
-  ensureWorkMenu();
+  ensureFixedMenus();
 
   const orderedMenus = [
     ...menuData.filter(menu => (menu.location || "top") !== "bottom"),
     ...menuData.filter(menu => (menu.location || "top") === "bottom")
   ];
 
-  orderedMenus.forEach((menu, displayIndex) => {
-    const realIndex = menuData.findIndex(item =>
-      item === menu
-    );
-
+  orderedMenus.forEach(menu => {
+    const realIndex = menuData.findIndex(item => item === menu);
     const tr = document.createElement("tr");
-    const isWork = Number(menu.panelIndex) === 11 || (menu.title || "").trim() === "Project 분배표";
+    const titleTrim = (menu.title || "").trim();
+    const isWork = Number(menu.panelIndex) === 11 || titleTrim === "Project 분배표";
+    const isSchedule = Number(menu.panelIndex) === 12 || titleTrim === "스케줄";
+    const isFixedMenu = isWork || isSchedule;
 
     tr.innerHTML = `
       <td>
-        <input data-field="location" data-index="${realIndex}"
-          value="${escapeHtml(isWork ? "bottom" : (menu.location || "top"))}"
-          ${isWork ? "readonly" : ""}>
+        <input data-field="location" data-index="${realIndex}" value="${escapeHtml(isFixedMenu ? "bottom" : (menu.location || "top"))}" ${isFixedMenu ? "readonly" : ""}>
       </td>
       <td>
-        <input data-field="title" data-index="${realIndex}"
-          value="${escapeHtml(isWork ? "Project 분배표" : (menu.title || ""))}"
-          ${isWork ? "readonly" : ""}>
+        <input data-field="title" data-index="${realIndex}" value="${escapeHtml(isWork ? "Project 분배표" : isSchedule ? "스케줄" : (menu.title || ""))}" ${isFixedMenu ? "readonly" : ""}>
       </td>
       <td>
-        <input data-field="panelIndex" data-index="${realIndex}"
-          value="${escapeHtml(String(isWork ? 11 : (menu.panelIndex ?? "")))}"
-          ${isWork ? "readonly" : ""}>
+        <input data-field="panelIndex" data-index="${realIndex}" value="${escapeHtml(String(isWork ? 11 : isSchedule ? 12 : (menu.panelIndex ?? "")))}" ${isFixedMenu ? "readonly" : ""}>
       </td>
       <td>
-        <input data-field="url" data-index="${realIndex}"
-          value="${escapeHtml(isWork ? "" : (menu.url || ""))}"
-          ${isWork ? "readonly" : ""}>
+        <input data-field="url" data-index="${realIndex}" value="${escapeHtml(isFixedMenu ? "" : (menu.url || ""))}" ${isFixedMenu ? "readonly" : ""}>
       </td>
       <td>
         <div class="menu-row-actions">
           ${
-            isWork
+            isFixedMenu
               ? '<span class="note">고정메뉴</span>'
               : (menu.location || "top") === "top"
                 ? `
@@ -1581,18 +1661,22 @@ window.addMenuRow = function(location) {
 window.removeMenuRow = function(index) {
   const target = menuData[index];
   if (!target) return;
-  if (Number(target.panelIndex) === 11 || (target.title || "").trim() === "Project 분배표") {
+  const titleTrim = (target.title || "").trim();
+  if (Number(target.panelIndex) === 11 || titleTrim === "Project 분배표") {
     alert("Project 분배표 메뉴는 삭제할 수 없습니다.");
+    return;
+  }
+  if (Number(target.panelIndex) === 12 || titleTrim === "스케줄") {
+    alert("스케줄 메뉴는 삭제할 수 없습니다.");
     return;
   }
   menuData.splice(index, 1);
   renderMenuTable();
 };
-  window.moveMenuUp = function(index) {
-  const current = menuData[index];
-  if (!current) return;
-  if ((current.location || "top") !== "top") return;
 
+window.moveMenuUp = function(index) {
+  const current = menuData[index];
+  if (!current || (current.location || "top") !== "top") return;
   for (let i = index - 1; i >= 0; i--) {
     if ((menuData[i].location || "top") === "top") {
       [menuData[i], menuData[index]] = [menuData[index], menuData[i]];
@@ -1604,9 +1688,7 @@ window.removeMenuRow = function(index) {
 
 window.moveMenuDown = function(index) {
   const current = menuData[index];
-  if (!current) return;
-  if ((current.location || "top") !== "top") return;
-
+  if (!current || (current.location || "top") !== "top") return;
   for (let i = index + 1; i < menuData.length; i++) {
     if ((menuData[i].location || "top") === "top") {
       [menuData[i], menuData[index]] = [menuData[index], menuData[i]];
@@ -1621,9 +1703,7 @@ function syncMenuDataFromTable() {
   const previousMenus = [...menuData];
 
   menuData = rows.map((row, index) => {
-    const getVal = (field) =>
-      row.querySelector(`[data-field="${field}"][data-index="${index}"]`)?.value?.trim() || "";
-
+    const getVal = field => row.querySelector(`[data-field="${field}"][data-index="${index}"]`)?.value?.trim() || "";
     const prev = previousMenus[index] || {};
 
     const rawTitle = getVal("title");
@@ -1631,48 +1711,33 @@ function syncMenuDataFromTable() {
     const rawLocation = getVal("location");
     const rawUrl = getVal("url");
 
-    const isWorkAllocation =
-      rawTitle === "Project 분배표" ||
-      Number(rawPanelIndex) === 11 ||
-      (prev.title || "").trim() === "Project 분배표";
+    const isWorkAllocation = rawTitle === "Project 분배표" || Number(rawPanelIndex) === 11 || (prev.title || "").trim() === "Project 분배표";
+    const isSchedule = rawTitle === "스케줄" || Number(rawPanelIndex) === 12 || (prev.title || "").trim() === "스케줄";
 
-    const title = isWorkAllocation
-      ? "Project 분배표"
-      : (rawTitle || prev.title || "");
-
-    const panelIndex = isWorkAllocation
-      ? 11
-      : (rawPanelIndex === "" ? Number(prev.panelIndex || 0) : Number(rawPanelIndex));
-
-    const location = isWorkAllocation
-      ? "bottom"
-      : (rawLocation || prev.location || "top");
+    const title = isWorkAllocation ? "Project 분배표" : isSchedule ? "스케줄" : (rawTitle || prev.title || "");
+    const panelIndex = isWorkAllocation ? 11 : isSchedule ? 12 : (rawPanelIndex === "" ? Number(prev.panelIndex || 0) : Number(rawPanelIndex));
+    const location = (isWorkAllocation || isSchedule) ? "bottom" : (rawLocation || prev.location || "top");
 
     const item = {
       title,
       panelIndex,
       location,
-      kind: rawUrl
-        ? "iframe"
-        : (isWorkAllocation ? "panel" : (location === "bottom" ? "iframe" : "panel"))
+      kind: rawUrl ? "iframe" : ((isWorkAllocation || isSchedule) ? "panel" : (location === "bottom" ? "iframe" : "panel"))
     };
 
-    if (rawUrl && !isWorkAllocation) {
+    if (rawUrl && !(isWorkAllocation || isSchedule)) {
       item.url = rawUrl;
     } else if (!rawUrl && prev.url && item.kind === "iframe") {
       item.url = prev.url;
     }
 
-    if (isWorkAllocation) {
-      item.theme = "purple";
-    } else if (prev.theme) {
-      item.theme = prev.theme;
-    }
+    if (isWorkAllocation || isSchedule) item.theme = "purple";
+    else if (prev.theme) item.theme = prev.theme;
 
     return item;
   }).filter(menu => (menu.title || "").trim() !== "");
 
-  ensureWorkMenu();
+  ensureFixedMenus();
 }
 
 window.saveMenusToFirebase = async function() {
@@ -1803,17 +1868,13 @@ async function ensureInitialData() {
   try {
     const allocationSnap = await getDoc(allocationRef);
     if (!allocationSnap.exists()) {
-      await setDoc(allocationRef, removeUndefinedDeep({
-        members: fixedMembers,
-        projects: []
-      }));
+      await setDoc(allocationRef, removeUndefinedDeep({ members: fixedMembers, projects: [] }));
     }
   } catch (error) {
     console.error("Project 분배표 초기 데이터 생성 실패:", error);
   }
 }
 
-/* Project 분배표 */
 function getSelectedProject() {
   return allocationData.projects.find(p => p.id === selectedProjectId) || null;
 }
@@ -1823,11 +1884,11 @@ function createEmptyProject(name) {
     id: "project_" + Date.now(),
     name,
     columns: [],
-   rows: fixedMembers.map(member => ({
-  name: member,
-  active: true,
-  values: {}
-}))
+    rows: fixedMembers.map(member => ({
+      name: member,
+      active: true,
+      values: {}
+    }))
   };
 }
 
@@ -1940,25 +2001,23 @@ function renderAllocationUI() {
 
   const headers = project.columns.map(col => `<th>${escapeHtml(col)}</th>`).join("");
   const rowsHtml = project.rows.map((row, rowIndex) => {
-  const cells = project.columns.map(col => {
-    const value = row.values?.[col] ?? "";
-    return `<td><input type="text" value="${escapeHtml(value)}" ${isAdmin(currentUser) ? "" : "readonly"} oninput="updateAllocationCell('${project.id}', ${rowIndex}, '${escapeHtml(col)}', this.value)"></td>`;
-  }).join("");
+    const cells = project.columns.map(col => {
+      const value = row.values?.[col] ?? "";
+      return `<td><input type="text" value="${escapeHtml(value)}" ${isAdmin(currentUser) ? "" : "readonly"} oninput="updateAllocationCell('${project.id}', ${rowIndex}, '${escapeHtml(col)}', this.value)"></td>`;
+    }).join("");
 
-  return `
-    <tr style="${row.active ? '' : 'opacity:0.3'}">
-      <td style="display:flex; align-items:center; gap:6px;">
-        ${escapeHtml(row.name)}
-        <button 
-          style="font-size:11px; padding:4px 6px; border-radius:6px; border:1px solid #cbd5e1; cursor:pointer;"
-          onclick="toggleMemberActive('${project.id}', ${rowIndex})">
-          ${row.active ? '제외' : '참여'}
-        </button>
-      </td>
-      ${cells}
-    </tr>
-  `;
-}).join("");
+    return `
+      <tr style="${row.active ? '' : 'opacity:0.3'}">
+        <td style="display:flex; align-items:center; gap:6px;">
+          ${escapeHtml(row.name)}
+          <button style="font-size:11px; padding:4px 6px; border-radius:6px; border:1px solid #cbd5e1; cursor:pointer;" onclick="toggleMemberActive('${project.id}', ${rowIndex})">
+            ${row.active ? '제외' : '참여'}
+          </button>
+        </td>
+        ${cells}
+      </tr>
+    `;
+  }).join("");
 
   body.innerHTML = `
     <div class="work-project-title">${escapeHtml(project.name)}</div>
@@ -1984,6 +2043,191 @@ function renderAllocationUI() {
   `;
 }
 
+window.toggleMemberActive = function(projectId, rowIndex) {
+  const project = allocationData.projects.find(p => p.id === projectId);
+  if (!project) return;
+  const row = project.rows[rowIndex];
+  row.active = !row.active;
+  renderAllocationUI();
+};
+
+function initCalendar() {
+  const calendarEl = document.getElementById("calendar");
+  if (!calendarEl || calendar) return;
+
+  calendar = new FullCalendar.Calendar(calendarEl, {
+    locale: "ko",
+    initialView: "dayGridMonth",
+    height: "auto",
+    headerToolbar: {
+      left: "prev,next today",
+      center: "title",
+      right: "dayGridMonth,timeGridWeek,timeGridDay"
+    },
+    buttonText: {
+      today: "오늘",
+      month: "월",
+      week: "주",
+      day: "일"
+    },
+    selectable: true,
+    editable: false,
+    dayMaxEvents: true,
+    dateClick(info) {
+      openScheduleEditor({
+        date: info.dateStr,
+        startTime: "",
+        endTime: "",
+        title: "",
+        memo: ""
+      });
+    },
+    eventClick(info) {
+      const ext = info.event.extendedProps || {};
+      openScheduleEditor({
+        id: info.event.id,
+        title: info.event.title,
+        date: ext.date || (info.event.startStr ? info.event.startStr.slice(0, 10) : ""),
+        startTime: ext.startTime || "",
+        endTime: ext.endTime || "",
+        memo: ext.memo || ""
+      });
+    },
+    events: []
+  });
+
+  calendar.render();
+}
+
+function mapScheduleDocToEvent(docSnap) {
+  const data = docSnap.data() || {};
+  const date = data.date || "";
+  const startTime = data.startTime || "";
+  const endTime = data.endTime || "";
+
+  let start = date;
+  let end;
+  let allDay = true;
+
+  if (date && startTime) {
+    start = `${date}T${startTime}`;
+    allDay = false;
+  }
+  if (date && endTime) {
+    end = `${date}T${endTime}`;
+  }
+
+  return {
+    id: docSnap.id,
+    title: data.title || "(제목 없음)",
+    start,
+    end,
+    allDay,
+    extendedProps: {
+      date,
+      startTime,
+      endTime,
+      memo: data.memo || "",
+      writer: data.writer || ""
+    }
+  };
+}
+
+function refreshCalendarEvents() {
+  if (!calendar) return;
+  calendar.removeAllEvents();
+  scheduleEvents.forEach(evt => calendar.addEvent(evt));
+}
+
+function subscribeSchedules() {
+  if (scheduleUnsubscribe) scheduleUnsubscribe();
+  const qRef = query(schedulesColRef, orderBy("date", "asc"));
+  scheduleUnsubscribe = onSnapshot(qRef, snap => {
+    scheduleEvents = snap.docs.map(mapScheduleDocToEvent);
+    refreshCalendarEvents();
+  }, error => {
+    console.error("스케줄 불러오기 실패:", error);
+  });
+}
+
+function formatTodayDate() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function openScheduleEditor(schedule = {}) {
+  currentScheduleEventId = schedule.id || null;
+  document.getElementById("scheduleModalTitle").textContent = currentScheduleEventId ? "일정 수정" : "일정 등록";
+  document.getElementById("scheduleFormTitle").value = schedule.title || "";
+  document.getElementById("scheduleFormDate").value = schedule.date || formatTodayDate();
+  document.getElementById("scheduleFormStart").value = schedule.startTime || "";
+  document.getElementById("scheduleFormEnd").value = schedule.endTime || "";
+  document.getElementById("scheduleFormMemo").value = schedule.memo || "";
+  document.getElementById("scheduleDeleteBtn").classList.toggle("hidden", !currentScheduleEventId);
+  openModal("scheduleModal");
+}
+
+window.openNewScheduleFromButton = function() {
+  openScheduleEditor({ date: formatTodayDate() });
+};
+
+window.closeScheduleEditor = function() {
+  closeModal("scheduleModal");
+};
+
+window.saveScheduleEvent = async function() {
+  try {
+    const title = document.getElementById("scheduleFormTitle").value.trim();
+    const date = document.getElementById("scheduleFormDate").value;
+    const startTime = document.getElementById("scheduleFormStart").value;
+    const endTime = document.getElementById("scheduleFormEnd").value;
+    const memo = document.getElementById("scheduleFormMemo").value.trim();
+
+    if (!title) return alert("일정 제목을 입력하세요.");
+    if (!date) return alert("날짜를 입력하세요.");
+    if (startTime && endTime && startTime > endTime) return alert("종료 시간이 시작 시간보다 빠를 수 없습니다.");
+
+    const payload = removeUndefinedDeep({
+      title,
+      date,
+      startTime: startTime || "",
+      endTime: endTime || "",
+      memo,
+      writer: currentUser?.email || "anonymous",
+      updatedAt: new Date().toISOString()
+    });
+
+    if (currentScheduleEventId) {
+      await updateDoc(doc(db, "schedules", currentScheduleEventId), payload);
+    } else {
+      await addDoc(schedulesColRef, {
+        ...payload,
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    closeModal("scheduleModal");
+  } catch (error) {
+    console.error("일정 저장 실패:", error);
+    alert("일정 저장 실패: " + (error.message || error));
+  }
+};
+
+window.deleteScheduleEvent = async function() {
+  if (!currentScheduleEventId) return;
+  if (!confirm("이 일정을 삭제하시겠습니까?")) return;
+  try {
+    await deleteDoc(doc(db, "schedules", currentScheduleEventId));
+    closeModal("scheduleModal");
+  } catch (error) {
+    console.error("일정 삭제 실패:", error);
+    alert("일정 삭제 실패: " + (error.message || error));
+  }
+};
+
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   updateAdminUI();
@@ -1997,31 +2241,21 @@ onAuthStateChanged(auth, async user => {
 onSnapshot(settingsRef, snap => {
   const data = snap.data() || {};
   menuData = Array.isArray(data.menus) && data.menus.length ? data.menus : [...defaultMenus];
-  ensureWorkMenu();
+  ensureFixedMenus();
   noticeData = data.notice || { title: "공지 제목", date: "", html: "<li>공지 내용이 없습니다.</li>" };
   pageContents = data.pageContents ? data.pageContents : structuredClone(defaultPageContents);
 
   renderMenus();
   renderNotice();
   renderAllContents();
-   
+
   const activeTitle = document.querySelector(".nav-item.active")?.textContent?.trim();
   if (!activeTitle) {
     showSheet(0, "청현 공지사항");
   }
 });
- 
-  window.toggleMemberActive = function(projectId, rowIndex) {
-  const project = allocationData.projects.find(p => p.id === projectId);
-  if (!project) return;
 
-  const row = project.rows[rowIndex];
-  row.active = !row.active;
-
-  renderAllocationUI();
-};
-
-  onSnapshot(allocationRef, snap => {
+onSnapshot(allocationRef, snap => {
   const data = snap.data() || {};
   allocationData = {
     members: Array.isArray(data.members) && data.members.length ? data.members : [...fixedMembers],
@@ -2039,6 +2273,8 @@ initEditors();
 renderMenus();
 renderNotice();
 renderAllContents();
+initCalendar();
+subscribeSchedules();
 showSheet(0, "청현 공지사항");
 </script>
 </body>
