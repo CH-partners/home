@@ -1319,20 +1319,17 @@ function createMenuButton(menu, isChild = false) {
   }
 
   if (Number(menu.panelIndex) === 0) {
-      btn.classList.add("nav-item-notice");
-      btn.textContent = "📢 " + (menu.title || "공지사항");
-    } else if (Number(menu.panelIndex) === 11) {
-      btn.classList.add("nav-item-highlight");
-      btn.textContent = "📊 분배표";
-    } else if (Number(menu.panelIndex) === 12) {
-      btn.classList.add("nav-item-highlight");
-      btn.textContent = "📅 스케줄";
-    } else if ((menu.title || "").includes("소액")) {
-      btn.classList.add("nav-item-highlight");
-      btn.textContent = "🔍 소액조회";
-    } else {
-      btn.textContent = menu.title || "메뉴";
-    }
+    btn.classList.add("nav-item-notice");
+    btn.textContent = "📢 " + (menu.title || "공지사항");
+  } else if (Number(menu.panelIndex) === 11) {
+    btn.classList.add("nav-item-highlight");
+    btn.textContent = "📊 분배표";
+  } else if (Number(menu.panelIndex) === 12) {
+    btn.classList.add("nav-item-highlight");
+    btn.textContent = "📅 스케줄";
+  } else {
+    btn.textContent = menu.title || "메뉴";
+  }
 
   btn.addEventListener("click", () => {
     if (menu.kind === "iframe" && menu.url) {
@@ -1734,38 +1731,59 @@ function syncMenuDataFromTable() {
   const rows = Array.from(document.querySelectorAll("#menuTableBody tr"));
   const previousMenus = [...menuData];
 
-  menuData = rows.map((row, index) => {
-    const getVal = field => row.querySelector(`[data-field="${field}"][data-index="${index}"]`)?.value?.trim() || "";
-    const prev = previousMenus[index] || {};
+  menuData = rows.map((row) => {
+    const firstInput = row.querySelector("[data-index]");
+    const realIndex = Number(firstInput?.getAttribute("data-index"));
+    const prev = previousMenus[realIndex] || {};
+
+    const getVal = (field) => {
+      return row.querySelector(`[data-field="${field}"][data-index="${realIndex}"]`)?.value?.trim() || "";
+    };
 
     const rawTitle = getVal("title");
     const rawPanelIndex = getVal("panelIndex");
     const rawLocation = getVal("location");
     const rawUrl = getVal("url");
 
+    const prevTitle = (prev.title || "").trim();
+
     const isWorkAllocation =
-  rawTitle === "Project 분배표" ||
-  rawTitle === "Project분배표" ||
-  rawTitle === "분배표" ||
-  Number(rawPanelIndex) === 11 ||
-  (prev.title || "").trim() === "Project 분배표" ||
-  (prev.title || "").trim() === "Project분배표" ||
-  (prev.title || "").trim() === "분배표";
+      rawTitle === "Project 분배표" ||
+      rawTitle === "Project분배표" ||
+      rawTitle === "분배표" ||
+      Number(rawPanelIndex) === 11 ||
+      prevTitle === "Project 분배표" ||
+      prevTitle === "Project분배표" ||
+      prevTitle === "분배표";
 
-const isSchedule =
-  rawTitle === "스케줄" ||
-  Number(rawPanelIndex) === 12 ||
-  (prev.title || "").trim() === "스케줄";
+    const isSchedule =
+      rawTitle === "스케줄" ||
+      Number(rawPanelIndex) === 12 ||
+      prevTitle === "스케줄";
 
-const title = isWorkAllocation ? "분배표" : isSchedule ? "스케줄" : (rawTitle || prev.title || "");
-    const panelIndex = isWorkAllocation ? 11 : isSchedule ? 12 : (rawPanelIndex === "" ? Number(prev.panelIndex || 0) : Number(rawPanelIndex));
-    const location = (isWorkAllocation || isSchedule) ? "bottom" : (rawLocation || prev.location || "top");
+    const title = isWorkAllocation
+      ? "분배표"
+      : isSchedule
+        ? "스케줄"
+        : (rawTitle || prev.title || "");
+
+    const panelIndex = isWorkAllocation
+      ? 11
+      : isSchedule
+        ? 12
+        : (rawPanelIndex === "" ? Number(prev.panelIndex || 0) : Number(rawPanelIndex));
+
+    const location = (isWorkAllocation || isSchedule)
+      ? "bottom"
+      : (rawLocation || prev.location || "top");
 
     const item = {
       title,
       panelIndex,
       location,
-      kind: rawUrl ? "iframe" : ((isWorkAllocation || isSchedule) ? "panel" : (location === "bottom" ? "iframe" : "panel"))
+      kind: rawUrl
+        ? "iframe"
+        : ((isWorkAllocation || isSchedule) ? "panel" : (location === "bottom" ? "iframe" : "panel"))
     };
 
     if (rawUrl && !(isWorkAllocation || isSchedule)) {
