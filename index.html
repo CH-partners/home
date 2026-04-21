@@ -783,6 +783,38 @@ body {
   .major-card { padding:18px; border-radius:18px; }
   .tool-frame { height:80vh; min-height:700px; }
 }
+  .content-table-preview {
+  margin-top: 16px;
+}
+
+.content-table-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.content-table-preview th,
+.content-table-preview td {
+  border: 1px solid #cbd5e1;
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.content-table-preview th {
+  background: #f8fafc;
+  font-weight: 700;
+}
+
+#contentTableEditor input {
+  width: 100%;
+  min-width: 120px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
 </style>
 </head>
 <body>
@@ -998,13 +1030,35 @@ body {
     </div>
     <div class="help-text" style="margin-bottom:12px;">굵게, 색상, 글자크기, 글머리표, 번호목록, 정렬, 링크까지 적용할 수 있습니다.</div>
     <div id="contentEditor" style="height:380px;"></div>
+
+    <!-- 여기 추가 -->
+    <div class="form-row" style="margin-top:18px;">
+      <label>표 입력</label>
+      <div class="help-text" style="margin-bottom:10px;">
+        표는 아래에서 입력/수정/삭제합니다. 저장 시 본문 아래에 표가 함께 반영됩니다.
+      </div>
+
+      <div class="work-header-actions">
+        <button type="button" class="action-btn" onclick="enableContentTable()">표 사용</button>
+        <button type="button" class="action-btn" onclick="addContentTableRow()">행 추가</button>
+        <button type="button" class="action-btn" onclick="addContentTableColumn()">열 추가</button>
+        <button type="button" class="action-btn" onclick="removeLastContentTableRow()">마지막 행 삭제</button>
+        <button type="button" class="action-btn" onclick="removeLastContentTableColumn()">마지막 열 삭제</button>
+        <button type="button" class="action-btn" onclick="clearContentTable()">표 삭제</button>
+      </div>
+
+      <div id="contentTableWrap" class="work-table-wrap" style="margin-top:10px;">
+        <table class="work-table" id="contentTableEditor"></table>
+      </div>
+    </div>
+    <!-- 여기까지 추가 -->
+
     <div class="modal-actions">
       <button class="secondary-btn" onclick="closeContentEditor()">닫기</button>
       <button class="primary-btn" onclick="saveContentToFirebase()">저장</button>
     </div>
   </div>
 </div>
-
 <div class="modal-backdrop" id="loginModal">
   <div class="modal">
     <div class="modal-title">관리자 로그인</div>
@@ -1100,7 +1154,10 @@ let contentEditor = null;
 let calendar = null;
 let scheduleUnsubscribe = null;
 let currentScheduleEventId = null;
-
+let currentContentTableData = {
+  enabled: false,
+  rows: []
+};
 let menuData = [];
 let noticeData = {
   title: "공지 제목",
@@ -1134,6 +1191,17 @@ const defaultMenus = [
 const defaultPageContents = {
   rent: {
     majorTitle: "임대차",
+    bodyHtml: `
+      <div class="status-card">
+        <div class="badge gray">미진행</div>
+        <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 경매미진행건으로</p>
+        <ul class="clean-list">
+          <li>등본 상 소유자 거주로 추정되어 미반영 / (상가) - 임대차 관련자료 없어 미반영</li>
+          <li>전입세대확인서 상 전입인 소유자로 미반영 / (상가) - 상가건물임대차현황서 상 등록내역 없어 미반영</li>
+        </ul>
+      </div>
+    `,
+    tableData: { enabled: false, rows: [] },
     html: `
       <div class="status-card">
         <div class="badge gray">미진행</div>
@@ -1147,6 +1215,12 @@ const defaultPageContents = {
   },
   wage: {
     majorTitle: "임금",
+    bodyHtml: `
+      <div class="group-title">개인</div>
+      <div class="sub-title">- 종기 내</div>
+      <p class="body-line">소유자 개인이며, 임금채권자로 추정되는 가압류권자 없어 미반영</p>
+    `,
+    tableData: { enabled: false, rows: [] },
     html: `
       <div class="group-title">개인</div>
       <div class="sub-title">- 종기 내</div>
@@ -1155,30 +1229,44 @@ const defaultPageContents = {
   },
   tax: {
     majorTitle: "조세",
+    bodyHtml: `<p class="body-line">경매열람시 교부청구 순서대로 기입(재산세, 종부세 등 선순위 반영 분 먼저 기재)</p>`,
+    tableData: { enabled: false, rows: [] },
     html: `<p class="body-line">경매열람시 교부청구 순서대로 기입(재산세, 종부세 등 선순위 반영 분 먼저 기재)</p>`
   },
   tenantqa: {
     majorTitle: "선순위임차인Q&A",
+    bodyHtml: `<p class="body-line">전입세대확인서 상 선순위 전입인 존재하는 바, 현재 유효한 임차인 여부 및 취급 시 임대차 관련자료 송부 부탁 드립니다.</p>`,
+    tableData: { enabled: false, rows: [] },
     html: `<p class="body-line">전입세대확인서 상 선순위 전입인 존재하는 바, 현재 유효한 임차인 여부 및 취급 시 임대차 관련자료 송부 부탁 드립니다.</p>`
   },
   guaranteeqa: {
     majorTitle: "보증서Q&A",
+    bodyHtml: `<p class="body-line">담보로 제시한 보증서 관련 자료 송부 부탁 드립니다.</p>`,
+    tableData: { enabled: false, rows: [] },
     html: `<p class="body-line">담보로 제시한 보증서 관련 자료 송부 부탁 드립니다.</p>`
   },
   securedqa: {
     majorTitle: "피담보채무Q&A",
+    bodyHtml: `<p class="body-line">피담보채무범위 확인 부탁 드립니다.</p>`,
+    tableData: { enabled: false, rows: [] },
     html: `<p class="body-line">피담보채무범위 확인 부탁 드립니다.</p>`
   },
   saleqa: {
     majorTitle: "매각대상여부Q&A",
+    bodyHtml: `<p class="body-line">매각대상 여부 확인 부탁 드립니다.</p>`,
+    tableData: { enabled: false, rows: [] },
     html: `<p class="body-line">매각대상 여부 확인 부탁 드립니다.</p>`
   },
   browseqa: {
     majorTitle: "열람자료Q&A",
+    bodyHtml: `<p class="body-line">경매열람자료 송부 부탁 드립니다.</p>`,
+    tableData: { enabled: false, rows: [] },
     html: `<p class="body-line">경매열람자료 송부 부탁 드립니다.</p>`
   },
   machineqa: {
     majorTitle: "기계기구Q&A",
+    bodyHtml: `<p class="body-line">기계기구 수량 재검토 부탁 드립니다.</p>`,
+    tableData: { enabled: false, rows: [] },
     html: `<p class="body-line">기계기구 수량 재검토 부탁 드립니다.</p>`
   }
 };
@@ -1503,11 +1591,16 @@ function ensureDynamicPanels() {
 
     const panelKey = getDynamicPanelKey(menu);
     if (!pageContents[panelKey]) {
-      pageContents[panelKey] = {
-        majorTitle: menu.title || "메뉴",
-        html: `<p>내용을 입력하세요.</p>`
-      };
-    }
+  pageContents[panelKey] = {
+    majorTitle: menu.title || "메뉴",
+    bodyHtml: `<p>내용을 입력하세요.</p>`,
+    tableData: {
+      enabled: false,
+      rows: []
+    },
+    html: `<p>내용을 입력하세요.</p>`
+  };
+}
   });
 
   document.querySelectorAll(".dynamic-panel-edit-btn").forEach(btn => {
@@ -1841,22 +1934,54 @@ window.openContentEditor = function(panelKey) {
   if (!pageContents[panelKey]) {
     pageContents[panelKey] = {
       majorTitle: getPanelTitleByKey(panelKey),
-      html: `<p>내용을 입력하세요.</p>`
+      html: `<p>내용을 입력하세요.</p>`,
+      bodyHtml: `<p>내용을 입력하세요.</p>`,
+      tableData: {
+        enabled: false,
+        rows: []
+      }
     };
   }
 
   const config = pageContents[panelKey];
+
+  if (!config.bodyHtml) {
+    config.bodyHtml = config.html || `<p>내용을 입력하세요.</p>`;
+  }
+
+  if (!config.tableData) {
+    config.tableData = {
+      enabled: false,
+      rows: []
+    };
+  }
+
   document.getElementById("contentModalTitle").textContent = `${getPanelTitleByKey(panelKey)} 내용 수정`;
   document.getElementById("contentMajorTitle").value = config.majorTitle || "";
-  contentEditor.root.innerHTML = config.html || "";
+  contentEditor.root.innerHTML = config.bodyHtml || config.html || "";
+
+  currentContentTableData = cloneTableData(config.tableData);
+  renderContentTableEditor();
+
   openModal("contentModal");
 };
+  
 window.closeContentEditor = function() { closeModal("contentModal"); };
 
 function syncContentFromEditor() {
   const config = pageContents[currentContentPanelKey];
-  config.majorTitle = document.getElementById("contentMajorTitle").value.trim() || getPanelTitleByKey(currentContentPanelKey);
-  config.html = contentEditor.root.innerHTML;
+
+  config.majorTitle =
+    document.getElementById("contentMajorTitle").value.trim() ||
+    getPanelTitleByKey(currentContentPanelKey);
+
+  const bodyHtml = contentEditor.root.innerHTML;
+  const tableData = cloneTableData(currentContentTableData);
+  const tableHtml = buildContentTableHtml(tableData);
+
+  config.bodyHtml = bodyHtml;
+  config.tableData = tableData;
+  config.html = bodyHtml + tableHtml;
 }
 
 window.saveContentToFirebase = async function() {
@@ -2103,7 +2228,210 @@ function renderAllocationUI() {
     </div>
   `;
 }
+  
+function createDefaultContentTable() {
+  return {
+    enabled: true,
+    rows: [
+      ["구분", "내용"],
+      ["", ""]
+    ]
+  };
+}
 
+function cloneTableData(data) {
+  return {
+    enabled: !!data?.enabled,
+    rows: Array.isArray(data?.rows)
+      ? data.rows.map(row => Array.isArray(row) ? [...row] : [])
+      : []
+  };
+}
+
+function normalizeContentTableRows(rows) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return [["구분", "내용"], ["", ""]];
+  }
+
+  const maxCols = Math.max(...rows.map(row => Array.isArray(row) ? row.length : 0), 1);
+
+  return rows.map(row => {
+    const safeRow = Array.isArray(row) ? [...row] : [];
+    while (safeRow.length < maxCols) safeRow.push("");
+    return safeRow;
+  });
+}
+
+function renderContentTableEditor() {
+  const table = document.getElementById("contentTableEditor");
+  if (!table) return;
+
+  if (!currentContentTableData.enabled) {
+    table.innerHTML = `
+      <tbody>
+        <tr>
+          <td style="padding:16px; color:#64748b;">
+            표를 사용하려면 "표 사용" 버튼을 눌러주세요.
+          </td>
+        </tr>
+      </tbody>
+    `;
+    return;
+  }
+
+  currentContentTableData.rows = normalizeContentTableRows(currentContentTableData.rows);
+  const rows = currentContentTableData.rows;
+
+  const theadHtml = `
+    <thead>
+      <tr>
+        ${rows[0].map((cell, colIndex) => `
+          <th>
+            <input
+              type="text"
+              value="${escapeHtml(cell || "")}"
+              oninput="updateContentTableCell(0, ${colIndex}, this.value)"
+              placeholder="헤더 입력"
+            >
+          </th>
+        `).join("")}
+      </tr>
+    </thead>
+  `;
+
+  const tbodyHtml = `
+    <tbody>
+      ${rows.slice(1).map((row, rowOffset) => {
+        const rowIndex = rowOffset + 1;
+        return `
+          <tr>
+            ${row.map((cell, colIndex) => `
+              <td>
+                <input
+                  type="text"
+                  value="${escapeHtml(cell || "")}"
+                  oninput="updateContentTableCell(${rowIndex}, ${colIndex}, this.value)"
+                  placeholder="내용 입력"
+                >
+              </td>
+            `).join("")}
+          </tr>
+        `;
+      }).join("")}
+    </tbody>
+  `;
+
+  table.innerHTML = theadHtml + tbodyHtml;
+}
+
+window.updateContentTableCell = function(rowIndex, colIndex, value) {
+  if (!currentContentTableData.enabled) return;
+  if (!currentContentTableData.rows[rowIndex]) return;
+  currentContentTableData.rows[rowIndex][colIndex] = value;
+};
+
+window.enableContentTable = function() {
+  if (!currentContentTableData.enabled) {
+    currentContentTableData = createDefaultContentTable();
+  }
+  renderContentTableEditor();
+};
+
+window.addContentTableRow = function() {
+  if (!currentContentTableData.enabled) {
+    currentContentTableData = createDefaultContentTable();
+  }
+  const colCount = currentContentTableData.rows[0]?.length || 2;
+  currentContentTableData.rows.push(Array(colCount).fill(""));
+  renderContentTableEditor();
+};
+
+window.addContentTableColumn = function() {
+  if (!currentContentTableData.enabled) {
+    currentContentTableData = createDefaultContentTable();
+  }
+
+  currentContentTableData.rows = normalizeContentTableRows(currentContentTableData.rows);
+
+  currentContentTableData.rows.forEach((row, idx) => {
+    row.push(idx === 0 ? `항목${row.length + 1}` : "");
+  });
+
+  renderContentTableEditor();
+};
+
+window.removeLastContentTableRow = function() {
+  if (!currentContentTableData.enabled) return;
+
+  if (currentContentTableData.rows.length <= 2) {
+    alert("최소 1개의 내용 행은 유지해야 합니다.");
+    return;
+  }
+
+  currentContentTableData.rows.pop();
+  renderContentTableEditor();
+};
+
+window.removeLastContentTableColumn = function() {
+  if (!currentContentTableData.enabled) return;
+
+  currentContentTableData.rows = normalizeContentTableRows(currentContentTableData.rows);
+  const colCount = currentContentTableData.rows[0]?.length || 0;
+
+  if (colCount <= 1) {
+    alert("최소 1개의 열은 유지해야 합니다.");
+    return;
+  }
+
+  currentContentTableData.rows.forEach(row => row.pop());
+  renderContentTableEditor();
+};
+
+window.clearContentTable = function() {
+  currentContentTableData = {
+    enabled: false,
+    rows: []
+  };
+  renderContentTableEditor();
+};
+
+function buildContentTableHtml(tableData) {
+  if (!tableData?.enabled) return "";
+
+  const rows = normalizeContentTableRows(tableData.rows || []);
+  if (!rows.length) return "";
+
+  const headerRow = rows[0];
+  const bodyRows = rows.slice(1);
+
+  const thead = `
+    <thead>
+      <tr>
+        ${headerRow.map(cell => `<th>${escapeHtml(cell || "")}</th>`).join("")}
+      </tr>
+    </thead>
+  `;
+
+  const tbody = `
+    <tbody>
+      ${bodyRows.map(row => `
+        <tr>
+          ${row.map(cell => `<td>${escapeHtml(cell || "")}</td>`).join("")}
+        </tr>
+      `).join("")}
+    </tbody>
+  `;
+
+  return `
+    <div class="content-table-preview">
+      <table>
+        ${thead}
+        ${tbody}
+      </table>
+    </div>
+  `;
+}
+  
 window.toggleMemberActive = function(projectId, rowIndex) {
   const project = allocationData.projects.find(p => p.id === projectId);
   if (!project) return;
@@ -2305,6 +2633,18 @@ onSnapshot(settingsRef, snap => {
   ensureFixedMenus();
   noticeData = data.notice || { title: "공지 제목", date: "", html: "<li>공지 내용이 없습니다.</li>" };
   pageContents = data.pageContents ? data.pageContents : structuredClone(defaultPageContents);
+
+Object.keys(pageContents).forEach(key => {
+  if (!pageContents[key].bodyHtml) {
+    pageContents[key].bodyHtml = pageContents[key].html || "";
+  }
+  if (!pageContents[key].tableData) {
+    pageContents[key].tableData = {
+      enabled: false,
+      rows: []
+    };
+  }
+});
 
   renderMenus();
   renderNotice();
