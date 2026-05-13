@@ -1495,16 +1495,16 @@ function ensureFixedMenus() {
     });
   }
 
-  const hasPhotoMenu = menuData.some(menu => Number(menu.panelIndex) === 13);
+  const fixedPhotoMenu = {
+  title: "사진",
+  panelIndex: 13,
+  location: "top",
+  kind: "panel"
+};
 
-if (!hasPhotoMenu) {
-  menuData.push({
-    title: "사진",
-    panelIndex: 13,
-    location: "top",
-    kind: "panel"
-  });
-}  
+menuData = menuData.filter(menu => Number(menu.panelIndex) !== 13);
+
+menuData.push(fixedPhotoMenu);
 }  
   
 function createMenuButton(menu, isChild = false) {
