@@ -548,13 +548,13 @@ body {
 .ql-editor .ql-size-small,
 .rich-preview .ql-size-small,
 #noticeItems .ql-size-small {
-  font-size:12px !important;
+  font-size:12px !ant;
 }
 
 .ql-editor .ql-size-large,
 .rich-preview .ql-size-large,
 #noticeItems .ql-size-large {
-  font-size:18px !important;
+  font-size:18px !ant;
 }
 
 .ql-editor .ql-size-huge,
@@ -968,9 +968,40 @@ body {
         <div id="calendar"></div>
       </section>
     </div>
+ 
+    <div class="sheet-panel" data-index="13">
+      <header class="sheet-header">
+        <h1>사진</h1>
+    
+        <div class="sheet-tools">
+          <input
+            class="hidden"
+            id="singlePhotoInput"
+            type="file"
+            accept="image/*"
+            onchange="uploadSinglePhoto(event)"
+          >
+    
+          <button
+            class="action-btn hidden panel-edit-btn"
+            onclick="document.getElementById('singlePhotoInput').click()"
+          >
+            사진 업로드
+          </button>
+        </div>
+      </header>
+    
+      <section class="major-card">
+        <div class="major-title">사진</div>
+    
+        <div id="singlePhotoWrap">
+          사진을 불러오는 중입니다.
+        </div>
+      </section>
+    </div>
   </main>
 </div>
-
+  
 <div class="modal-backdrop" id="noticeModal">
   <div class="modal">
     <div class="modal-title">공지 수정</div>
@@ -1122,7 +1153,8 @@ body {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
-
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
+  
 const firebaseConfig = {
   apiKey: "AIzaSyDr_SfWtjfRPqfguJ6yvwBo-e3r8bGAs_M",
   authDomain: "ch-partners-71452.firebaseapp.com",
@@ -1146,6 +1178,8 @@ const fixedMembers = [
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
+const photoRef = doc(db, "sharedPages", "menuPhoto");
 
 const settingsRef = doc(db, "sharedPages", "mainSettings");
 const allocationRef = doc(db, "sharedPages", "workAllocation");
@@ -1175,6 +1209,67 @@ let allocationData = {
 let selectedProjectId = null;
 let navGroupState = { qna: false };
 let scheduleEvents = [];
+let singlePhotoData = {
+  url: "",
+  updatedAt: ""
+};
+
+function renderSinglePhoto() {
+  const wrap = document.getElementById("singlePhotoWrap");
+
+  if (!wrap) return;
+
+  if (!singlePhotoData.url) {
+    wrap.innerHTML = "등록된 사진이 없습니다.";
+    return;
+  }
+
+  wrap.innerHTML = `
+    <img
+      src="${singlePhotoData.url}"
+      style="
+        max-width:100%;
+        border-radius:18px;
+        border:1px solid #e5e7eb;
+      "
+    >
+
+    <div class="note" style="margin-top:10px;">
+      마지막 업로드: ${singlePhotoData.updatedAt || "-"}
+    </div>
+  `;
+}
+
+window.uploadSinglePhoto = async function(event) {
+  try {
+    if (!isAdmin(currentUser)) {
+      return alert("관리자만 업로드할 수 있습니다.");
+    }
+
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const fileRef = storageRef(storage, "menuPhoto/main-image");
+
+    await uploadBytes(fileRef, file);
+
+    const url = await getDownloadURL(fileRef);
+
+    await setDoc(photoRef, {
+      url,
+      updatedAt: new Date().toISOString()
+    });
+
+    alert("업로드 완료");
+
+    event.target.value = "";
+
+  } catch (e) {
+    console.error(e);
+    alert("업로드 실패");
+  }
+};
 
 const defaultMenus = [
   { title: "청현 공지사항", panelIndex: 0, location: "top", kind: "panel" },
@@ -1187,6 +1282,7 @@ const defaultMenus = [
   { title: "매각대상여부Q&A", panelIndex: 7, location: "top", kind: "panel" },
   { title: "열람자료Q&A", panelIndex: 8, location: "top", kind: "panel" },
   { title: "기계기구Q&A", panelIndex: 9, location: "top", kind: "panel" },
+  { title: "사진", panelIndex: 13, location: "top", kind: "panel" },
   { title: "소액조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" },
   { title: "", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" },
   { title: "스케줄", panelIndex: 12, location: "bottom", kind: "panel", theme: "purple" }
@@ -1398,7 +1494,19 @@ function ensureFixedMenus() {
       return menu;
     });
   }
-}
+
+  const hasPhotoMenu = menuData.some(menu => Number(menu.panelIndex) === 13);
+
+if (!hasPhotoMenu) {
+  menuData.push({
+    title: "사진",
+    panelIndex: 13,
+    location: "top",
+    kind: "panel"
+  });
+}  
+}  
+  
 function createMenuButton(menu, isChild = false) {
   const btn = document.createElement("button");
   btn.className = "nav-item";
@@ -1549,7 +1657,7 @@ function ensureDynamicPanels() {
   const main = document.querySelector(".main");
   if (!main) return;
 
-  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12]);
+  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12,13]);
 
   menuData.forEach(menu => {
     const panelIndex = Number(menu.panelIndex);
@@ -1639,7 +1747,7 @@ function ensureDynamicPanels() {
 
   ensureDynamicPanels();
 
-  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12]);
+  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12,13]);
 
   menuData.forEach(menu => {
     const panelIndex = Number(menu.panelIndex);
@@ -2739,7 +2847,16 @@ Object.keys(pageContents).forEach(key => {
     showSheet(0, "청현 공지사항");
   }
 });
+  
+onSnapshot(photoRef, snap => {
+  singlePhotoData = snap.data() || {
+    url: "",
+    updatedAt: ""
+  };
 
+  renderSinglePhoto();
+});
+  
 onSnapshot(allocationRef, snap => {
   const data = snap.data() || {};
   allocationData = {
