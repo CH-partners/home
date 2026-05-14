@@ -27,6 +27,7 @@
         <button class="admin-btn primary" id="loginBtn" onclick="openLoginModal()">관리자 로그인</button>
         <button class="admin-btn hidden" id="logoutBtn" onclick="logoutAdmin()">로그아웃</button>
         <button class="admin-btn hidden" id="menuEditBtn" onclick="openMenuEditor()">메뉴 수정</button>
+        <button class="admin-btn hidden" id="logBtn" onclick="openLogModal()">수정로그</button>
       </div>
     </div>
 
@@ -309,6 +310,16 @@
   </div>
 </div>
 
+ <div class="modal-backdrop" id="logModal">
+  <div class="modal large">
+    <div class="modal-title">수정로그</div>
+    <div id="logList" class="note">로그를 불러오는 중입니다.</div>
+    <div class="modal-actions">
+      <button class="secondary-btn" onclick="closeLogModal()">닫기</button>
+    </div>
+  </div>
+</div>
+  
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script type="module" src="./js/main.js"></script>
 
