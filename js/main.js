@@ -1662,6 +1662,43 @@ onSnapshot(allocationRef, snap => {
   renderAllocationUI();
 });
 
+window.downloadAllAllocationExcel = function() {
+  if (!allocationData.projects.length) {
+    alert("다운로드할 분배표 프로젝트가 없습니다.");
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  allocationData.projects.forEach(project => {
+    const data = [];
+
+    data.push(["이름", ...project.columns]);
+
+    project.rows.forEach(row => {
+      if (!row.active) return;
+
+      const rowData = [row.name];
+
+      project.columns.forEach(col => {
+        rowData.push(row.values?.[col] || "");
+      });
+
+      data.push(rowData);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    const sheetName = String(project.name || "프로젝트")
+      .replace(/[\\/?*[\]:]/g, "")
+      .slice(0, 31);
+
+    XLSX.utils.book_append_sheet(wb, ws, sheetName || "프로젝트");
+  });
+
+  XLSX.writeFile(wb, "전체_분배표.xlsx");
+};
+
 initEditors();
 renderMenus();
 renderNotice();
