@@ -144,6 +144,7 @@
         <div class="work-toolbar">
           <button class="action-btn" onclick="createProjectPrompt()">분배표 생성</button>
           <button class="action-btn" onclick="saveAllocationData()">저장</button>
+          <button class="action-btn" onclick="downloadAllAllocationExcel()">전체 엑셀 다운로드</button>
         </div>
         <div class="work-badges" id="workProjectBadges"></div>
         <div id="workAllocationBody"></div>
@@ -321,6 +322,7 @@
 </div>
   
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script type="module" src="./js/main.js"></script>
 
 </body>
