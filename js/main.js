@@ -29,6 +29,7 @@ const db = getFirestore(app);
 const settingsRef = doc(db, "sharedPages", "mainSettings");
 const allocationRef = doc(db, "sharedPages", "workAllocation");
 const schedulesColRef = collection(db, "schedules");
+const editLogsColRef = collection(db, "editLogs");
 
 let currentUser = null;
 let currentContentPanelKey = null;
@@ -182,6 +183,20 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+async function addEditLog(type, target, action) {
+  try {
+    await addDoc(editLogsColRef, {
+      type,
+      target,
+      action,
+      user: currentUser?.email || "unknown",
+      time: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("수정로그 저장 실패:", error);
+  }
+}
+
 function isQnaMenu(menu) {
   const title = (menu.title || "").trim();
   if (title === "경매참고비고" || title === "감정평가비고") return false;
@@ -197,6 +212,7 @@ function updateAdminUI() {
   document.getElementById("loginBtn").classList.toggle("hidden", admin);
   document.getElementById("logoutBtn").classList.toggle("hidden", !admin);
   document.getElementById("menuEditBtn").classList.toggle("hidden", !admin);
+  document.getElementById("logBtn")?.classList.toggle("hidden", !admin);
   document.getElementById("noticeEditBtn").classList.toggle("hidden", !admin);
   document.querySelectorAll(".panel-edit-btn").forEach(btn => btn.classList.toggle("hidden", !admin));
 }
@@ -573,6 +589,14 @@ function initEditors() {
 
 function openModal(id) { document.getElementById(id).classList.add("show"); }
 function closeModal(id) { document.getElementById(id).classList.remove("show"); }
+window.openLogModal = function() {
+  if (!isAdmin(currentUser)) return alert("관리자만 볼 수 있습니다.");
+  openModal("logModal");
+};
+
+window.closeLogModal = function() {
+  closeModal("logModal");
+};
 window.openLoginModal = () => openModal("loginModal");
 window.closeLoginModal = () => closeModal("loginModal");
 
@@ -781,7 +805,9 @@ window.saveMenusToFirebase = async function() {
   if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
   syncMenuDataFromTable();
   await setDoc(settingsRef, removeUndefinedDeep({ menus: menuData, notice: noticeData, pageContents }), { merge: true });
+  await addEditLog("메뉴", "메뉴 설정", "수정");
   renderMenus();
+  
   closeModal("menuModal");
   alert("메뉴가 저장되었습니다.");
 };
@@ -872,6 +898,7 @@ window.saveContentToFirebase = async function() {
     if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
     syncContentFromEditor();
     await setDoc(settingsRef, removeUndefinedDeep({ pageContents, menus: menuData, notice: noticeData }), { merge: true });
+    await addEditLog("본문", getPanelTitleByKey(currentContentPanelKey), "수정");
     renderAllContents();
     closeModal("contentModal");
     alert("내용이 저장되었습니다.");
@@ -890,6 +917,7 @@ window.saveNoticeToFirebase = async function() {
       html: noticeEditor.root.innerHTML
     };
     await setDoc(settingsRef, removeUndefinedDeep({ notice: noticeData, menus: menuData, pageContents }), { merge: true });
+    await addEditLog("공지사항", noticeData.title, "수정");
     renderNotice();
     closeModal("noticeModal");
     alert("공지사항이 저장되었습니다.");
@@ -1560,7 +1588,8 @@ window.saveScheduleEvent = async function() {
         createdAt: new Date().toISOString()
       });
     }
-
+    await addEditLog("스케줄", title, currentScheduleEventId ? "수정" : "등록");
+    
     closeModal("scheduleModal");
   } catch (error) {
     console.error("일정 저장 실패:", error);
