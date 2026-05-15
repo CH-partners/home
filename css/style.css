@@ -11,7 +11,7 @@ body {
   min-height:100vh;
 }
 .sidebar {
-  background:#faf6f1;
+  background:#fcfcfd;
   border-right:1px solid #e5e7eb;
   padding:26px 18px 22px;
   position:sticky;
