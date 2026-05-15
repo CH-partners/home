@@ -813,6 +813,10 @@ body {
   font-family: inherit;
 }
 
-#noticeEditor .ql-editor {
-  min-height: 550px;
+#noticeModal .ql-container {
+  height: 550px !important;
+}
+
+#noticeModal .ql-editor {
+  min-height: 550px !important;
 }
