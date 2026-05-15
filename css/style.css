@@ -429,12 +429,20 @@ body {
   padding:22px;
   box-shadow:0 20px 60px rgba(15,23,42,0.25);
 }
-.modal.large { width:min(980px, 100%); }
-.modal-title {
-  font-size:22px;
-  font-weight:800;
-  color:#0f172a;
-  margin-bottom:16px;
+.modal.large {
+  width: 1400px;
+  height: 800px;
+
+  max-width: 98vw;
+  max-height: 94vh;
+
+  min-width: 700px;
+  min-height: 500px;
+
+  resize: both;
+  overflow: auto;
+
+   display: block;
 }
 .form-row { margin-bottom:14px; }
 .form-row label {
@@ -805,15 +813,3 @@ body {
   font-family: inherit;
 }
 
-.modal.large {
-  width: min(1400px, 98vw);
-  
-  resize: both;
-  overflow: auto;
-
-  min-width: 700px;
-  min-height: 500px;
-
-  max-width: 98vw;
-  max-height: 94vh;
-}
