@@ -804,3 +804,14 @@ body {
   font-size: 13px;
   font-family: inherit;
 }
+
+.modal.large {
+  resize: both;
+  overflow: auto;
+
+  min-width: 700px;
+  min-height: 500px;
+
+  max-width: 98vw;
+  max-height: 94vh;
+}
