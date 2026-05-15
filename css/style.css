@@ -806,6 +806,8 @@ body {
 }
 
 .modal.large {
+  width: min(1400px, 98vw);
+  
   resize: both;
   overflow: auto;
 
