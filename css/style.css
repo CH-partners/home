@@ -740,19 +740,19 @@ body {
 .fc .fc-button {
   border-radius:10px !important;
   border:1px solid #f9a8d4 !important;
-  background:#fff1f5 !important;
-  color:#be185d !important;
+  background:#ffffff !important;
+  color:#334155 !important;
   box-shadow:none !important;
 }
 .fc .fc-button:hover {
-  background:#fce7f3 !important;
-  color:#9d174d !important;
+  background:#eff6ff !important;
+  color:#1d4ed8 !important;
   border-color:#f472b6 !important;
 }
 .fc .fc-button.fc-button-active,
 .fc .fc-button-primary:not(:disabled):active {
-  background:#ec4899 !important;
-  color:#ffffff !important;
+  background:#dbeafe !important;
+  color:#1d4ed8 !important;
   border-color:#db2777 !important;
 }
 .fc .fc-daygrid-day-number,
