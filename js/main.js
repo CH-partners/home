@@ -312,7 +312,7 @@ function createMenuButton(menu, isChild = false) {
     btn.classList.add("nav-item-highlight");
     btn.textContent = "📊 분배표";
   } else if (Number(menu.panelIndex) === 12) {
-    btn.classList.add("nav-item-highlight");
+    btn.classList.add("nav-item-schedule");
     btn.textContent = "📅 스케줄";
   } else {
     btn.textContent = menu.title || "메뉴";
