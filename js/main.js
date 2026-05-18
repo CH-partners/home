@@ -1148,21 +1148,22 @@ function renderAllocationUI() {
     }).join("");
 
     return `
-      <tr style="${row.active ? '' : 'opacity:0.3'}">
-        <td style="display:flex; align-items:center; gap:6px;">
-            ${escapeHtml(row.name)}
-          
-            <button style="font-size:11px; padding:4px 6px; border-radius:6px; border:1px solid #cbd5e1; cursor:pointer;"
-              onclick="moveMemberUp('${project.id}', ${rowIndex})">위</button>
-          
-            <button style="font-size:11px; padding:4px 6px; border-radius:6px; border:1px solid #cbd5e1; cursor:pointer;"
-              onclick="moveMemberDown('${project.id}', ${rowIndex})">아래</button>
-          
-            <button style="font-size:11px; padding:4px 6px; border-radius:6px; border:1px solid #cbd5e1; cursor:pointer;"
-              onclick="toggleMemberActive('${project.id}', ${rowIndex})">
-              ${row.active ? '제외' : '참여'}
-            </button>
-          </td>
+      <tr
+        draggable="true"
+        ondragstart="dragMemberStart(event, '${project.id}', ${rowIndex})"
+        ondragover="dragMemberOver(event)"
+        ondrop="dropMemberRow(event, '${project.id}', ${rowIndex})"
+        style="${row.active ? '' : 'opacity:0.3'}"
+      >
+       <td class="drag-member-cell">
+          <span class="drag-handle">☰</span>
+          <span>${escapeHtml(row.name)}</span>
+        
+          <button class="member-toggle-btn"
+            onclick="toggleMemberActive('${project.id}', ${rowIndex})">
+            ${row.active ? '제외' : '참여'}
+          </button>
+        </td>
         ${cells}
       </tr>
     `;
@@ -1443,25 +1444,49 @@ window.toggleMemberActive = function(projectId, rowIndex) {
   row.active = !row.active;
   renderAllocationUI();
 };
-window.moveMemberUp = function(projectId, rowIndex) {
-  const project = allocationData.projects.find(p => p.id === projectId);
-  if (!project || rowIndex <= 0) return;
 
-  [project.rows[rowIndex - 1], project.rows[rowIndex]] =
-  [project.rows[rowIndex], project.rows[rowIndex - 1]];
+let draggedMemberIndex = null;
+
+window.dragMemberStart = function(event, projectId, rowIndex) {
+  draggedMemberIndex = rowIndex;
+
+  event.currentTarget.classList.add("dragging");
+
+  event.dataTransfer.effectAllowed = "move";
+};
+
+window.dragMemberOver = function(event) {
+  event.preventDefault();
+};
+
+window.dropMemberRow = function(event, projectId, targetIndex) {
+  event.preventDefault();
+
+  const project = allocationData.projects.find(
+    p => p.id === projectId
+  );
+
+  if (!project) return;
+
+  if (
+    draggedMemberIndex === null ||
+    draggedMemberIndex === targetIndex
+  ) return;
+
+  const movedRow =
+    project.rows.splice(draggedMemberIndex, 1)[0];
+
+  project.rows.splice(targetIndex, 0, movedRow);
+
+  document
+    .querySelectorAll(".dragging")
+    .forEach(el => el.classList.remove("dragging"));
+
+  draggedMemberIndex = null;
 
   renderAllocationUI();
 };
 
-window.moveMemberDown = function(projectId, rowIndex) {
-  const project = allocationData.projects.find(p => p.id === projectId);
-  if (!project || rowIndex >= project.rows.length - 1) return;
-
-  [project.rows[rowIndex + 1], project.rows[rowIndex]] =
-  [project.rows[rowIndex], project.rows[rowIndex + 1]];
-
-  renderAllocationUI();
-};
 function initCalendar() {
   const calendarEl = document.getElementById("calendar");
   if (!calendarEl || calendar) return;
@@ -1702,7 +1727,7 @@ onSnapshot(allocationRef, snap => {
   if (!selectedProjectId || !allocationData.projects.some(p => p.id === selectedProjectId)) {
     selectedProjectId = allocationData.projects[0]?.id || null;
   }
-
+  
   renderAllocationUI();
 });
 
