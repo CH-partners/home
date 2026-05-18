@@ -589,14 +589,58 @@ function initEditors() {
 
 function openModal(id) { document.getElementById(id).classList.add("show"); }
 function closeModal(id) { document.getElementById(id).classList.remove("show"); }
+let logUnsubscribe = null;
+
 window.openLogModal = function() {
   if (!isAdmin(currentUser)) return alert("관리자만 볼 수 있습니다.");
+
   openModal("logModal");
+
+  const logList = document.getElementById("logList");
+  logList.innerHTML = "로그를 불러오는 중입니다.";
+
+  if (logUnsubscribe) logUnsubscribe();
+
+  const qRef = query(editLogsColRef, orderBy("time", "desc"));
+
+  logUnsubscribe = onSnapshot(qRef, snap => {
+    if (snap.empty) {
+      logList.innerHTML = "수정로그가 없습니다.";
+      return;
+    }
+
+    logList.innerHTML = snap.docs.map(docSnap => {
+      const log = docSnap.data() || {};
+      const date = log.time
+        ? new Date(log.time).toLocaleString("ko-KR")
+        : "-";
+
+      return `
+        <div style="padding:10px 0; border-bottom:1px solid #e5e7eb;">
+          <div><strong>${escapeHtml(log.type || "-")}</strong> / ${escapeHtml(log.target || "-")}</div>
+          <div>작업: ${escapeHtml(log.action || "-")}</div>
+          <div>사용자: ${escapeHtml(log.user || "-")}</div>
+          <div>시간: ${escapeHtml(date)}</div>
+        </div>
+      `;
+    }).join("");
+  }, error => {
+    console.error("수정로그 불러오기 실패:", error);
+    logList.innerHTML =
+      "수정로그 불러오기 실패: " +
+      escapeHtml(error.message || error);
+  });
 };
 
 window.closeLogModal = function() {
+  if (logUnsubscribe) {
+    logUnsubscribe();
+    logUnsubscribe = null;
+  }
+
   closeModal("logModal");
 };
+
 window.openLoginModal = () => openModal("loginModal");
 window.closeLoginModal = () => closeModal("loginModal");
 
