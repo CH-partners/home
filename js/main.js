@@ -1171,7 +1171,7 @@ function renderAllocationUI() {
 
   body.innerHTML = `
     <div class="work-project-title">${escapeHtml(project.name)}</div>
-    <div class="work-info">첫 번째 열은 이름 고정이며, 두 번째 열부터 항목 추가로 생성됩니다.</div>
+    <div class="work-info">첫 번째 열은 이름 고정이며, 두 번째 열부터 항목 추가로 생성됩니다, 마우스드래그로 순서를 변경할수 있습니다.</div>
     <div class="work-header-actions">
       <button class="action-btn" onclick="addColumnPrompt()">항목 추가</button>
       <button class="action-btn" onclick="saveAllocationData()">저장</button>
