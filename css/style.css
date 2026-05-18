@@ -642,9 +642,9 @@ body {
   padding:0 10px;
   border-radius:12px;
 
-  background:#ffffff;
-  border:1px solid #dbeafe;
-  color:#334155;
+  background:#f1f5f9;
+  border:1px solid #e2e8f0;
+  color:#475569;
 
   font-size:13px;
   font-weight:700;
@@ -660,15 +660,15 @@ body {
   background:#eff6ff;
 }
 .work-badge:hover {
-  background:#eff6ff;
-  color:#2563eb;
-  border-color:#93c5fd;
+  background:#f3e8ff;
+  color:#7c3aed;
+  border-color:#d8b4fe;
 }
 
 .work-badge.active {
-  background:#2563eb;
+  background:#7c3aed;
   color:#ffffff;
-  border-color:#2563eb;
+  border-color:#7c3aed;
 }
 
 .work-empty {
