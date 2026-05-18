@@ -642,9 +642,9 @@ body {
   padding:0 10px;
   border-radius:12px;
 
-  background:#f1f5f9;
-  border:1px solid #e2e8f0;
-  color:#475569;
+  background:#e2e8f0;
+  border:1px solid #cbd5e1;
+  color:#334155;
 
   font-size:13px;
   font-weight:700;
@@ -656,9 +656,7 @@ body {
   overflow:hidden;
   text-overflow:ellipsis;
 }
-.work-badges:hover {
-  background:#eff6ff;
-}
+
 .work-badge:hover {
   background:#f3e8ff;
   color:#7c3aed;
