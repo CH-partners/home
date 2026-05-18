@@ -691,6 +691,19 @@ body {
   min-width:100%;
   border-collapse:collapse;
 }
+.work-table tbody tr {
+  transition:background .15s ease;
+}
+
+.work-table tbody tr:hover {
+  background:#f8fafc;
+}
+
+.work-table tbody tr.dragging {
+  opacity:0.5;
+  background:#ede9fe;
+}
+
 .work-table th,
 .work-table td {
   border-bottom:1px solid #e5e7eb;
