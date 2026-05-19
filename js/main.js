@@ -1024,6 +1024,7 @@ function createEmptyProject(name) {
   return {
     id: "project_" + Date.now(),
     name,
+    memo: "",
     columns: [],
     rows: fixedMembers.map(member => ({
       name: member,
@@ -1086,6 +1087,16 @@ window.deleteSelectedProject = function() {
 window.selectProject = function(projectId) {
   selectedProjectId = projectId;
   renderAllocationUI();
+};
+
+window.updateProjectMemo = function(projectId, value) {
+  const project = allocationData.projects.find(
+    p => p.id === projectId
+  );
+
+  if (!project) return;
+
+  project.memo = value;
 };
 
 window.updateAllocationCell = function(projectId, rowIndex, columnName, value) {
@@ -1174,7 +1185,22 @@ function renderAllocationUI() {
   }).join("");
 
   body.innerHTML = `
-    <div class="work-project-title">${escapeHtml(project.name)}</div>
+    <div class="work-project-header">
+
+  <div class="work-project-title">
+    ${escapeHtml(project.name)}
+  </div>
+
+      <input
+        type="text"
+        class="work-project-memo"
+        placeholder="프로젝트 메모 입력..."
+        value="${escapeHtml(project.memo || "")}"
+        ${isAdmin(currentUser) ? "" : "readonly"}
+        oninput="updateProjectMemo('${project.id}', this.value)"
+      >
+    
+    </div>
     <div class="work-info">첫 번째 열은 이름 고정이며, 두 번째 열부터 항목 추가로 생성됩니다, ☰버튼 마우스 클릭&드래그로 순서를 바꿀수 있씁니다. </div>
     <div class="work-header-actions">
       <button class="action-btn" onclick="addColumnPrompt()">항목 추가</button>
