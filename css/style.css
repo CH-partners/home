@@ -882,3 +882,35 @@ body {
 .drag-handle:active {
   cursor:grabbing;
 }
+.work-project-header {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.work-project-memo {
+  flex:1;
+
+  height:40px;
+
+  border:none;
+  border-radius:999px;
+
+  background:#f1f5f9;
+
+  padding:0 16px;
+
+  font-size:13px;
+  color:#334155;
+
+  outline:none;
+
+  transition:all .15s ease;
+}
+
+.work-project-memo:focus {
+  background:#ffffff;
+  box-shadow:0 0 0 3px rgba(124,58,237,0.12);
+  border:1px solid #c4b5fd;
+}
