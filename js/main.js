@@ -1149,14 +1149,18 @@ function renderAllocationUI() {
 
     return `
       <tr
-        draggable="true"
-        ondragstart="dragMemberStart(event, '${project.id}', ${rowIndex})"
         ondragover="dragMemberOver(event)"
         ondrop="dropMemberRow(event, '${project.id}', ${rowIndex})"
+        ondragend="dragMemberEnd(event)"
         style="${row.active ? '' : 'opacity:0.3'}"
       >
        <td class="drag-member-cell">
-          <span class="drag-handle">☰</span>
+          <span
+            class="drag-handle"
+            draggable="true"
+            ondragstart="dragMemberStart(event, '${project.id}', ${rowIndex})"
+            ondragend="dragMemberEnd(event)"
+          >☰</span>
           <span>${escapeHtml(row.name)}</span>
         
           <button class="member-toggle-btn"
@@ -1450,9 +1454,18 @@ let draggedMemberIndex = null;
 window.dragMemberStart = function(event, projectId, rowIndex) {
   draggedMemberIndex = rowIndex;
 
-  event.currentTarget.classList.add("dragging");
+  const tr = event.currentTarget.closest("tr");
+  if (tr) tr.classList.add("dragging");
 
   event.dataTransfer.effectAllowed = "move";
+};
+
+window.dragMemberEnd = function(event) {
+  document
+    .querySelectorAll(".dragging")
+    .forEach(el => el.classList.remove("dragging"));
+
+  draggedMemberIndex = null;
 };
 
 window.dragMemberOver = function(event) {
@@ -1469,9 +1482,12 @@ window.dropMemberRow = function(event, projectId, targetIndex) {
   if (!project) return;
 
   if (
-    draggedMemberIndex === null ||
-    draggedMemberIndex === targetIndex
-  ) return;
+  draggedMemberIndex === null ||
+  draggedMemberIndex === targetIndex
+) {
+  window.dragMemberEnd(event);
+  return;
+}
 
   const movedRow =
     project.rows.splice(draggedMemberIndex, 1)[0];
