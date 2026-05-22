@@ -1073,6 +1073,89 @@ window.addColumnPrompt = function() {
   renderAllocationUI();
 };
 
+window.editColumnPrompt = function() {
+  if (!isAdmin(currentUser))
+    return alert("관리자만 수정할 수 있습니다.");
+
+  const project = getSelectedProject();
+
+  if (!project)
+    return alert("먼저 프로젝트를 선택하세요.");
+
+  if (!project.columns.length)
+    return alert("편집할 항목이 없습니다.");
+
+  const oldName = prompt(
+    "편집할 항목명을 입력하세요.\n\n" +
+    project.columns.join(", ")
+  );
+
+  if (!oldName) return;
+
+  const oldTrim = oldName.trim();
+
+  if (!project.columns.includes(oldTrim)) {
+    alert("존재하지 않는 항목입니다.");
+    return;
+  }
+
+  const mode = prompt(
+    `"${oldTrim}" 항목을 어떻게 처리할까요?\n\n` +
+    "1 = 이름 수정\n" +
+    "2 = 삭제"
+  );
+
+  if (!mode) return;
+
+  if (mode.trim() === "1") {
+    const newName = prompt("새 항목명을 입력하세요.", oldTrim);
+
+    if (!newName) return;
+
+    const newTrim = newName.trim();
+
+    if (!newTrim) return;
+
+    if (
+      project.columns.includes(newTrim) &&
+      newTrim !== oldTrim
+    ) {
+      alert("같은 이름의 항목이 이미 있습니다.");
+      return;
+    }
+
+    project.columns = project.columns.map(col =>
+      col === oldTrim ? newTrim : col
+    );
+
+    project.rows.forEach(row => {
+      row.values[newTrim] = row.values[oldTrim] || "";
+      delete row.values[oldTrim];
+    });
+
+    renderAllocationUI();
+    return;
+  }
+
+  if (mode.trim() === "2") {
+    if (!confirm(`"${oldTrim}" 항목을 삭제하시겠습니까?`))
+      return;
+
+    project.columns = project.columns.filter(
+      col => col !== oldTrim
+    );
+
+    project.rows.forEach(row => {
+      delete row.values[oldTrim];
+    });
+
+    renderAllocationUI();
+    return;
+  }
+
+  alert("1 또는 2만 입력하세요.");
+};
+
 window.deleteSelectedProject = function() {
   if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
   const project = getSelectedProject();
@@ -1203,9 +1286,25 @@ function renderAllocationUI() {
     </div>
     <div class="work-info">첫 번째 열은 이름 고정이며, 두 번째 열부터 항목 추가로 생성됩니다, ☰버튼 마우스 클릭&드래그로 순서를 바꿀수 있씁니다. </div>
     <div class="work-header-actions">
-      <button class="action-btn" onclick="addColumnPrompt()">항목 추가</button>
-      <button class="action-btn" onclick="saveAllocationData()">저장</button>
-      <button class="action-btn" onclick="deleteSelectedProject()">프로젝트 삭제</button>
+      <button class="action-btn"
+        onclick="addColumnPrompt()">
+        항목 추가
+      </button>
+    
+      <button class="action-btn"
+        onclick="editColumnPrompt()">
+        항목 편집
+      </button>
+    
+      <button class="action-btn"
+        onclick="saveAllocationData()">
+        저장
+      </button>
+    
+      <button class="action-btn"
+        onclick="deleteSelectedProject()">
+        프로젝트 삭제
+      </button>
     </div>
     <div class="work-table-wrap">
       <table class="work-table">
