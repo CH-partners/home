@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>전월세 실거래가 조회</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+body {
+    background: #f4f6f9;
+    padding: 40px;
+}
+
+.main-card {
+    background: #ffffff;
+    padding: 24px;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+
+.big-input {
+    height: 64px;
+    font-size: 20px;
+    border-radius: 14px;
+}
+
+.modal-content {
+    border-radius: 24px;
+}
+
+.modal-header,
+.modal-footer {
+    padding: 24px;
+}
+
+.modal-body {
+    padding: 28px;
+}
+
+.table-container {
+    max-height: 620px;
+    overflow: auto;
+    border-radius: 14px;
+}
+
+.filter-card {
+    background: #f8f9fa;
+    padding: 18px;
+    border-radius: 16px;
+    margin-bottom: 18px;
+}
+
+.table th {
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.table td {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.badge-jeonse {
+    background: #0d6efd;
+}
+
+.badge-monthly {
+    background: #dc3545;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-1">전월세 실거래가 조회</h2>
+            <div class="text-muted">주소, 계약년월, 부동산 종류로 조회합니다. 단독/다가구는 지번, 도로명 표시안됨</div>
+        </div>
+
+        <button class="btn btn-primary btn-lg px-5 py-3"
+            data-bs-toggle="modal"
+            data-bs-target="#searchModal">
+            조회하기
+        </button>
+    </div>
+
+    <div class="main-card">
+
+        <div class="filter-card">
+            <div class="row g-3">
+
+                <div class="col-md-3">
+                    <label class="form-label">건물명</label>
+                    <select id="filterBuilding" class="form-select" onchange="applyFilter()">
+                        <option value="">전체</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">동</label>
+                    <select id="filterUmd" class="form-select" onchange="applyFilter()">
+                        <option value="">전체</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">전세/월세</label>
+                    <select id="filterRentType" class="form-select" onchange="applyFilter()">
+                        <option value="">전체</option>
+                        <option value="전세">전세</option>
+                        <option value="월세">월세</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">면적</label>
+                    <select id="filterArea" class="form-select" onchange="applyFilter()">
+                        <option value="">전체</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label">층</label>
+                    <select id="filterFloor" class="form-select" onchange="applyFilter()">
+                        <option value="">전체</option>
+                    </select>
+                </div>
+
+                <div class="col-md-1 d-flex align-items-end">
+                    <button class="btn btn-secondary w-100" onclick="resetFilter()">
+                        초기화
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-between mb-3">
+            <div id="summaryText" class="fw-bold text-primary">조회 결과가 없습니다.</div>
+            <button class="btn btn-outline-success btn-sm" onclick="downloadCsv()">
+                CSV 다운로드
+            </button>
+        </div>
+
+        <div class="table-container">
+            <table class="table table-striped table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>구분</th>
+                        <th>건물명</th>
+                        <th>보증금</th>
+                        <th>월세</th>
+                        <th>면적</th>
+                        <th>층</th>
+                        <th>계약일</th>
+                        <th>동</th>
+                        <th>지번</th>
+                        <th>도로명</th>
+                        <th>주소표시</th>
+                    </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+            </table>
+        </div>
+
+    </div>
+</div>
+
+<div class="modal fade" id="searchModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title fw-bold">실거래가 조회</h3>
+                    <div class="text-muted">주소, 계약년월, 부동산 종류를 입력하세요.</div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+
+            <div class="modal-body">
+
+                <div class="mb-4">
+                    <label class="form-label fs-5 fw-bold">주소</label>
+                    <input type="text"
+                        class="form-control big-input"
+                        id="address"
+                        placeholder="예: 부산 해운대구 우동">
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fs-5 fw-bold">계약년월</label>
+                    <input type="text"
+                        class="form-control big-input"
+                        id="dealYmd"
+                        placeholder="예: 202005">
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fs-5 fw-bold">부동산 종류</label>
+                    <select class="form-select big-input" id="type">
+                        <option value="apt">아파트</option>
+                        <option value="rh">연립다세대</option>
+                        <option value="sh">단독다가구</option>
+                        <option value="offi">오피스텔</option>
+                    </select>
+                </div>
+
+                <div id="matchInfo" class="alert alert-light border mb-0">
+                    주소 입력 후 조회하면 매칭된 법정동코드가 표시됩니다.
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary btn-lg" data-bs-dismiss="modal">
+                    닫기
+                </button>
+                <button class="btn btn-primary btn-lg px-5" onclick="searchRent()">
+                    조회
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+const SERVICE_KEY = "df074846c5baa04b3d6ead9f4346ac15d3e68e5bcf6ccfbf12eaf7a7e8b66ec3";
+
+const BJD_URL = "https://raw.githubusercontent.com/CH-partners/housing-db/refs/heads/main/bjd_code.json";
+
+const endpoints = {
+    apt: "RTMSDataSvcAptRent/getRTMSDataSvcAptRent",
+    rh: "RTMSDataSvcRHRent/getRTMSDataSvcRHRent",
+    sh: "RTMSDataSvcSHRent/getRTMSDataSvcSHRent",
+    offi: "RTMSDataSvcOffiRent/getRTMSDataSvcOffiRent"
+};
+
+let bjdData = [];
+let currentData = [];
+let filteredData = [];
+
+function normalize(text) {
+    return String(text || "")
+        .replace(/\s/g, "")
+        .replace(/\(.*?\)/g, "");
+}
+
+async function loadBjdData() {
+    const res = await fetch(BJD_URL);
+    bjdData = await res.json();
+    console.log("법정동코드 로드 완료:", bjdData.length);
+}
+
+function findBjdCode(address) {
+    const input = normalize(address);
+
+    let exact = bjdData.find(item => normalize(item.short) === input);
+    if (exact) return exact;
+
+    exact = bjdData.find(item => normalize(item.name) === input);
+    if (exact) return exact;
+
+    const matches = bjdData.filter(item => {
+        const name = normalize(item.name);
+        const short = normalize(item.short);
+
+        return (
+            name.includes(input) ||
+            short.includes(input) ||
+            input.includes(short)
+        );
+    });
+
+    matches.sort((a, b) => b.name.length - a.name.length);
+    return matches[0] || null;
+}
+
+function getText(item, tagName) {
+    return item.querySelector(tagName)?.textContent?.trim() || "";
+}
+
+function cleanNumberText(value) {
+    const v = String(value || "").trim();
+
+    if (!v || v === "0" || v === "0000" || v === "00000") {
+        return "";
+    }
+
+    return String(parseInt(v, 10));
+}
+
+function buildJibun(item) {
+    const directJibun = getText(item, "jibun");
+
+    if (directJibun) {
+        return directJibun;
+    }
+
+    const bonbun =
+        cleanNumberText(getText(item, "bonbun")) ||
+        cleanNumberText(getText(item, "bobn")) ||
+        cleanNumberText(getText(item, "bun"));
+
+    const bubun =
+        cleanNumberText(getText(item, "bubun")) ||
+        cleanNumberText(getText(item, "bubn")) ||
+        cleanNumberText(getText(item, "ji"));
+
+    if (bonbun && bubun) {
+        return `${bonbun}-${bubun}`;
+    }
+
+    if (bonbun) {
+        return bonbun;
+    }
+
+    return "";
+}
+
+function getBuildingName(item, type) {
+    if (type === "apt") {
+        return getText(item, "aptNm") || "아파트";
+    }
+
+    if (type === "rh") {
+        return getText(item, "mhouseNm") ||
+               getText(item, "houseNm") ||
+               getText(item, "aptNm") ||
+               "연립다세대";
+    }
+
+    if (type === "sh") {
+        return getText(item, "mhouseNm") ||
+               getText(item, "houseNm") ||
+               "단독다가구";
+    }
+
+    if (type === "offi") {
+        return getText(item, "offiNm") ||
+               getText(item, "aptNm") ||
+               "오피스텔";
+    }
+
+    return "";
+}
+
+function getAddressDisplay(row) {
+    if (row.road) {
+        return row.road;
+    }
+
+    if (row.umd && row.jibun) {
+        return `${row.umd} ${row.jibun}`;
+    }
+
+    if (row.jibun) {
+        return row.jibun;
+    }
+
+    return row.umd || "";
+}
+
+async function searchRent() {
+    const address = document.getElementById("address").value.trim();
+    const dealYmd = document.getElementById("dealYmd").value.trim();
+    const type = document.getElementById("type").value;
+
+    if (!address) {
+        alert("주소를 입력하세요.");
+        return;
+    }
+
+    if (!/^\d{6}$/.test(dealYmd)) {
+        alert("계약년월은 202005 형식으로 입력하세요.");
+        return;
+    }
+
+    const bjd = findBjdCode(address);
+
+    if (!bjd) {
+        alert("법정동코드를 찾을 수 없습니다.");
+        return;
+    }
+
+    document.getElementById("matchInfo").innerHTML =
+        `매칭 주소: <b>${bjd.name}</b><br>` +
+        `법정동코드: <b>${bjd.code}</b> / LAWD_CD: <b>${bjd.lawd_cd}</b>`;
+
+    const url =
+        `https://apis.data.go.kr/1613000/${endpoints[type]}` +
+        `?serviceKey=${SERVICE_KEY}` +
+        `&LAWD_CD=${bjd.lawd_cd}` +
+        `&DEAL_YMD=${dealYmd}` +
+        `&numOfRows=100` +
+        `&pageNo=1`;
+
+    try {
+        const res = await fetch(url);
+        const text = await res.text();
+	
+	console.log(text);
+
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(text, "text/xml");
+
+        const resultCode = xml.querySelector("resultCode")?.textContent || "";
+        const resultMsg = xml.querySelector("resultMsg")?.textContent || "";
+
+        if (resultCode !== "000") {
+            alert("API 오류: " + resultMsg);
+            return;
+        }
+
+        const items = xml.querySelectorAll("item");
+        currentData = [];
+
+        items.forEach(item => {
+            const monthlyRent = getText(item, "monthlyRent") || "0";
+
+            const row = {
+                rentType: monthlyRent === "0" ? "전세" : "월세",
+                buildingName: getBuildingName(item, type),
+                deposit: getText(item, "deposit"),
+                monthlyRent: monthlyRent,
+                area: getText(item, "excluUseAr"),
+                floor: getText(item, "floor"),
+                year: getText(item, "dealYear"),
+                month: getText(item, "dealMonth"),
+                day: getText(item, "dealDay"),
+                umd: getText(item, "umdNm"),
+                jibun: buildJibun(item),
+                road: getText(item, "roadnm")
+            };
+
+            row.addressDisplay = getAddressDisplay(row);
+
+            currentData.push(row);
+        });
+
+        filteredData = [...currentData];
+
+        populateFilters(currentData);
+        renderTable(filteredData);
+
+        const modal = bootstrap.Modal.getInstance(document.getElementById("searchModal"));
+        modal.hide();
+
+    } catch (err) {
+        alert("API 호출 실패: " + err.message + "\n브라우저 CORS 문제일 수 있습니다.");
+    }
+}
+
+function uniqueSorted(data, key) {
+    return [...new Set(data.map(x => x[key]).filter(Boolean))]
+        .sort((a, b) => String(a).localeCompare(String(b), "ko"));
+}
+
+function fillSelect(id, values, label) {
+    const select = document.getElementById(id);
+    select.innerHTML = `<option value="">전체 ${label}</option>`;
+
+    values.forEach(value => {
+        select.innerHTML += `<option value="${value}">${value}</option>`;
+    });
+}
+
+function populateFilters(data) {
+    fillSelect("filterBuilding", uniqueSorted(data, "buildingName"), "건물명");
+    fillSelect("filterUmd", uniqueSorted(data, "umd"), "동");
+    fillSelect("filterArea", uniqueSorted(data, "area"), "면적");
+    fillSelect("filterFloor", uniqueSorted(data, "floor"), "층");
+
+    document.getElementById("filterRentType").value = "";
+}
+
+function applyFilter() {
+    const building = document.getElementById("filterBuilding").value;
+    const umd = document.getElementById("filterUmd").value;
+    const rentType = document.getElementById("filterRentType").value;
+    const area = document.getElementById("filterArea").value;
+    const floor = document.getElementById("filterFloor").value;
+
+    filteredData = currentData.filter(row => {
+        if (building && row.buildingName !== building) return false;
+        if (umd && row.umd !== umd) return false;
+        if (rentType && row.rentType !== rentType) return false;
+        if (area && row.area !== area) return false;
+        if (floor && row.floor !== floor) return false;
+        return true;
+    });
+
+    renderTable(filteredData);
+}
+
+function resetFilter() {
+    document.getElementById("filterBuilding").value = "";
+    document.getElementById("filterUmd").value = "";
+    document.getElementById("filterRentType").value = "";
+    document.getElementById("filterArea").value = "";
+    document.getElementById("filterFloor").value = "";
+
+    filteredData = [...currentData];
+    renderTable(filteredData);
+}
+
+function renderTable(data) {
+    const tbody = document.getElementById("resultBody");
+    tbody.innerHTML = "";
+
+    document.getElementById("summaryText").textContent =
+        `총 ${currentData.length}건 중 ${data.length}건 표시`;
+
+    if (data.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="11" class="text-center text-muted py-5">
+                    표시할 결과가 없습니다.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    data.forEach(row => {
+        const badgeClass = row.rentType === "전세" ? "badge-jeonse" : "badge-monthly";
+        const date = `${row.year}-${String(row.month).padStart(2, "0")}-${String(row.day).padStart(2, "0")}`;
+
+        tbody.innerHTML += `
+            <tr>
+                <td><span class="badge ${badgeClass}">${row.rentType}</span></td>
+                <td>${row.buildingName}</td>
+                <td>${row.deposit}</td>
+                <td>${row.monthlyRent}</td>
+                <td>${row.area}</td>
+                <td>${row.floor}</td>
+                <td>${date}</td>
+                <td>${row.umd}</td>
+                <td>${row.jibun}</td>
+                <td>${row.road}</td>
+                <td>${row.addressDisplay}</td>
+            </tr>
+        `;
+    });
+}
+
+function downloadCsv() {
+    if (!filteredData.length) {
+        alert("다운로드할 데이터가 없습니다.");
+        return;
+    }
+
+    const headers = ["구분", "건물명", "보증금", "월세", "면적", "층", "계약일", "동", "지번", "도로명", "주소표시"];
+
+    const rows = filteredData.map(row => {
+        const date = `${row.year}-${String(row.month).padStart(2, "0")}-${String(row.day).padStart(2, "0")}`;
+
+        return [
+            row.rentType,
+            row.buildingName,
+            row.deposit,
+            row.monthlyRent,
+            row.area,
+            row.floor,
+            date,
+            row.umd,
+            row.jibun,
+            row.road,
+            row.addressDisplay
+        ];
+    });
+
+    const csv = [headers, ...rows]
+        .map(row => row.map(value => `"${String(value).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "전월세_실거래가.csv";
+    a.click();
+
+    URL.revokeObjectURL(url);
+}
+
+loadBjdData();
+</script>
+
+</body>
+</html>
