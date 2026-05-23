@@ -320,8 +320,26 @@ function createMenuButton(menu, isChild = false) {
 
   btn.addEventListener("click", () => {
     if (menu.kind === "iframe" && menu.url) {
-      const frame = document.querySelector('.sheet-panel[data-index="10"] iframe');
-      if (frame) frame.src = menu.url;
+      const panelIndex = Number(menu.panelIndex || 10);
+      let panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
+    
+      if (!panel) {
+        panel = document.createElement("div");
+        panel.className = "sheet-panel";
+        panel.setAttribute("data-index", String(panelIndex));
+        panel.innerHTML = `
+          <header class="sheet-header">
+            <h1>${escapeHtml(menu.title || "외부페이지")}</h1>
+          </header>
+          <section class="major-card iframe-card">
+            <iframe class="tool-frame" src="${escapeHtml(menu.url)}"></iframe>
+          </section>
+        `;
+        document.querySelector(".main").appendChild(panel);
+      } else {
+        const frame = panel.querySelector("iframe");
+        if (frame) frame.src = menu.url;
+      }
     }
     renderAllContents();
     if (Number(menu.panelIndex) === 11) renderAllocationUI();
