@@ -110,6 +110,13 @@ body {
                     </select>
                 </div>
 
+				<div class="col-md-1">
+				    <label class="form-label">월</label>
+				    <select id="filterMonth" class="form-select" onchange="applyFilter()">
+				        <option value="">전체</option>
+				    </select>
+				</div>
+
                 <div class="col-md-2">
                     <label class="form-label">전세/월세</label>
                     <select id="filterRentType" class="form-select" onchange="applyFilter()">
@@ -126,7 +133,7 @@ body {
                     </select>
                 </div>
 
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <label class="form-label">층</label>
                     <select id="filterFloor" class="form-select" onchange="applyFilter()">
                         <option value="">전체</option>
@@ -196,11 +203,11 @@ body {
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label fs-5 fw-bold">계약년월</label>
+                    <label class="form-label fs-5 fw-bold">조회년도</label>
                     <input type="text"
                         class="form-control big-input"
                         id="dealYmd"
-                        placeholder="예: 202005">
+                        placeholder="예: 2020">
                 </div>
 
                 <div class="mb-4">
@@ -289,7 +296,21 @@ function findBjdCode(address) {
 function getText(item, tagName) {
     return item.querySelector(tagName)?.textContent?.trim() || "";
 }
+	
+function getYearMonths(year) {
 
+    const result = [];
+
+    for (let m = 1; m <= 12; m++) {
+
+        result.push(
+            `${year}${String(m).padStart(2, "0")}`
+        );
+    }
+
+    return result;
+}
+	
 function cleanNumberText(value) {
     const v = String(value || "").trim();
 
@@ -373,7 +394,7 @@ function getAddressDisplay(row) {
 
 async function searchRent() {
     const address = document.getElementById("address").value.trim();
-    const dealYmd = document.getElementById("dealYmd").value.trim();
+    const searchYear = document.getElementById("dealYmd").value.trim();
     const type = document.getElementById("type").value;
 
     if (!address) {
@@ -381,8 +402,8 @@ async function searchRent() {
         return;
     }
 
-    if (!/^\d{6}$/.test(dealYmd)) {
-        alert("계약년월은 202005 형식으로 입력하세요.");
+    if (!/^\d{4}$/.test(searchYear)) {
+        alert("조회년도는 2024 형식으로 입력하세요.");
         return;
     }
 
@@ -397,63 +418,74 @@ async function searchRent() {
         `매칭 주소: <b>${bjd.name}</b><br>` +
         `법정동코드: <b>${bjd.code}</b> / LAWD_CD: <b>${bjd.lawd_cd}</b>`;
 
-    const url =
-        `https://apis.data.go.kr/1613000/${endpoints[type]}` +
-        `?serviceKey=${SERVICE_KEY}` +
-        `&LAWD_CD=${bjd.lawd_cd}` +
-        `&DEAL_YMD=${dealYmd}` +
-        `&numOfRows=100` +
-        `&pageNo=1`;
+    currentData = [];
 
     try {
-        const res = await fetch(url);
-        const text = await res.text();
-	
-	console.log(text);
+        const months = getYearMonths(searchYear);
 
-        const parser = new DOMParser();
-        const xml = parser.parseFromString(text, "text/xml");
+        for (const ym of months) {
+            const url =
+                `https://apis.data.go.kr/1613000/${endpoints[type]}` +
+                `?serviceKey=${SERVICE_KEY}` +
+                `&LAWD_CD=${bjd.lawd_cd}` +
+                `&DEAL_YMD=${ym}` +
+                `&numOfRows=100` +
+                `&pageNo=1`;
 
-        const resultCode = xml.querySelector("resultCode")?.textContent || "";
-        const resultMsg = xml.querySelector("resultMsg")?.textContent || "";
+            const res = await fetch(url);
+            const text = await res.text();
 
-        if (resultCode !== "000") {
-            alert("API 오류: " + resultMsg);
-            return;
+            console.log(ym, text);
+
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(text, "text/xml");
+
+            const resultCode = xml.querySelector("resultCode")?.textContent || "";
+            const resultMsg = xml.querySelector("resultMsg")?.textContent || "";
+
+            if (resultCode !== "000") {
+                console.warn(`${ym} API 오류: ${resultMsg}`);
+                continue;
+            }
+
+            const items = xml.querySelectorAll("item");
+
+            items.forEach(item => {
+                const monthlyRent = getText(item, "monthlyRent") || "0";
+
+                const row = {
+                    rentType: monthlyRent === "0" ? "전세" : "월세",
+                    buildingName: getBuildingName(item, type),
+                    deposit: getText(item, "deposit"),
+                    monthlyRent: monthlyRent,
+                    area:
+                        getText(item, "excluUseAr") ||
+                        getText(item, "totalFloorAr"),
+                    floor: getText(item, "floor"),
+                    year: getText(item, "dealYear"),
+                    month: String(getText(item, "dealMonth")).padStart(2, "0"),
+                    day: String(getText(item, "dealDay")).padStart(2, "0"),
+                    umd: getText(item, "umdNm"),
+                    jibun: buildJibun(item),
+                    road: getText(item, "roadnm"),
+                    searchYm: ym
+                };
+
+                row.addressDisplay = getAddressDisplay(row);
+
+                currentData.push(row);
+            });
         }
-
-        const items = xml.querySelectorAll("item");
-        currentData = [];
-
-        items.forEach(item => {
-            const monthlyRent = getText(item, "monthlyRent") || "0";
-
-            const row = {
-                rentType: monthlyRent === "0" ? "전세" : "월세",
-                buildingName: getBuildingName(item, type),
-                deposit: getText(item, "deposit"),
-                monthlyRent: monthlyRent,
-                area: getText(item, "excluUseAr"),
-                floor: getText(item, "floor"),
-                year: getText(item, "dealYear"),
-                month: getText(item, "dealMonth"),
-                day: getText(item, "dealDay"),
-                umd: getText(item, "umdNm"),
-                jibun: buildJibun(item),
-                road: getText(item, "roadnm")
-            };
-
-            row.addressDisplay = getAddressDisplay(row);
-
-            currentData.push(row);
-        });
 
         filteredData = [...currentData];
 
         populateFilters(currentData);
         renderTable(filteredData);
 
-        const modal = bootstrap.Modal.getInstance(document.getElementById("searchModal"));
+        const modal = bootstrap.Modal.getInstance(
+            document.getElementById("searchModal")
+        );
+
         modal.hide();
 
     } catch (err) {
@@ -476,10 +508,36 @@ function fillSelect(id, values, label) {
 }
 
 function populateFilters(data) {
-    fillSelect("filterBuilding", uniqueSorted(data, "buildingName"), "건물명");
-    fillSelect("filterUmd", uniqueSorted(data, "umd"), "동");
-    fillSelect("filterArea", uniqueSorted(data, "area"), "면적");
-    fillSelect("filterFloor", uniqueSorted(data, "floor"), "층");
+
+    fillSelect(
+        "filterBuilding",
+        uniqueSorted(data, "buildingName"),
+        "건물명"
+    );
+
+    fillSelect(
+        "filterUmd",
+        uniqueSorted(data, "umd"),
+        "동"
+    );
+
+    fillSelect(
+        "filterMonth",
+        uniqueSorted(data, "month"),
+        "월"
+    );
+
+    fillSelect(
+        "filterArea",
+        uniqueSorted(data, "area"),
+        "면적"
+    );
+
+    fillSelect(
+        "filterFloor",
+        uniqueSorted(data, "floor"),
+        "층"
+    );
 
     document.getElementById("filterRentType").value = "";
 }
@@ -487,6 +545,7 @@ function populateFilters(data) {
 function applyFilter() {
     const building = document.getElementById("filterBuilding").value;
     const umd = document.getElementById("filterUmd").value;
+	const month = document.getElementById("filterMonth").value;
     const rentType = document.getElementById("filterRentType").value;
     const area = document.getElementById("filterArea").value;
     const floor = document.getElementById("filterFloor").value;
@@ -494,7 +553,8 @@ function applyFilter() {
     filteredData = currentData.filter(row => {
         if (building && row.buildingName !== building) return false;
         if (umd && row.umd !== umd) return false;
-        if (rentType && row.rentType !== rentType) return false;
+		if (month && row.month !== month) return false;
+		if (rentType && row.rentType !== rentType) return false;
         if (area && row.area !== area) return false;
         if (floor && row.floor !== floor) return false;
         return true;
@@ -505,10 +565,11 @@ function applyFilter() {
 
 function resetFilter() {
     document.getElementById("filterBuilding").value = "";
-    document.getElementById("filterUmd").value = "";
-    document.getElementById("filterRentType").value = "";
-    document.getElementById("filterArea").value = "";
-    document.getElementById("filterFloor").value = "";
+	document.getElementById("filterUmd").value = "";
+	document.getElementById("filterMonth").value = "";
+	document.getElementById("filterRentType").value = "";
+	document.getElementById("filterArea").value = "";
+	document.getElementById("filterFloor").value = "";
 
     filteredData = [...currentData];
     renderTable(filteredData);
