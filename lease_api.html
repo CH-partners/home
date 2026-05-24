@@ -465,10 +465,60 @@ function getAddressDisplay(row) {
     return row.umd || "";
 }
 
+
+function clearPreviousSearchState() {
+    currentData = [];
+    filteredData = [];
+
+    const resultBody = document.getElementById("resultBody");
+    if (resultBody) {
+        resultBody.innerHTML = `
+            <tr>
+                <td colspan="11" class="text-center text-muted py-5">
+                    새 조회를 준비 중입니다.
+                </td>
+            </tr>
+        `;
+    }
+
+    const summaryText = document.getElementById("summaryText");
+    if (summaryText) {
+        summaryText.textContent = "새 조회를 준비 중입니다.";
+    }
+
+    const filterIds = [
+        "filterBuilding",
+        "filterUmd",
+        "filterMonth",
+        "filterRentType",
+        "filterArea",
+        "filterFloor"
+    ];
+
+    filterIds.forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+
+        if (id === "filterRentType") {
+            select.value = "";
+        } else {
+            select.innerHTML = `<option value="">전체</option>`;
+        }
+    });
+
+    const modalBuildingSelect = document.getElementById("modalBuildingSelect");
+    if (modalBuildingSelect) {
+        modalBuildingSelect.innerHTML = `<option value="">API 조회 후 건물명을 선택하세요</option>`;
+        modalBuildingSelect.disabled = true;
+    }
+}
+
 async function searchRent() {
     const address = document.getElementById("address").value.trim();
     const searchYear = document.getElementById("dealYear").value.trim().replace(/[^0-9]/g, "");
     const type = document.getElementById("type").value;
+
+    clearPreviousSearchState();
 
     if (!address) {
         alert("주소를 입력하세요.");
@@ -491,14 +541,9 @@ async function searchRent() {
         `매칭 주소: <b>${bjd.name}</b><br>` +
         `법정동코드: <b>${bjd.code}</b> / LAWD_CD: <b>${bjd.lawd_cd}</b>`;
 
-    currentData = [];
-    filteredData = [];
-
     const modalBuildingSelect = document.getElementById("modalBuildingSelect");
     modalBuildingSelect.innerHTML = `<option value="">API 조회 중입니다...</option>`;
     modalBuildingSelect.disabled = true;
-
-    renderTable(filteredData);
 
     try {
         const months = getYearMonths(searchYear);
@@ -783,6 +828,11 @@ function downloadCsv() {
 
     URL.revokeObjectURL(url);
 }
+
+
+document.getElementById("searchModal").addEventListener("show.bs.modal", () => {
+    clearPreviousSearchState();
+});
 
 loadBjdData();
 </script>
