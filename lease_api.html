@@ -145,7 +145,7 @@ body {
 	        </h2>
 	
 	        <div class="text-muted">
-	            주소, 계약년월, 부동산 종류로 조회 입력년월 이전 3개월까지 조회됩니다.
+	            주소, 조회년도, 부동산 종류로 API 조회 후 건물명을 선택하면 해당 년도 데이터가 표시됩니다.
 	            *단독/다가구는 지번, 도로명 표시안됨
 	        </div>
 	    </div>
@@ -257,7 +257,7 @@ body {
             <div class="modal-header">
                 <div>
                     <h3 class="modal-title fw-bold">실거래가 조회</h3>
-                    <div class="text-muted">주소, 계약년월, 부동산 종류를 입력하세요.</div>
+                    <div class="text-muted">주소, 조회년도, 부동산 종류를 입력 후 API 조회하세요.</div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
@@ -273,11 +273,11 @@ body {
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label fs-5 fw-bold">조회년월</label>
+                    <label class="form-label fs-5 fw-bold">조회년도</label>
                     <input type="text"
                         class="form-control big-input"
-                        id="dealYmd"
-                        placeholder="예: 202005">
+                        id="dealYear"
+                        placeholder="예: 2025">
                 </div>
 
                 <div class="mb-4">
@@ -290,8 +290,15 @@ body {
                     </select>
                 </div>
 
+                <div class="mb-4">
+                    <label class="form-label fs-5 fw-bold">조회된 건물명</label>
+                    <select class="form-select big-input" id="modalBuildingSelect" onchange="selectBuildingAndRender()" disabled>
+                        <option value="">API 조회 후 건물명을 선택하세요</option>
+                    </select>
+                </div>
+
                 <div id="matchInfo" class="alert alert-light border mb-0">
-                    주소 입력 후 조회하면 매칭된 법정동코드가 표시됩니다.
+                    주소 입력 후 API 조회하면 매칭된 법정동코드와 건물명 목록이 표시됩니다.
                 </div>
 
             </div>
@@ -301,7 +308,7 @@ body {
                     닫기
                 </button>
                 <button class="btn btn-primary btn-lg px-5" onclick="searchRent()">
-                    조회
+                    API 조회
                 </button>
             </div>
 
@@ -363,32 +370,15 @@ function findBjdCode(address) {
     return matches[0] || null;
 }
 
-function getRecentMonths(dealYmd, count = 4) {
-
-    const year =
-        parseInt(dealYmd.slice(0, 4), 10);
-
-    const month =
-        parseInt(dealYmd.slice(4, 6), 10);
-
+function getYearMonths(year) {
     const result = [];
 
-    for (let i = 0; i < count; i++) {
-
-        const date =
-            new Date(year, month - 1 - i, 1);
-
-        const y = date.getFullYear();
-
-        const m =
-            String(date.getMonth() + 1)
-            .padStart(2, "0");
-
-        result.push(`${y}${m}`);
+    for (let month = 1; month <= 12; month++) {
+        result.push(`${year}${String(month).padStart(2, "0")}`);
     }
 
     return result;
-}	
+}
 
 function getText(item, tagName) {
     return item.querySelector(tagName)?.textContent?.trim() || "";
@@ -477,7 +467,7 @@ function getAddressDisplay(row) {
 
 async function searchRent() {
     const address = document.getElementById("address").value.trim();
-    const searchYear = document.getElementById("dealYmd").value.trim().replace(/[^0-9]/g, "");
+    const searchYear = document.getElementById("dealYear").value.trim().replace(/[^0-9]/g, "");
     const type = document.getElementById("type").value;
 
     if (!address) {
@@ -485,8 +475,8 @@ async function searchRent() {
         return;
     }
 
-    if (!/^\d{6}$/.test(searchYear)) {
-        alert("조회년월을 202405 형식으로 입력하세요.");
+    if (!/^\d{4}$/.test(searchYear)) {
+        alert("조회년도을 202405 형식으로 입력하세요.");
         return;
     }
 
@@ -502,9 +492,16 @@ async function searchRent() {
         `법정동코드: <b>${bjd.code}</b> / LAWD_CD: <b>${bjd.lawd_cd}</b>`;
 
     currentData = [];
+    filteredData = [];
+
+    const modalBuildingSelect = document.getElementById("modalBuildingSelect");
+    modalBuildingSelect.innerHTML = `<option value="">API 조회 중입니다...</option>`;
+    modalBuildingSelect.disabled = true;
+
+    renderTable(filteredData);
 
     try {
-        const months = getRecentMonths(searchYear, 4);
+        const months = getYearMonths(searchYear);
 
         for (const ym of months) {
             const url =
@@ -560,16 +557,17 @@ async function searchRent() {
             });
         }
 
-        filteredData = [...currentData];
+        filteredData = [];
 
         populateFilters(currentData);
+        populateModalBuildingSelect(currentData);
         renderTable(filteredData);
 
-        const modal = bootstrap.Modal.getInstance(
-            document.getElementById("searchModal")
-        );
+        const buildingCount = uniqueSorted(currentData, "buildingName").length;
 
-        modal.hide();
+        document.getElementById("matchInfo").innerHTML +=
+            `<br>조회 건수: <b>${currentData.length}</b>건 / 건물명: <b>${buildingCount}</b>개` +
+            `<br><span class="text-primary fw-bold">조회된 건물명 드롭다운에서 건물명을 선택하세요.</span>`;
 
     } catch (err) {
         alert("API 호출 실패: " + err.message + "\n브라우저 CORS 문제일 수 있습니다.");
@@ -625,6 +623,46 @@ function populateFilters(data) {
     document.getElementById("filterRentType").value = "";
 }
 
+function populateModalBuildingSelect(data) {
+    const select = document.getElementById("modalBuildingSelect");
+    const buildings = uniqueSorted(data, "buildingName");
+
+    select.innerHTML = `<option value="">건물명을 선택하세요</option>`;
+
+    buildings.forEach(name => {
+        select.innerHTML += `<option value="${name}">${name}</option>`;
+    });
+
+    select.disabled = buildings.length === 0;
+}
+
+function selectBuildingAndRender() {
+    const selectedBuilding = document.getElementById("modalBuildingSelect").value;
+
+    if (!selectedBuilding) {
+        filteredData = [];
+        renderTable(filteredData);
+        return;
+    }
+
+    document.getElementById("filterBuilding").value = selectedBuilding;
+
+    filteredData = currentData.filter(row => row.buildingName === selectedBuilding);
+
+    populateFilters(currentData);
+    document.getElementById("filterBuilding").value = selectedBuilding;
+
+    renderTable(filteredData);
+
+    const modalEl = document.getElementById("searchModal");
+    const modal = bootstrap.Modal.getInstance(modalEl);
+
+    if (modal) {
+        modal.hide();
+    }
+}
+
+
 function applyFilter() {
     const building = document.getElementById("filterBuilding").value;
     const umd = document.getElementById("filterUmd").value;
@@ -662,8 +700,15 @@ function renderTable(data) {
     const tbody = document.getElementById("resultBody");
     tbody.innerHTML = "";
 
+    const selectedBuilding =
+        document.getElementById("filterBuilding")?.value ||
+        document.getElementById("modalBuildingSelect")?.value ||
+        "";
+
     document.getElementById("summaryText").textContent =
-        `총 ${currentData.length}건 중 ${data.length}건 표시`;
+        selectedBuilding
+            ? `선택 건물: ${selectedBuilding} / 총 ${currentData.length}건 중 ${data.length}건 표시`
+            : `API 조회 후 건물명을 선택하세요. 총 ${currentData.length}건 조회됨`;
 
     if (data.length === 0) {
         tbody.innerHTML = `
