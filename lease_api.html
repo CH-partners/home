@@ -196,7 +196,7 @@ body {
                     </select>
                 </div>
 
-                <div class="col-md-2">
+                <div class="col-md-1">
                     <label class="form-label">면적</label>
                     <select id="filterArea" class="form-select" onchange="applyFilter()">
                         <option value="">전체</option>
@@ -486,7 +486,7 @@ async function searchRent() {
     }
 
     if (!/^\d{6}$/.test(searchYear)) {
-        alert("조회년도는 202405 형식으로 입력하세요.");
+        alert("조회년월을 202405 형식으로 입력하세요.");
         return;
     }
 
