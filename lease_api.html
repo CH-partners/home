@@ -412,7 +412,7 @@ function getAddressDisplay(row) {
 
 async function searchRent() {
     const address = document.getElementById("address").value.trim();
-    const searchYear = document.getElementById("dealYmd").value.trim();
+    const searchYear = document.getElementById("dealYmd").value.trim().replace(/[^0-9]/g, "");
     const type = document.getElementById("type").value;
 
     if (!address) {
