@@ -704,7 +704,7 @@ function downloadCsv() {
         return;
     }
 
-    const headers = ["구분", "건물명", "보증금", "월세", "면적", "층", "계약일", "동", "지번", "도로명", "주소표시"];
+    const headers = ["구분", "건물명", "보증금(만원)", "월세(만원)", "면적", "층", "계약일", "동", "지번", "도로명", "주소표시"];
 
     const rows = filteredData.map(row => {
         const date = `${row.year}-${String(row.month).padStart(2, "0")}-${String(row.day).padStart(2, "0")}`;
