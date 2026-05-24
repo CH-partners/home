@@ -203,11 +203,11 @@ body {
                 </div>
 
                 <div class="mb-4">
-                    <label class="form-label fs-5 fw-bold">조회년도</label>
+                    <label class="form-label fs-5 fw-bold">조회년월</label>
                     <input type="text"
                         class="form-control big-input"
                         id="dealYmd"
-                        placeholder="예: 2020">
+                        placeholder="예: 202005">
                 </div>
 
                 <div class="mb-4">
@@ -293,23 +293,36 @@ function findBjdCode(address) {
     return matches[0] || null;
 }
 
-function getText(item, tagName) {
-    return item.querySelector(tagName)?.textContent?.trim() || "";
-}
-	
-function getYearMonths(year) {
+function getRecentMonths(dealYmd, count = 4) {
+
+    const year =
+        parseInt(dealYmd.slice(0, 4), 10);
+
+    const month =
+        parseInt(dealYmd.slice(4, 6), 10);
 
     const result = [];
 
-    for (let m = 1; m <= 12; m++) {
+    for (let i = 0; i < count; i++) {
 
-        result.push(
-            `${year}${String(m).padStart(2, "0")}`
-        );
+        const date =
+            new Date(year, month - 1 - i, 1);
+
+        const y = date.getFullYear();
+
+        const m =
+            String(date.getMonth() + 1)
+            .padStart(2, "0");
+
+        result.push(`${y}${m}`);
     }
 
     return result;
-}
+}	
+
+function getText(item, tagName) {
+    return item.querySelector(tagName)?.textContent?.trim() || "";
+}	
 	
 function cleanNumberText(value) {
     const v = String(value || "").trim();
@@ -403,7 +416,7 @@ async function searchRent() {
     }
 
     if (!/^\d{4}$/.test(searchYear)) {
-        alert("조회년도는 2024 형식으로 입력하세요.");
+        alert("조회년도는 202405 형식으로 입력하세요.");
         return;
     }
 
@@ -421,7 +434,7 @@ async function searchRent() {
     currentData = [];
 
     try {
-        const months = getYearMonths(searchYear);
+        const months = getRecentMonths(searchYear, 4);
 
         for (const ym of months) {
             const url =
