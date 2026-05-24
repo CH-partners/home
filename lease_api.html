@@ -121,6 +121,24 @@ body {
     min-width: 70px;
     white-space: nowrap;
 }	
+	
+.top-area {
+    width: 1000px;
+    max-width: 100%;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.search-btn {
+    height: 48px;
+    padding: 0 26px;
+    font-size: 20px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+	
 </style>
 </head>
 
@@ -128,26 +146,29 @@ body {
 
 <div class="container-fluid">
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-bold mb-1">국토교통부 전월세 실거래가 조회</h2>
-            <div class="text-muted">
-			    주소, 계약년월, 부동산 종류로 조회 입력년월 이전 3개월까지 조회됩니다. *단독/다가구는 지번, 도로명 표시안됨
-			</div>
+    <div class="top-area mb-4">
 
-        <button
-		    class="btn btn-primary"
-		    style="
-		        height: 52px;
-		        padding: 0 28px;
-		        font-size: 22px;
-		        border-radius: 12px;
-		    "
-            data-bs-toggle="modal"
-            data-bs-target="#searchModal">
-            조회하기
-        </button>
-    </div>
+	    <div>
+	        <h2 class="fw-bold mb-1">
+	            국토교통부 전월세 실거래가 조회
+	        </h2>
+	
+	        <div class="text-muted">
+	            주소, 계약년월, 부동산 종류로 조회 입력년월 이전 3개월까지 조회됩니다.
+	            *단독/다가구는 지번, 도로명 표시안됨
+	        </div>
+	    </div>
+	
+	    <button
+	        class="btn btn-primary search-btn"
+	        data-bs-toggle="modal"
+	        data-bs-target="#searchModal">
+	
+	        조회하기
+	
+	    </button>
+	
+	</div>
 
     <div class="main-card">
 
