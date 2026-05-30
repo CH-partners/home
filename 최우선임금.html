@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>최우선임금 계산기</title>
+  <style>
+    body {
+      font-family: Arial, "Malgun Gothic", sans-serif;
+      background: #f5f6f8;
+      margin: 0;
+      padding: 20px;
+      color: #222;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 24px;
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      margin-top: 0;
+      text-align: center;
+      font-size: 26px;
+    }
+
+    .usage {
+      background: #eef5ff;
+      color: #064b9b;
+      padding: 16px;
+      border-radius: 10px;
+      line-height: 1.7;
+      white-space: pre-line;
+      margin-bottom: 22px;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      margin-top: 14px;
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 11px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 24px;
+      padding: 14px;
+      font-size: 18px;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    #result {
+      margin-top: 24px;
+      padding: 18px;
+      background: #fafafa;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      min-height: 300px;
+      white-space: pre-line;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .error {
+      color: #dc2626;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>최우선임금 계산기</h1>
+
+    <div class="usage">[사용방법]
+
+1) 재직일수 또는 재직기간(시작/종료) 입력
+2) 3개월임금이 있으면 그대로 입력 (우선 적용)
+   - 없으면 평균임금(1일) 또는 월급 입력
+3) 총퇴직금이 있으면 입력
+   - 없으면 '월급 × (재직일수/365)'로 자동 계산
+   - 월급이 없더라도 3개월임금만 있으면 '월급 = 3개월임금/3'으로 자동 추정
+4) 계산하기 클릭 → 계산식 포함 결과 출력
+
+※ 날짜는 22-5-8 / 22.5.8 / 22/5/8 / 2022-5-8 모두 가능</div>
+
+    <label>재직일수</label>
+    <input id="days" type="text" />
+
+    <label>재직기간 시작</label>
+    <input id="startDate" type="text" placeholder="예: 2022-05-08" onblur="formatDateInput(this)" />
+
+    <label>재직기간 종료</label>
+    <input id="endDate" type="text" placeholder="예: 2024-05-07" onblur="formatDateInput(this)" />
+
+    <label>평균임금 (1일)</label>
+    <input id="avgWage" type="text" oninput="formatCommaInput(this)" />
+
+    <label>월급</label>
+    <input id="monthlyWage" type="text" oninput="formatCommaInput(this)" />
+
+    <label>3개월 임금</label>
+    <input id="threeMonthWage" type="text" oninput="formatCommaInput(this)" />
+
+    <label>총 퇴직금</label>
+    <input id="retirement" type="text" oninput="formatCommaInput(this)" />
+
+    <button onclick="calculate()">계산하기</button>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    function removeComma(value) {
+      return String(value || "").replace(/,/g, "").trim();
+    }
+
+    function formatCommaInput(input) {
+      let value = removeComma(input.value);
+      if (value === "") return;
+
+      if (/^\d+$/.test(value)) {
+        input.value = Number(value).toLocaleString("ko-KR");
+      }
+    }
+
+    function getNumber(id) {
+      const value = removeComma(document.getElementById(id).value);
+      if (value === "") return null;
+
+      const number = Number(value);
+      if (isNaN(number)) return null;
+
+      return number;
+    }
+
+    function formatDateInput(input) {
+      let raw = input.value.trim();
+      if (!raw) return;
+
+      raw = raw.replace(/\./g, "-").replace(/\//g, "-");
+      const parts = raw.split("-");
+
+      if (parts.length !== 3) return;
+
+      let y = parts[0];
+      let m = parts[1];
+      let d = parts[2];
+
+      if (y.length === 2) y = "20" + y;
+
+      const date = new Date(Number(y), Number(m) - 1, Number(d));
+
+      if (
+        date.getFullYear() === Number(y) &&
+        date.getMonth() === Number(m) - 1 &&
+        date.getDate() === Number(d)
+      ) {
+        input.value =
+          date.getFullYear() + "-" +
+          String(date.getMonth() + 1).padStart(2, "0") + "-" +
+          String(date.getDate()).padStart(2, "0");
+      }
+    }
+
+    function parseDate(value) {
+      const parts = value.split("-");
+      if (parts.length !== 3) return null;
+
+      const y = Number(parts[0]);
+      const m = Number(parts[1]);
+      const d = Number(parts[2]);
+
+      const date = new Date(y, m - 1, d);
+
+      if (
+        date.getFullYear() === y &&
+        date.getMonth() === m - 1 &&
+        date.getDate() === d
+      ) {
+        return date;
+      }
+
+      return null;
+    }
+
+    function calculateDays() {
+      const startInput = document.getElementById("startDate");
+      const endInput = document.getElementById("endDate");
+
+      formatDateInput(startInput);
+      formatDateInput(endInput);
+
+      const start = parseDate(startInput.value);
+      const end = parseDate(endInput.value);
+
+      if (!start || !end) return null;
+
+      const oneDay = 1000 * 60 * 60 * 24;
+      return Math.floor((end - start) / oneDay) + 1;
+    }
+
+    function money(value) {
+      return Math.round(value).toLocaleString("ko-KR");
+    }
+
+    function showError(message) {
+      document.getElementById("result").innerHTML =
+        '<span class="error">오류: ' + message + '</span>';
+    }
+
+    function calculate() {
+      try {
+        formatDateInput(document.getElementById("startDate"));
+        formatDateInput(document.getElementById("endDate"));
+
+        let totalDays;
+        let daysFormula;
+
+        const daysValue = removeComma(document.getElementById("days").value);
+
+        if (daysValue !== "") {
+          totalDays = parseInt(daysValue, 10);
+          if (isNaN(totalDays) || totalDays <= 0) {
+            showError("재직일수를 올바르게 입력하세요.");
+            return;
+          }
+          daysFormula = "재직일수 입력값 사용: " + totalDays + "일";
+        } else {
+          totalDays = calculateDays();
+          if (!totalDays || totalDays <= 0) {
+            showError("재직일수 또는 재직기간(시작/종료)을 올바르게 입력하세요.");
+            return;
+          }
+          daysFormula = "재직일수 = 종료일 - 시작일 + 1 = " + totalDays + "일";
+        }
+
+        const threeMonthIn = getNumber("threeMonthWage");
+        const avgDailyIn = getNumber("avgWage");
+        const monthlyIn = getNumber("monthlyWage");
+        const retirementIn = getNumber("retirement");
+
+        let threeMonthWage;
+        let wageFormula;
+
+        if (threeMonthIn !== null) {
+          threeMonthWage = threeMonthIn;
+          wageFormula = "3개월임금 입력값 사용: " + money(threeMonthWage) + "원";
+        } else if (avgDailyIn !== null) {
+          threeMonthWage = avgDailyIn * 92;
+          wageFormula =
+            "3개월임금 = 평균임금 × 92 = " +
+            money(avgDailyIn) + " × 92 = " +
+            money(threeMonthWage) + "원";
+        } else if (monthlyIn !== null) {
+          threeMonthWage = monthlyIn * 3;
+          wageFormula =
+            "3개월임금 = 월급 × 3 = " +
+            money(monthlyIn) + " × 3 = " +
+            money(threeMonthWage) + "원";
+        } else {
+          showError("3개월임금 또는 평균임금(1일) 또는 월급 중 하나는 입력해야 합니다.");
+          return;
+        }
+
+        let monthly;
+        let monthlyFormula = "";
+
+        if (monthlyIn !== null) {
+          monthly = monthlyIn;
+          monthlyFormula = "월급 입력값 사용: " + money(monthly) + "원";
+        } else {
+          monthly = threeMonthWage / 3;
+          monthlyFormula =
+            "월급(추정) = 3개월임금 ÷ 3 = " +
+            money(threeMonthWage) + " ÷ 3 = " +
+            money(monthly) + "원";
+        }
+
+        let totalRetirement;
+        let retirementFormula;
+
+        if (retirementIn !== null) {
+          totalRetirement = retirementIn;
+          retirementFormula = "총퇴직금 입력값 사용: " + money(totalRetirement) + "원";
+        } else {
+          totalRetirement = monthly * (totalDays / 365);
+          retirementFormula =
+            "총퇴직금 = 월급 × (재직일수 ÷ 365) = " +
+            money(monthly) + " × (" + totalDays + "/365) = " +
+            money(totalRetirement) + "원";
+        }
+
+        const retirement3Years = totalRetirement * (1095 / totalDays);
+
+        const retirement3Formula =
+          "최근3년퇴직금 = 총퇴직금 × (1095 ÷ 재직일수)\n" +
+          "= " + money(totalRetirement) + " × (1095/" + totalDays + ")\n" +
+          "= " + money(retirement3Years) + "원";
+
+        const priorityWage = threeMonthWage + retirement3Years;
+
+        const finalFormula =
+          "최우선임금 = 3개월임금 + 최근3년퇴직금\n" +
+          "= " + money(threeMonthWage) + " + " + money(retirement3Years) + "\n" +
+          "= " + money(priorityWage) + "원";
+
+        document.getElementById("result").textContent =
+`[재직일수]
+${daysFormula}
+
+[3개월 임금]
+${wageFormula}
+
+[월급(퇴직금 계산용)]
+${monthlyFormula || "월급 입력/추정값 없음"}
+
+[총 퇴직금]
+${retirementFormula}
+
+[최근 3년 퇴직금]
+${retirement3Formula}
+
+[최우선임금]
+${finalFormula}`;
+      } catch (e) {
+        showError(e.message);
+      }
+    }
+  </script>
+</body>
+</html>
