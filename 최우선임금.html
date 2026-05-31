@@ -118,7 +118,6 @@
 
     <div class="section">
       <h3>① 재직기간 입력</h3>
-
       <div class="guide">
         • 재직일수를 알고 있으면 재직일수만 입력<br>
         • 재직일수를 모르면 재직기간 시작일과 종료일 입력<br>
@@ -127,7 +126,7 @@
       </div>
 
       <label>재직일수</label>
-      <input id="days" type="text" placeholder="예: 730" />
+      <input id="days" type="text" placeholder="예: 750" />
 
       <div class="or-text">또는</div>
 
@@ -140,7 +139,6 @@
 
     <div class="section">
       <h3>② 임금 입력</h3>
-
       <div class="guide">
         • 3개월임금이 있으면 그대로 입력합니다<br>
         • 3개월임금이 없으면 평균임금(1일)을 입력합니다<br>
@@ -152,7 +150,7 @@
       <input id="threeMonthWage" type="text" oninput="formatCommaInput(this)" placeholder="예: 9,000,000" />
 
       <label>평균임금 (1일)</label>
-      <input id="avgWage" type="text" oninput="formatCommaInput(this)" placeholder="예: 100,000" />
+      <input id="avgWage" type="text" oninput="formatCommaInput(this)" placeholder="예: 210,000" />
 
       <label>월급</label>
       <input id="monthlyWage" type="text" oninput="formatCommaInput(this)" placeholder="예: 3,000,000" />
@@ -160,11 +158,11 @@
 
     <div class="section">
       <h3>③ 퇴직금 입력</h3>
-
       <div class="guide">
         • 총퇴직금을 알고 있으면 입력합니다<br>
         • 총퇴직금이 없으면 월급과 재직일수로 자동 계산합니다<br>
-        • 월급이 없고 3개월임금만 있으면 월급은 3개월임금 ÷ 3으로 추정합니다
+        • 단, 재직일수가 1년 미만이면 퇴직금은 0원입니다<br>
+        • 재직일수가 3년 이하이면 최근3년퇴직금은 총퇴직금 전액입니다
       </div>
 
       <label>총 퇴직금</label>
@@ -350,11 +348,20 @@
         let totalRetirement;
         let retirementFormula;
 
-        if (retirementIn !== null) {
+        if (totalDays < 365) {
+          totalRetirement = 0;
+
+          retirementFormula =
+            "재직일수(" + totalDays + "일)가 1년 미만이므로 퇴직금 없음\n" +
+            "= 0원";
+        } else if (retirementIn !== null) {
           totalRetirement = retirementIn;
-          retirementFormula = "총퇴직금 입력값 사용: " + money(totalRetirement) + "원";
+
+          retirementFormula =
+            "총퇴직금 입력값 사용: " + money(totalRetirement) + "원";
         } else {
           totalRetirement = monthly * (totalDays / 365);
+
           retirementFormula =
             "총퇴직금 = 월급 × (재직일수 ÷ 365) = " +
             money(monthly) + " × (" + totalDays + "/365) = " +
@@ -363,24 +370,26 @@
 
         let retirement3Years;
         let retirement3Formula;
-        
-        if (totalDays <= 1095) {
-        
-          retirement3Years = totalRetirement;
-        
+
+        if (totalDays < 365) {
+          retirement3Years = 0;
+
           retirement3Formula =
-            "재직기간이 3년 이하이므로 총퇴직금 전액 반영\n" +
+            "재직일수(" + totalDays + "일)가 1년 미만이므로 퇴직금 없음\n" +
+            "= 0원";
+        } else if (totalDays <= 1095) {
+          retirement3Years = totalRetirement;
+
+          retirement3Formula =
+            "재직일수(" + totalDays + "일)가 1095일 이하이므로 총퇴직금 전액 반영\n" +
             "= " + money(retirement3Years) + "원";
-        
         } else {
-        
           retirement3Years = totalRetirement * (1095 / totalDays);
-        
+
           retirement3Formula =
             "최근3년퇴직금 = 총퇴직금 × (1095 ÷ 재직일수)\n" +
             "= " + money(totalRetirement) + " × (1095/" + totalDays + ")\n" +
             "= " + money(retirement3Years) + "원";
-        
         }
 
         const priorityWage = threeMonthWage + retirement3Years;
