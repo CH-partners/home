@@ -985,3 +985,16 @@ body {
     white-space:nowrap;
     word-break:keep-all;
 }
+.nav-bottom-wrap {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+    margin-top:8px;
+}
+
+.nav-bottom-wrap .nav-item {
+    width:100% !important;
+    min-width:0;
+    justify-content:center;
+    text-align:center;
+}
