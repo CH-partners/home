@@ -948,3 +948,12 @@ body {
   background:#2563eb;
   color:#fff;
 }
+.menu-table select {
+  width:100%;
+  border:1px solid #cbd5e1;
+  border-radius:10px;
+  padding:9px 10px;
+  font-size:13px;
+  font-family:inherit;
+  background:#fff;
+}
