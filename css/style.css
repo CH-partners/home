@@ -919,3 +919,32 @@ body {
   box-shadow:0 0 0 3px rgba(124,58,237,0.12);
   border:1px solid #c4b5fd;
 }
+.nav-item-pink {
+  background:#fce7f3;
+  color:#be185d;
+}
+
+.nav-item-pink:hover {
+  background:#fbcfe8;
+  color:#9d174d;
+}
+
+.nav-item-pink.active {
+  background:#ec4899;
+  color:#fff;
+}
+
+.nav-item-blue {
+  background:#dbeafe;
+  color:#1d4ed8;
+}
+
+.nav-item-blue:hover {
+  background:#bfdbfe;
+  color:#1e40af;
+}
+
+.nav-item-blue.active {
+  background:#2563eb;
+  color:#fff;
+}
