@@ -301,8 +301,15 @@ function createMenuButton(menu, isChild = false) {
   if (isChild) btn.classList.add("nav-sub-item");
 
   if (menu.location === "bottom") {
-    if (menu.theme === "purple") btn.classList.add("nav-item-purple");
-    else btn.classList.add("nav-item-green");
+      if (menu.theme === "purple") {
+          btn.classList.add("nav-item-purple");
+      } else if (menu.theme === "pink") {
+          btn.classList.add("nav-item-pink");
+      } else if (menu.theme === "blue") {
+          btn.classList.add("nav-item-blue");
+      } else {
+          btn.classList.add("nav-item-green");
+      }
   }
 
   if (Number(menu.panelIndex) === 0) {
