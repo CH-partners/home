@@ -361,12 +361,27 @@
             money(totalRetirement) + "원";
         }
 
-        const retirement3Years = totalRetirement * (1095 / totalDays);
-
-        const retirement3Formula =
-          "최근3년퇴직금 = 총퇴직금 × (1095 ÷ 재직일수)\n" +
-          "= " + money(totalRetirement) + " × (1095/" + totalDays + ")\n" +
-          "= " + money(retirement3Years) + "원";
+        let retirement3Years;
+        let retirement3Formula;
+        
+        if (totalDays <= 1095) {
+        
+          retirement3Years = totalRetirement;
+        
+          retirement3Formula =
+            "재직기간이 3년 이하이므로 총퇴직금 전액 반영\n" +
+            "= " + money(retirement3Years) + "원";
+        
+        } else {
+        
+          retirement3Years = totalRetirement * (1095 / totalDays);
+        
+          retirement3Formula =
+            "최근3년퇴직금 = 총퇴직금 × (1095 ÷ 재직일수)\n" +
+            "= " + money(totalRetirement) + " × (1095/" + totalDays + ")\n" +
+            "= " + money(retirement3Years) + "원";
+        
+        }
 
         const priorityWage = threeMonthWage + retirement3Years;
 
