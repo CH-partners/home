@@ -399,12 +399,7 @@ function renderMenus() {
   });
 
   const badgeWrap = document.createElement("div");
-  badgeWrap.style.display = "flex";
-  badgeWrap.style.gap = "6px";
-  badgeWrap.style.flexWrap = "wrap";
-  badgeWrap.style.overflowX = "visible";
-  badgeWrap.style.justifyContent = "flex-start";
-  badgeWrap.style.marginBottom = "4px";
+  badgeWrap.className = "nav-bottom-wrap";
 
   orderedBottomMenus.forEach(menu => {
     badgeWrap.appendChild(createMenuButton(menu));
