@@ -726,6 +726,14 @@ function renderMenuTable() {
         <input data-field="panelIndex" data-index="${realIndex}" value="${escapeHtml(String(isWork ? 11 : isSchedule ? 12 : (menu.panelIndex ?? "")))}" ${isFixedMenu ? "readonly" : ""}>
       </td>
       <td>
+        <select data-field="theme" data-index="${realIndex}" ${isFixedMenu ? "disabled" : ""}>
+          <option value="green" ${(menu.theme || "green") === "green" ? "selected" : ""}>초록</option>
+          <option value="purple" ${menu.theme === "purple" ? "selected" : ""}>보라</option>
+          <option value="pink" ${menu.theme === "pink" ? "selected" : ""}>분홍</option>
+          <option value="blue" ${menu.theme === "blue" ? "selected" : ""}>파랑</option>
+        </select>
+      </td>
+      <td>
         <input data-field="url" data-index="${realIndex}" value="${escapeHtml(isFixedMenu ? "" : (menu.url || ""))}" ${isFixedMenu ? "readonly" : ""}>
       </td>
       <td>
@@ -752,7 +760,14 @@ function renderMenuTable() {
 }
 
 window.addMenuRow = function(location) {
-  menuData.push({ title: "", panelIndex: 0, location: location || "top", kind: location === "bottom" ? "iframe" : "panel", url: "" });
+  menuData.push({
+      title: "",
+      panelIndex: 0,
+      location: location || "top",
+      kind: location === "bottom" ? "iframe" : "panel",
+      url: "",
+      theme: location === "bottom" ? "green" : ""
+    });
   renderMenuTable();
 };
 
@@ -813,6 +828,7 @@ function syncMenuDataFromTable() {
     const rawPanelIndex = getVal("panelIndex");
     const rawLocation = getVal("location");
     const rawUrl = getVal("url");
+    const rawTheme = getVal("theme") || prev.theme || "green";
 
     const prevTitle = (prev.title || "").trim();
 
@@ -861,8 +877,13 @@ function syncMenuDataFromTable() {
       item.url = prev.url;
     }
 
-    if (isWorkAllocation || isSchedule) item.theme = "purple";
-    else if (prev.theme) item.theme = prev.theme;
+    if (isWorkAllocation || isSchedule) {
+      item.theme = "purple";
+    } else if (location === "bottom") {
+      item.theme = rawTheme || "green";
+    } else if (prev.theme) {
+      item.theme = prev.theme;
+    }
 
     return item;
   }).filter(menu => (menu.title || "").trim() !== "");
