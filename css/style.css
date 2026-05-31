@@ -258,20 +258,18 @@ body {
 
 .admin-actions {
   display:flex;
-  gap:8px;
-  flex-wrap:wrap;
+  gap:6px;
+}
+
+.admin-actions .admin-btn {
+  flex:1;
 }
 
 .admin-btn {
-  border:1px solid #dbeafe;
-  background:#ffffff;
-  color:#475569;
-  padding:8px 10px;
-  border-radius:10px;
-  font-size:12px;
-  font-weight:700;
-  cursor:pointer;
-  transition:all .15s ease;
+  width:100%;
+  padding:8px 4px;
+  text-align:center;
+  white-space:nowrap;
 }
 
 .admin-btn:hover {
