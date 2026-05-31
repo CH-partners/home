@@ -28,14 +28,30 @@
       font-size: 26px;
     }
 
-    .usage {
+    .section {
+      margin-top: 22px;
+      padding: 18px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      background: #fafafa;
+    }
+
+    .section h3 {
+      margin-top: 0;
+      margin-bottom: 14px;
+      font-size: 18px;
+      color: #1f2937;
+    }
+
+    .guide {
       background: #eef5ff;
-      color: #064b9b;
-      padding: 16px;
-      border-radius: 10px;
+      border-left: 4px solid #2563eb;
+      padding: 10px 12px;
+      margin-bottom: 15px;
+      border-radius: 6px;
       line-height: 1.7;
-      white-space: pre-line;
-      margin-bottom: 22px;
+      font-size: 14px;
+      color: #064b9b;
     }
 
     label {
@@ -52,6 +68,13 @@
       border: 1px solid #ccc;
       border-radius: 8px;
       font-size: 16px;
+    }
+
+    .or-text {
+      text-align: center;
+      margin: 12px 0;
+      color: #666;
+      font-weight: bold;
     }
 
     button {
@@ -93,38 +116,60 @@
   <div class="container">
     <h1>최우선임금 계산기</h1>
 
-    <div class="usage">[사용방법]
+    <div class="section">
+      <h3>① 재직기간 입력</h3>
 
-1) 재직일수 또는 재직기간(시작/종료) 입력
-2) 3개월임금이 있으면 그대로 입력 (우선 적용)
-   - 없으면 평균임금(1일) 또는 월급 입력
-3) 총퇴직금이 있으면 입력
-   - 없으면 '월급 × (재직일수/365)'로 자동 계산
-   - 월급이 없더라도 3개월임금만 있으면 '월급 = 3개월임금/3'으로 자동 추정
-4) 계산하기 클릭 → 계산식 포함 결과 출력
+      <div class="guide">
+        • 재직일수를 알고 있으면 재직일수만 입력<br>
+        • 재직일수를 모르면 재직기간 시작일과 종료일 입력<br>
+        • 둘 다 입력한 경우 재직일수를 우선 사용<br>
+        • 날짜는 22-5-8 / 22.5.8 / 22/5/8 / 2022-5-8 모두 가능
+      </div>
 
-※ 날짜는 22-5-8 / 22.5.8 / 22/5/8 / 2022-5-8 모두 가능</div>
+      <label>재직일수</label>
+      <input id="days" type="text" placeholder="예: 730" />
 
-    <label>재직일수</label>
-    <input id="days" type="text" />
+      <div class="or-text">또는</div>
 
-    <label>재직기간 시작</label>
-    <input id="startDate" type="text" placeholder="예: 2022-05-08" onblur="formatDateInput(this)" />
+      <label>재직기간 시작</label>
+      <input id="startDate" type="text" placeholder="예: 2022-05-08" onblur="formatDateInput(this)" />
 
-    <label>재직기간 종료</label>
-    <input id="endDate" type="text" placeholder="예: 2024-05-07" onblur="formatDateInput(this)" />
+      <label>재직기간 종료</label>
+      <input id="endDate" type="text" placeholder="예: 2024-05-07" onblur="formatDateInput(this)" />
+    </div>
 
-    <label>평균임금 (1일)</label>
-    <input id="avgWage" type="text" oninput="formatCommaInput(this)" />
+    <div class="section">
+      <h3>② 임금 입력</h3>
 
-    <label>월급</label>
-    <input id="monthlyWage" type="text" oninput="formatCommaInput(this)" />
+      <div class="guide">
+        • 3개월임금이 있으면 그대로 입력합니다<br>
+        • 3개월임금이 없으면 평균임금(1일)을 입력합니다<br>
+        • 평균임금도 없으면 월급을 입력합니다<br>
+        • 3개월임금이 있으면 다른 임금보다 우선 적용됩니다
+      </div>
 
-    <label>3개월 임금</label>
-    <input id="threeMonthWage" type="text" oninput="formatCommaInput(this)" />
+      <label>3개월 임금</label>
+      <input id="threeMonthWage" type="text" oninput="formatCommaInput(this)" placeholder="예: 9,000,000" />
 
-    <label>총 퇴직금</label>
-    <input id="retirement" type="text" oninput="formatCommaInput(this)" />
+      <label>평균임금 (1일)</label>
+      <input id="avgWage" type="text" oninput="formatCommaInput(this)" placeholder="예: 100,000" />
+
+      <label>월급</label>
+      <input id="monthlyWage" type="text" oninput="formatCommaInput(this)" placeholder="예: 3,000,000" />
+    </div>
+
+    <div class="section">
+      <h3>③ 퇴직금 입력</h3>
+
+      <div class="guide">
+        • 총퇴직금을 알고 있으면 입력합니다<br>
+        • 총퇴직금이 없으면 월급과 재직일수로 자동 계산합니다<br>
+        • 월급이 없고 3개월임금만 있으면 월급은 3개월임금 ÷ 3으로 추정합니다
+      </div>
+
+      <label>총 퇴직금</label>
+      <input id="retirement" type="text" oninput="formatCommaInput(this)" placeholder="예: 12,000,000" />
+    </div>
 
     <button onclick="calculate()">계산하기</button>
 
@@ -242,17 +287,21 @@
 
         if (daysValue !== "") {
           totalDays = parseInt(daysValue, 10);
+
           if (isNaN(totalDays) || totalDays <= 0) {
             showError("재직일수를 올바르게 입력하세요.");
             return;
           }
+
           daysFormula = "재직일수 입력값 사용: " + totalDays + "일";
         } else {
           totalDays = calculateDays();
+
           if (!totalDays || totalDays <= 0) {
             showError("재직일수 또는 재직기간(시작/종료)을 올바르게 입력하세요.");
             return;
           }
+
           daysFormula = "재직일수 = 종료일 - 시작일 + 1 = " + totalDays + "일";
         }
 
