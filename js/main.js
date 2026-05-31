@@ -14,7 +14,8 @@ const firebaseConfig = {
 
 const ADMIN_EMAILS = [
   "admin@admin.com",
-  "eastspring1979@gmail.com"
+  "eastspring1979@gmail.com",
+  "sora@jeju.com"
 ].map(v => v.toLowerCase());
 
 const fixedMembers = [
