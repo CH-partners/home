@@ -216,8 +216,8 @@ function getMenuGroup(menu) {
 function getGroupTitle(groupKey) {
   const map = {
     qna: "Q&A 모음",
-    search: "검색 메뉴",
-    work: "법정선순위_임차",
+    search: "비고 문구(경매, 감정평가, 기타)",
+    work: "법정선순위",
     reference: "참고 메뉴"
   };
 
@@ -763,8 +763,8 @@ function renderMenuTable() {
         <select data-field="group" data-index="${realIndex}" ${isFixedMenu ? "disabled" : ""}>
           <option value="" ${!getMenuGroup(menu) ? "selected" : ""}>일반</option>
           <option value="qna" ${getMenuGroup(menu) === "qna" ? "selected" : ""}>Q&A 모음</option>
-          <option value="search" ${getMenuGroup(menu) === "search" ? "selected" : ""}>검색 메뉴</option>
-          <option value="work" ${getMenuGroup(menu) === "work" ? "selected" : ""}>법정선순위_임차</option>
+          <option value="search" ${getMenuGroup(menu) === "search" ? "selected" : ""}>비고 문구(경매, 감정평가, 기타)</option>
+          <option value="work" ${getMenuGroup(menu) === "work" ? "selected" : ""}>법정선순위</option>
           <option value="reference" ${getMenuGroup(menu) === "reference" ? "selected" : ""}>참고 메뉴</option>
         </select>
       </td>
