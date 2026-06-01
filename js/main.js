@@ -54,7 +54,7 @@ let allocationData = {
   projects: []
 };
 let selectedProjectId = null;
-let navGroupState = { qna: false };
+let navGroupState = {};
 let scheduleEvents = [];
 
 const defaultMenus = [
@@ -203,6 +203,25 @@ function isQnaMenu(menu) {
   if (title === "경매참고비고" || title === "감정평가비고") return false;
   const qnaPanelIndexes = [4, 5, 6, 7, 8, 9];
   return qnaPanelIndexes.includes(Number(menu.panelIndex));
+}
+
+function getMenuGroup(menu) {
+  if (menu.group) return menu.group;
+
+  if (isQnaMenu(menu)) return "qna";
+
+  return "";
+}
+
+function getGroupTitle(groupKey) {
+  const map = {
+    qna: "Q&A 모음",
+    search: "검색 메뉴",
+    work: "업무 메뉴",
+    reference: "참고 메뉴"
+  };
+
+  return map[groupKey] || groupKey;
 }
 
 function updateAdminUI() {
@@ -374,8 +393,19 @@ function renderMenus() {
   const topMenus = menuData.filter(menu => menu.location !== "bottom");
   const bottomMenus = menuData.filter(menu => menu.location === "bottom");
 
-  const qnaMenus = topMenus.filter(menu => isQnaMenu(menu));
-  const normalMenus = topMenus.filter(menu => !isQnaMenu(menu));
+  const groupedMenus = {};
+  const normalMenus = [];
+  
+  topMenus.forEach(menu => {
+    const groupKey = getMenuGroup(menu);
+  
+    if (groupKey) {
+      if (!groupedMenus[groupKey]) groupedMenus[groupKey] = [];
+      groupedMenus[groupKey].push(menu);
+    } else {
+      normalMenus.push(menu);
+    }
+  });
 
   const noticeMenu = normalMenus.find(m => Number(m.panelIndex) === 0);
   if (noticeMenu) {
@@ -407,28 +437,28 @@ function renderMenus() {
   });
   topNav.appendChild(badgeWrap);
 
-  if (qnaMenus.length) {
-    const isExpanded = !!navGroupState.qna;
-
+  Object.entries(groupedMenus).forEach(([groupKey, menus]) => {
+    const isExpanded = !!navGroupState[groupKey];
+  
     const groupToggle = document.createElement("button");
     groupToggle.className = "nav-group-toggle" + (isExpanded ? " expanded" : "");
     groupToggle.innerHTML = `
-      <span class="nav-group-label"><span>Q&A 모음</span></span>
+      <span class="nav-group-label"><span>${escapeHtml(getGroupTitle(groupKey))}</span></span>
       <span class="nav-group-arrow">▶</span>
     `;
-    groupToggle.onclick = () => window.toggleNavGroup("qna");
-
+    groupToggle.onclick = () => window.toggleNavGroup(groupKey);
+  
     topNav.appendChild(groupToggle);
-
+  
     const groupWrap = document.createElement("div");
     groupWrap.className = "nav-sub-group" + (isExpanded ? "" : " collapsed");
-
-    qnaMenus.forEach(menu => {
+  
+    menus.forEach(menu => {
       groupWrap.appendChild(createMenuButton(menu, true));
     });
-
+  
     topNav.appendChild(groupWrap);
-  }
+  });
 
   normalMenus
     .filter(m => Number(m.panelIndex) !== 0)
@@ -730,6 +760,15 @@ function renderMenuTable() {
         </select>
       </td>
       <td>
+        <select data-field="group" data-index="${realIndex}" ${isFixedMenu ? "disabled" : ""}>
+          <option value="" ${!getMenuGroup(menu) ? "selected" : ""}>일반</option>
+          <option value="qna" ${getMenuGroup(menu) === "qna" ? "selected" : ""}>Q&A 모음</option>
+          <option value="search" ${getMenuGroup(menu) === "search" ? "selected" : ""}>검색 메뉴</option>
+          <option value="work" ${getMenuGroup(menu) === "work" ? "selected" : ""}>업무 메뉴</option>
+          <option value="reference" ${getMenuGroup(menu) === "reference" ? "selected" : ""}>참고 메뉴</option>
+        </select>
+      </td>
+      <td>
         <input data-field="url" data-index="${realIndex}" value="${escapeHtml(isFixedMenu ? "" : (menu.url || ""))}" ${isFixedMenu ? "readonly" : ""}>
       </td>
       <td>
@@ -757,13 +796,14 @@ function renderMenuTable() {
 
 window.addMenuRow = function(location) {
   menuData.push({
-      title: "",
-      panelIndex: 0,
-      location: location || "top",
-      kind: location === "bottom" ? "iframe" : "panel",
-      url: "",
-      theme: location === "bottom" ? "green" : ""
-    });
+    title: "",
+    panelIndex: 0,
+    location: location || "top",
+    kind: location === "bottom" ? "iframe" : "panel",
+    url: "",
+    theme: location === "bottom" ? "green" : "",
+    group: ""
+  });
   renderMenuTable();
 };
 
@@ -825,6 +865,7 @@ function syncMenuDataFromTable() {
     const rawLocation = getVal("location");
     const rawUrl = getVal("url");
     const rawTheme = getVal("theme") || prev.theme || "green";
+    const rawGroup = getVal("group") || "";
 
     const prevTitle = (prev.title || "").trim();
 
@@ -879,6 +920,10 @@ function syncMenuDataFromTable() {
       item.theme = rawTheme || "green";
     } else if (prev.theme) {
       item.theme = prev.theme;
+    }
+
+    if (rawGroup && location !== "bottom") {
+      item.group = rawGroup;
     }
 
     return item;
