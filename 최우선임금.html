@@ -140,10 +140,10 @@
     <div class="section">
       <h3>② 임금 입력</h3>
       <div class="guide">
-        • 3개월임금이 있으면 그대로 입력합니다<br>
-        • 3개월임금이 없으면 평균임금(1일)을 입력합니다<br>
-        • 평균임금도 없으면 월급을 입력합니다<br>
-        • 3개월임금이 있으면 다른 임금보다 우선 적용됩니다
+        • 평균임금(1일)이 있으면 법정퇴직금 계산에 우선 사용합니다<br>
+        • 평균임금이 없고 3개월임금이 있으면 평균임금 = 3개월임금 ÷ 92로 계산합니다<br>
+        • 3개월임금과 평균임금이 없으면 월급으로 계산합니다<br>
+        • 3개월임금은 최우선임금에 그대로 반영됩니다
       </div>
 
       <label>3개월 임금</label>
@@ -159,10 +159,10 @@
     <div class="section">
       <h3>③ 퇴직금 입력</h3>
       <div class="guide">
-        • 총퇴직금을 알고 있으면 입력합니다<br>
-        • 총퇴직금이 없으면 월급과 재직일수로 자동 계산합니다<br>
-        • 단, 재직일수가 1년 미만이면 퇴직금은 0원입니다<br>
-        • 재직일수가 3년 이하이면 최근3년퇴직금은 총퇴직금 전액입니다
+        • 총퇴직금을 알고 있으면 입력값을 우선 사용합니다<br>
+        • 총퇴직금이 없으면 법정퇴직금으로 자동 계산합니다<br>
+        • 법정퇴직금 = 평균임금(1일) × 30 × 재직일수 ÷ 365<br>
+        • 재직일수가 1년 미만이면 퇴직금은 0원입니다
       </div>
 
       <label>총 퇴직금</label>
@@ -309,23 +309,47 @@
         const retirementIn = getNumber("retirement");
 
         let threeMonthWage;
+        let avgDaily;
         let wageFormula;
 
         if (threeMonthIn !== null) {
           threeMonthWage = threeMonthIn;
-          wageFormula = "3개월임금 입력값 사용: " + money(threeMonthWage) + "원";
+
+          if (avgDailyIn !== null) {
+            avgDaily = avgDailyIn;
+            wageFormula =
+              "3개월임금 입력값 사용: " + money(threeMonthWage) + "원\n" +
+              "평균임금(1일) 입력값 사용: " + money(avgDaily) + "원";
+          } else {
+            avgDaily = threeMonthWage / 92;
+            wageFormula =
+              "3개월임금 입력값 사용: " + money(threeMonthWage) + "원\n" +
+              "평균임금(1일) = 3개월임금 ÷ 92 = " +
+              money(threeMonthWage) + " ÷ 92 = " +
+              money(avgDaily) + "원";
+          }
+
         } else if (avgDailyIn !== null) {
-          threeMonthWage = avgDailyIn * 92;
+          avgDaily = avgDailyIn;
+          threeMonthWage = avgDaily * 92;
+
           wageFormula =
             "3개월임금 = 평균임금 × 92 = " +
-            money(avgDailyIn) + " × 92 = " +
-            money(threeMonthWage) + "원";
+            money(avgDaily) + " × 92 = " +
+            money(threeMonthWage) + "원\n" +
+            "평균임금(1일) 입력값 사용: " + money(avgDaily) + "원";
+
         } else if (monthlyIn !== null) {
           threeMonthWage = monthlyIn * 3;
+          avgDaily = monthlyIn / 30;
+
           wageFormula =
             "3개월임금 = 월급 × 3 = " +
             money(monthlyIn) + " × 3 = " +
-            money(threeMonthWage) + "원";
+            money(threeMonthWage) + "원\n" +
+            "평균임금(추정) = 월급 ÷ 30 = " +
+            money(monthlyIn) + " ÷ 30 = " +
+            money(avgDaily) + "원";
         } else {
           showError("3개월임금 또는 평균임금(1일) 또는 월급 중 하나는 입력해야 합니다.");
           return;
@@ -340,7 +364,7 @@
         } else {
           monthly = threeMonthWage / 3;
           monthlyFormula =
-            "월급(추정) = 3개월임금 ÷ 3 = " +
+            "월급(참고) = 3개월임금 ÷ 3 = " +
             money(threeMonthWage) + " ÷ 3 = " +
             money(monthly) + "원";
         }
@@ -360,12 +384,12 @@
           retirementFormula =
             "총퇴직금 입력값 사용: " + money(totalRetirement) + "원";
         } else {
-          totalRetirement = monthly * (totalDays / 365);
+          totalRetirement = avgDaily * 30 * (totalDays / 365);
 
           retirementFormula =
-            "총퇴직금 = 월급 × (재직일수 ÷ 365) = " +
-            money(monthly) + " × (" + totalDays + "/365) = " +
-            money(totalRetirement) + "원";
+            "법정퇴직금 = 평균임금(1일) × 30 × (재직일수 ÷ 365)\n" +
+            "= " + money(avgDaily) + " × 30 × (" + totalDays + "/365)\n" +
+            "= " + money(totalRetirement) + "원";
         }
 
         let retirement3Years;
@@ -403,10 +427,10 @@
 `[재직일수]
 ${daysFormula}
 
-[3개월 임금]
+[3개월 임금 / 평균임금]
 ${wageFormula}
 
-[월급(퇴직금 계산용)]
+[월급(참고)]
 ${monthlyFormula || "월급 입력/추정값 없음"}
 
 [총 퇴직금]
