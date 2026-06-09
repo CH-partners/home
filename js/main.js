@@ -14,8 +14,8 @@ window.checkSitePassword = function () {
     if(input === SITE_PASSWORD){
 
         localStorage.setItem(
-            "site_auth",
-            "ok"
+            "site_auth_time",
+            Date.now()
         );
 
         document
@@ -33,14 +33,29 @@ document.addEventListener(
     "DOMContentLoaded",
     () => {
 
-        const auth =
-            localStorage.getItem("site_auth");
-
-        if(auth === "ok"){
-
-            document
-                .getElementById("loginOverlay")
-                .style.display = "none";
+        const authTime =
+            localStorage.getItem("site_auth_time");
+        
+        if(authTime){
+        
+            const diff =
+                Date.now() - Number(authTime);
+        
+            const oneDay =
+                24 * 60 * 60 * 1000;
+        
+            if(diff < oneDay){
+        
+                document
+                    .getElementById("loginOverlay")
+                    .style.display = "none";
+        
+            }else{
+        
+                localStorage.removeItem(
+                    "site_auth_time"
+                );
+            }
         }
     }
 );
