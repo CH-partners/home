@@ -4,62 +4,6 @@ import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, quer
 import { initAllocation } from "./allocation.js";
 import { initSchedule } from "./schedule.js";
 
-const SITE_PASSWORD = "qwer11";
-
-window.checkSitePassword = function () {
-
-    const input =
-        document.getElementById("sitePassword").value;
-
-    if(input === SITE_PASSWORD){
-
-        localStorage.setItem(
-            "site_auth_time",
-            Date.now()
-        );
-
-        document
-            .getElementById("loginOverlay")
-            .style.display = "none";
-
-    }else{
-
-        alert("비밀번호가 틀렸습니다.");
-
-    }
-};
-
-document.addEventListener(
-    "DOMContentLoaded",
-    () => {
-
-        const authTime =
-            localStorage.getItem("site_auth_time");
-        
-        if(authTime){
-        
-            const diff =
-                Date.now() - Number(authTime);
-        
-            const oneDay =
-                24 * 60 * 60 * 1000;
-        
-            if(diff < oneDay){
-        
-                document
-                    .getElementById("loginOverlay")
-                    .style.display = "none";
-        
-            }else{
-        
-                localStorage.removeItem(
-                    "site_auth_time"
-                );
-            }
-        }
-    }
-);
-
 const firebaseConfig = {
   apiKey: "AIzaSyDr_SfWtjfRPqfguJ6yvwBo-e3r8bGAs_M",
   authDomain: "ch-partners-71452.firebaseapp.com",
