@@ -1008,3 +1008,129 @@ body {
     align-items:center;
     z-index:99999;
 }
+.dashboard-nav-wrap {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-top:10px;
+}
+
+.dashboard-nav-item {
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  border:1px solid #e2e8f0;
+  background:#ffffff;
+  padding:13px 14px;
+  border-radius:16px;
+  font-weight:800;
+  box-shadow:0 6px 16px rgba(15,23,42,0.04);
+}
+
+.dashboard-nav-item small {
+  font-size:11px;
+  font-weight:500;
+  color:#64748b;
+}
+
+.dashboard-nav-item:hover {
+  background:#f8fafc;
+  border-color:#cbd5e1;
+  color:#0f172a;
+}
+
+.dashboard-nav-item.active {
+  background:#0f172a;
+  color:#ffffff;
+  border-color:#0f172a;
+}
+
+.dashboard-nav-item.active small {
+  color:#cbd5e1;
+}
+
+.dashboard-panel {
+  max-width:1180px;
+}
+
+.dashboard-card-grid {
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:18px;
+}
+
+.dashboard-menu-card {
+  border:1px solid #e5e7eb;
+  background:#ffffff;
+  border-radius:22px;
+  padding:0;
+  text-align:left;
+  cursor:pointer;
+  overflow:hidden;
+  box-shadow:0 12px 28px rgba(15,23,42,0.06);
+  transition:all .18s ease;
+}
+
+.dashboard-menu-card:hover {
+  transform:translateY(-4px);
+  box-shadow:0 18px 38px rgba(15,23,42,0.12);
+  border-color:#cbd5e1;
+}
+
+.dashboard-card-top {
+  height:7px;
+  background:#2563eb;
+}
+
+.dashboard-card-top.tool {
+  background:#2563eb;
+}
+
+.dashboard-card-top.qna {
+  background:#7c3aed;
+}
+
+.dashboard-card-top.work {
+  background:#dc2626;
+}
+
+.dashboard-card-top.search {
+  background:#0f766e;
+}
+
+.dashboard-card-top.reference {
+  background:#475569;
+}
+
+.dashboard-card-body {
+  padding:22px 24px;
+}
+
+.dashboard-card-title {
+  font-size:18px;
+  font-weight:900;
+  color:#0f172a;
+  margin-bottom:8px;
+  word-break:keep-all;
+}
+
+.dashboard-card-desc {
+  font-size:13px;
+  color:#64748b;
+}
+
+.dashboard-empty {
+  grid-column:1 / -1;
+  padding:28px;
+  border:1px dashed #cbd5e1;
+  border-radius:18px;
+  background:#f8fafc;
+  color:#64748b;
+  text-align:center;
+}
+
+@media (max-width: 920px) {
+  .dashboard-card-grid {
+    grid-template-columns:1fr;
+  }
+}
