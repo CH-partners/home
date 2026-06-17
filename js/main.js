@@ -216,6 +216,171 @@ function getGroupTitle(groupKey) {
 
   return map[groupKey] || groupKey;
 }
+  const dashboardGroups = [
+  {
+    key: "notice",
+    title: "공지사항",
+    icon: "📢",
+    desc: "공지 및 주요 안내사항"
+  },
+  {
+    key: "tool",
+    title: "업무도구",
+    icon: "🛠",
+    desc: "분배표, 스케줄, 조회·계산 도구"
+  },
+  {
+    key: "qna",
+    title: "Q&A",
+    icon: "❓",
+    desc: "권리분석 관련 질의응답"
+  },
+  {
+    key: "work",
+    title: "법정선순위",
+    icon: "⚖",
+    desc: "임차, 임금, 조세 관련 문구"
+  },
+  {
+    key: "search",
+    title: "비고문구",
+    icon: "📝",
+    desc: "경매, 감정평가, 기타 비고"
+  },
+  {
+    key: "reference",
+    title: "공유자료",
+    icon: "📚",
+    desc: "공유사항, 검토코드, 참고자료"
+  }
+];
+
+function getDashboardGroupTitle(groupKey) {
+  const found = dashboardGroups.find(group => group.key === groupKey);
+  return found ? `${found.icon} ${found.title}` : groupKey;
+}
+
+function getMenusByDashboardGroup(groupKey) {
+  if (groupKey === "tool") {
+    return menuData.filter(menu => {
+      const title = (menu.title || "").trim();
+
+      return (
+        Number(menu.panelIndex) === 11 ||
+        Number(menu.panelIndex) === 12 ||
+        title === "소액조회" ||
+        title.includes("전월세") ||
+        title.includes("최우선임금") ||
+        menu.group === "tool"
+      );
+    });
+  }
+
+  return menuData.filter(menu => getMenuGroup(menu) === groupKey);
+}
+
+function ensureDashboardPanel(groupKey) {
+  const main = document.querySelector(".main");
+  const panelIndex = `dashboard-${groupKey}`;
+
+  let panel = document.querySelector(`.sheet-panel[data-dashboard="${groupKey}"]`);
+
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.className = "sheet-panel dashboard-panel";
+    panel.setAttribute("data-dashboard", groupKey);
+
+    panel.innerHTML = `
+      <header class="sheet-header">
+        <h1>${escapeHtml(getDashboardGroupTitle(groupKey))}</h1>
+      </header>
+      <section class="dashboard-card-grid" id="dashboardGrid-${groupKey}"></section>
+    `;
+
+    main.appendChild(panel);
+  }
+
+  return panel;
+}
+
+function showDashboardGroup(groupKey) {
+  document.querySelectorAll(".sheet-panel").forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+
+  const panel = ensureDashboardPanel(groupKey);
+  const grid = panel.querySelector(`#dashboardGrid-${groupKey}`);
+  const menus = getMenusByDashboardGroup(groupKey);
+
+  grid.innerHTML = "";
+
+  if (!menus.length) {
+    grid.innerHTML = `
+      <div class="dashboard-empty">
+        등록된 메뉴가 없습니다.
+      </div>
+    `;
+  } else {
+    menus.forEach(menu => {
+      grid.appendChild(createDashboardCard(menu));
+    });
+  }
+
+  panel.classList.add("active");
+
+  const activeBtn = document.querySelector(`[data-dashboard-nav="${groupKey}"]`);
+  if (activeBtn) activeBtn.classList.add("active");
+}
+
+function createDashboardCard(menu) {
+  const card = document.createElement("button");
+  card.className = "dashboard-menu-card";
+
+  const title = menu.title || "메뉴";
+  const groupKey = getMenuGroup(menu) || "tool";
+
+  card.innerHTML = `
+    <div class="dashboard-card-top ${groupKey}"></div>
+    <div class="dashboard-card-body">
+      <div class="dashboard-card-title">${escapeHtml(title)}</div>
+      <div class="dashboard-card-desc">클릭하여 이동</div>
+    </div>
+  `;
+
+  card.onclick = () => {
+    if (menu.kind === "iframe" && menu.url) {
+      const panelIndex = Number(menu.panelIndex || 10);
+      let panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
+
+      if (!panel) {
+        panel = document.createElement("div");
+        panel.className = "sheet-panel";
+        panel.setAttribute("data-index", String(panelIndex));
+        panel.innerHTML = `
+          <header class="sheet-header">
+            <h1>${escapeHtml(menu.title || "외부페이지")}</h1>
+          </header>
+          <section class="major-card iframe-card">
+            <iframe class="tool-frame" src="${escapeHtml(menu.url)}"></iframe>
+          </section>
+        `;
+        document.querySelector(".main").appendChild(panel);
+      } else {
+        const frame = panel.querySelector("iframe");
+        if (frame) frame.src = menu.url;
+      }
+    }
+
+    renderAllContents();
+
+    if (Number(menu.panelIndex) === 11) {
+      window.allocationApi?.renderAllocationUI();
+    }
+
+    showSheet(Number(menu.panelIndex || 0), menu.title);
+  };
+
+  return card;
+}
 
 function updateAdminUI() {
   const admin = isAdmin(currentUser);
@@ -400,64 +565,40 @@ function renderMenus() {
     }
   });
 
-  const noticeMenu = normalMenus.find(m => Number(m.panelIndex) === 0);
-  if (noticeMenu) {
-    topNav.appendChild(createMenuButton(noticeMenu));
-  }
-
   const divider = document.createElement("div");
   divider.style.height = "1px";
   divider.style.background = "#e5e7eb";
   divider.style.margin = "10px 0";
   topNav.appendChild(divider);
 
-  const orderedBottomMenus = [...bottomMenus].sort((a, b) => {
-    const order = {
-      "분배표": 0,
-      "스케줄": 1,
-      "소액조회": 2
-    };
-    const av = order[a.title] ?? 99;
-    const bv = order[b.title] ?? 99;
-    return av - bv;
-  });
+  const dashboardNavWrap = document.createElement("div");
+  dashboardNavWrap.className = "dashboard-nav-wrap";
 
-  const badgeWrap = document.createElement("div");
-  badgeWrap.className = "nav-bottom-wrap";
+  dashboardGroups.forEach(group => {
+    const btn = document.createElement("button");
+    btn.className = "nav-item dashboard-nav-item";
+    btn.setAttribute("data-dashboard-nav", group.key);
 
-  orderedBottomMenus.forEach(menu => {
-    badgeWrap.appendChild(createMenuButton(menu));
-  });
-  topNav.appendChild(badgeWrap);
-
-  Object.entries(groupedMenus).forEach(([groupKey, menus]) => {
-    const isExpanded = !!navGroupState[groupKey];
-  
-    const groupToggle = document.createElement("button");
-    groupToggle.className = "nav-group-toggle" + (isExpanded ? " expanded" : "");
-    groupToggle.innerHTML = `
-      <span class="nav-group-label"><span>${escapeHtml(getGroupTitle(groupKey))}</span></span>
-      <span class="nav-group-arrow">▶</span>
+    btn.innerHTML = `
+      <span>${group.icon} ${group.title}</span>
+      <small>${group.desc}</small>
     `;
-    groupToggle.onclick = () => window.toggleNavGroup(groupKey);
-  
-    topNav.appendChild(groupToggle);
-  
-    const groupWrap = document.createElement("div");
-    groupWrap.className = "nav-sub-group" + (isExpanded ? "" : " collapsed");
-  
-    menus.forEach(menu => {
-      groupWrap.appendChild(createMenuButton(menu, true));
-    });
-  
-    topNav.appendChild(groupWrap);
+
+    btn.onclick = () => {
+      if (group.key === "notice") {
+        showSheet(0, "청현 공지사항");
+        document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+        btn.classList.add("active");
+        return;
+      }
+
+      showDashboardGroup(group.key);
+    };
+
+    dashboardNavWrap.appendChild(btn);
   });
 
-  normalMenus
-    .filter(m => Number(m.panelIndex) !== 0)
-    .forEach(menu => {
-      topNav.appendChild(createMenuButton(menu));
-    });
+  topNav.appendChild(dashboardNavWrap);
 
   renderAllContents();
 }
@@ -755,6 +896,7 @@ function renderMenuTable() {
       <td>
         <select data-field="group" data-index="${realIndex}" ${isFixedMenu ? "disabled" : ""}>
           <option value="" ${!getMenuGroup(menu) ? "selected" : ""}>일반</option>
+          <option value="tool" ${getMenuGroup(menu) === "tool" ? "selected" : ""}>업무도구</option>
           <option value="qna" ${getMenuGroup(menu) === "qna" ? "selected" : ""}>Q&A 모음</option>
           <option value="search" ${getMenuGroup(menu) === "search" ? "selected" : ""}>비고 문구(경매, 감정평가, 기타)</option>
           <option value="work" ${getMenuGroup(menu) === "work" ? "selected" : ""}>법정선순위</option>
