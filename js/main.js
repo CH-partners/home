@@ -362,7 +362,7 @@ function createDashboardCard(menu) {
 
   const title = menu.title || "메뉴";
   const groupKey = getMenuGroup(menu) || "tool";
-  const icon = getMenuIcon(title);
+  const icon = menu.icon || getMenuIcon(title);
   
   card.innerHTML = `
     <div class="dashboard-card-top ${groupKey}"></div>
@@ -909,6 +909,13 @@ function renderMenuTable() {
         ${isFixedMenu ? "readonly" : ""}
       >
     </td>
+    <td>
+      <input data-field="icon" data-index="${realIndex}"
+        value="${escapeHtml(menu.icon || "")}"
+        placeholder="예: 📊"
+        ${isFixedMenu ? "readonly" : ""}
+      >
+    </td>
       <td>
         <input data-field="panelIndex" data-index="${realIndex}" value="${escapeHtml(String(isWork ? 11 : isSchedule ? 12 : (menu.panelIndex ?? "")))}" ${isFixedMenu ? "readonly" : ""}>
       </td>
@@ -1023,6 +1030,7 @@ function syncMenuDataFromTable() {
     };
 
     const rawTitle = getVal("title");
+    const rawIcon = getVal("icon");
     const rawPanelIndex = getVal("panelIndex");
     const rawLocation = getVal("location");
     const rawUrl = getVal("url");
@@ -1061,8 +1069,9 @@ function syncMenuDataFromTable() {
       ? "bottom"
       : (rawLocation || prev.location || "top");
 
-    const item = {
+   const item = {
       title,
+      icon: rawIcon || prev.icon || "",
       panelIndex,
       location,
       kind: rawUrl
