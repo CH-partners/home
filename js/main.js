@@ -331,16 +331,43 @@ function showDashboardGroup(groupKey) {
   if (activeBtn) activeBtn.classList.add("active");
 }
 
+function getMenuIcon(title) {
+  title = title || "";
+
+  if (title.includes("분배표")) return "📊";
+  if (title.includes("스케줄")) return "📅";
+  if (title.includes("소액")) return "🏠";
+  if (title.includes("전월세")) return "🏢";
+  if (title.includes("최우선")) return "💰";
+
+  if (title.includes("임대차") || title.includes("임차")) return "💬";
+  if (title.includes("보증")) return "📜";
+  if (title.includes("채권") || title.includes("피담보")) return "📋";
+  if (title.includes("매각")) return "🏷️";
+  if (title.includes("임금")) return "⚖️";
+  if (title.includes("조세") || title.includes("당해세")) return "🏛️";
+
+  if (title.includes("경매")) return "✒️";
+  if (title.includes("감정")) return "📝";
+  if (title.includes("공유")) return "🔥";
+  if (title.includes("검토코드")) return "📌";
+  if (title.includes("참고")) return "🚨";
+
+  return "📁";
+}
+
 function createDashboardCard(menu) {
   const card = document.createElement("button");
   card.className = "dashboard-menu-card";
 
   const title = menu.title || "메뉴";
   const groupKey = getMenuGroup(menu) || "tool";
-
+  const icon = getMenuIcon(title);
+  
   card.innerHTML = `
     <div class="dashboard-card-top ${groupKey}"></div>
     <div class="dashboard-card-body">
+      <div class="dashboard-icon">${icon}</div>
       <div class="dashboard-card-title">${escapeHtml(title)}</div>
       <div class="dashboard-card-desc">클릭하여 이동</div>
     </div>
