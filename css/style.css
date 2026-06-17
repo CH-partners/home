@@ -1015,22 +1015,22 @@ body {
 
 .dashboard-card-grid {
   display:grid;
-  grid-template-columns:repeat(2, minmax(260px, 1fr));
-  gap:22px;
-  max-width:980px;
+  grid-template-columns:repeat(3, minmax(220px, 1fr));
+  gap:18px;
+  max-width:1050px;
 }
 
 .dashboard-menu-card {
   position:relative;
-  min-height:150px;
+  min-height:135px;
   border:1px solid #e2e8f0;
   background:linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-  border-radius:24px;
-  padding:24px;
+  border-radius:22px;
+  padding:20px;
   text-align:left;
   cursor:pointer;
   overflow:hidden;
-  box-shadow:0 14px 34px rgba(15,23,42,0.08);
+  box-shadow:0 12px 28px rgba(15,23,42,0.07);
   transition:all .2s ease;
 }
 
@@ -1069,29 +1069,38 @@ body {
   background:#475569;
 }
 
+.dashboard-icon {
+  width:46px;
+  height:46px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:16px;
+  background:#eff6ff;
+  font-size:25px;
+  margin-bottom:14px;
+  box-shadow:inset 0 0 0 1px rgba(37,99,235,0.08);
+}
+
 .dashboard-card-body {
   padding:0;
 }
 
 .dashboard-card-title {
-  font-size:21px;
+  font-size:17px;
   font-weight:900;
   color:#0f172a;
-  margin:18px 0 10px;
+  margin-bottom:6px;
   word-break:keep-all;
 }
 
 .dashboard-card-desc {
-  font-size:14px;
+  font-size:12px;
   color:#64748b;
 }
 
 .dashboard-card-desc::after {
-  content:"열기 →";
-  display:block;
-  margin-top:20px;
-  font-weight:800;
-  color:#2563eb;
+  content:"";
 }
 
 .dashboard-empty {
