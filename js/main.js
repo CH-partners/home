@@ -276,6 +276,15 @@ function getMenusByDashboardGroup(groupKey) {
     });
   }
 
+  if (groupKey === "work") {
+    return menuData.filter(menu => {
+      const menuGroup = getMenuGroup(menu);
+      return menuGroup === "work" || (
+        !menuGroup && [1, 2, 3].includes(Number(menu.panelIndex))
+      );
+    });
+  }
+
   return menuData.filter(menu => getMenuGroup(menu) === groupKey);
 }
 
@@ -575,57 +584,67 @@ function renderMenus() {
   topNav.innerHTML = "";
   bottomNav.innerHTML = "";
 
-  const topMenus = menuData.filter(menu => menu.location !== "bottom");
-  const bottomMenus = menuData.filter(menu => menu.location === "bottom");
+  const renderedMenus = new Set();
+  const noticeMenu = menuData.find(menu => Number(menu.panelIndex) === 0);
 
-  const groupedMenus = {};
-  const normalMenus = [];
-  
-  topMenus.forEach(menu => {
-    const groupKey = getMenuGroup(menu);
-  
-    if (groupKey) {
-      if (!groupedMenus[groupKey]) groupedMenus[groupKey] = [];
-      groupedMenus[groupKey].push(menu);
-    } else {
-      normalMenus.push(menu);
-    }
-  });
+  if (noticeMenu) {
+    topNav.appendChild(createMenuButton(noticeMenu));
+    renderedMenus.add(noticeMenu);
+  }
 
   const divider = document.createElement("div");
-  divider.style.height = "1px";
-  divider.style.background = "#e5e7eb";
-  divider.style.margin = "10px 0";
+  divider.className = "nav-divider";
   topNav.appendChild(divider);
 
-  const dashboardNavWrap = document.createElement("div");
-  dashboardNavWrap.className = "dashboard-nav-wrap";
+  dashboardGroups
+    .filter(group => group.key !== "notice")
+    .forEach(group => {
+      const menus = getMenusByDashboardGroup(group.key)
+        .filter(menu => !renderedMenus.has(menu));
 
-  dashboardGroups.forEach(group => {
-    const btn = document.createElement("button");
-    btn.className = "nav-item dashboard-nav-item";
-    btn.setAttribute("data-dashboard-nav", group.key);
+      if (!menus.length) return;
 
-    btn.innerHTML = `
-      <span>${group.icon} ${group.title}</span>
-      <small>${group.desc}</small>
-    `;
+      const isExpanded = !!navGroupState[group.key];
+      const groupId = `nav-group-${group.key}`;
+      const groupToggle = document.createElement("button");
+      groupToggle.type = "button";
+      groupToggle.className = "nav-group-toggle" + (isExpanded ? " expanded" : "");
+      groupToggle.setAttribute("aria-expanded", String(isExpanded));
+      groupToggle.setAttribute("aria-controls", groupId);
+      groupToggle.innerHTML = `
+        <span class="nav-group-label">
+          <span aria-hidden="true">${group.icon}</span>
+          <span>${escapeHtml(group.title)}</span>
+        </span>
+        <span class="nav-group-arrow" aria-hidden="true">▶</span>
+      `;
+      groupToggle.addEventListener("click", () => window.toggleNavGroup(group.key));
+      topNav.appendChild(groupToggle);
 
-    btn.onclick = () => {
-      if (group.key === "notice") {
-        showSheet(0, "청현 공지사항");
-        document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
-        btn.classList.add("active");
-        return;
-      }
+      const groupWrap = document.createElement("div");
+      groupWrap.id = groupId;
+      groupWrap.className = "nav-sub-group" + (isExpanded ? "" : " collapsed");
+      groupWrap.hidden = !isExpanded;
 
-      showDashboardGroup(group.key);
-    };
+      menus.forEach(menu => {
+        groupWrap.appendChild(createMenuButton(menu, true));
+        renderedMenus.add(menu);
+      });
 
-    dashboardNavWrap.appendChild(btn);
-  });
+      topNav.appendChild(groupWrap);
+    });
 
-  topNav.appendChild(dashboardNavWrap);
+  const ungroupedMenus = menuData.filter(menu => !renderedMenus.has(menu));
+
+  if (ungroupedMenus.length) {
+    const extraDivider = document.createElement("div");
+    extraDivider.className = "nav-divider";
+    topNav.appendChild(extraDivider);
+
+    ungroupedMenus.forEach(menu => {
+      topNav.appendChild(createMenuButton(menu));
+    });
+  }
 
   renderAllContents();
 }

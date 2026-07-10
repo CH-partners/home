@@ -65,6 +65,11 @@ body {
   flex-direction:column;
   gap:8px;
 }
+.nav-divider {
+  height:1px;
+  margin:10px 0;
+  background:#e5e7eb;
+}
 .nav-item {
   border:0;
   background:transparent;
@@ -106,6 +111,11 @@ body {
 .nav-group-toggle:hover {
   background:#e0e7ff; 
   color:#3730a3; 
+}
+.nav-group-toggle:focus-visible,
+.nav-item:focus-visible {
+  outline:3px solid rgba(37,99,235,.24);
+  outline-offset:2px;
 }
 .nav-group-label {
   display:flex;
