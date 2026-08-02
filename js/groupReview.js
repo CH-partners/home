@@ -706,6 +706,28 @@ export function initGroupReview(ctx) {
     }
   };
 
+  window.reopenGroupReviewUse = async function() {
+    try {
+      if (!activeMember) return alert("먼저 이름을 선택하고 사용 시작을 누르세요.");
+      if (!isSheetCompleted(activeMember)) return alert("이미 수정 가능한 상태입니다.");
+
+      selectedMember = activeMember;
+      selectedSheetKey = activeMember;
+
+      await lockSelectedMember(activeMember);
+
+      const sheet = ensureLocalSheet(activeMember);
+      sheet.completed = false;
+      await persistGroupReviewSheet({ silent: true, keepLock: true, completed: false });
+
+      renderGroupReviewUI();
+      alert("재수정 모드로 전환되었습니다.");
+    } catch (error) {
+      console.error("그룹리뷰 재수정 실패:", error);
+      alert("그룹리뷰 재수정 실패: " + (error.message || error));
+    }
+  };
+
   window.downloadGroupReviewExcel = function() {
     const project = getSelectedProject();
     if (!project) return alert("다운로드할 그룹리뷰 프로젝트가 없습니다.");
@@ -785,6 +807,7 @@ export function initGroupReview(ctx) {
         <div class="review-use-controls completed">
           <span><strong>${escapeHtml(activeMember)}</strong> 입력 완료 상태입니다. 입력칸은 잠겼고 확인 체크만 가능합니다.</span>
           <button class="action-btn" onclick="saveGroupReviewSheet()">확인 저장</button>
+          <button class="action-btn" onclick="reopenGroupReviewUse()">재수정</button>
         </div>
       `
         : `
@@ -879,6 +902,7 @@ export function initGroupReview(ctx) {
       <div class="work-header-actions">
         <button class="action-btn" onclick="addGroupReviewRow()" ${editable ? "" : "disabled"}>행 추가</button>
         <button class="action-btn" onclick="saveGroupReviewSheet()" ${checkable ? "" : "disabled"}>${completed ? "확인 저장" : "임시저장"}</button>
+        ${completed ? `<button class="action-btn" onclick="reopenGroupReviewUse()" ${checkable ? "" : "disabled"}>재수정</button>` : ""}
         ${completed ? "" : `<button class="action-btn danger" onclick="completeGroupReviewUse()" ${editable ? "" : "disabled"}>완료</button>`}
       </div>
 
