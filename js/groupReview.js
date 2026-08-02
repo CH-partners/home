@@ -15,18 +15,19 @@ export function initGroupReview(ctx) {
   const lockMinutes = 15;
   const sessionStorageKey = "groupReviewSessionId";
   const memberStorageKey = "groupReviewSelectedMember";
+  const activeMemberStorageKey = "groupReviewActiveMember";
 
   let projects = [];
   let selectedProjectId = null;
   let selectedSheetKey = null;
   let selectedMember = sessionStorage.getItem(memberStorageKey) || "";
+  let activeMember = sessionStorage.getItem(activeMemberStorageKey) || "";
   let sheetsData = {};
   let unsubscribeProjects = null;
   let unsubscribeSheets = null;
   let subscribedProjectId = null;
   let projectsLoaded = false;
   let projectsError = "";
-  let createProjectAfterLoad = false;
   let creatingDefaultProject = false;
 
   let sessionId = localStorage.getItem(sessionStorageKey);
@@ -180,7 +181,7 @@ export function initGroupReview(ctx) {
   function canEditSheet(sheetKey) {
     if (!canUse()) return false;
     if (isAdmin(getCurrentUser())) return true;
-    return !!selectedMember && sheetKey === selectedMember;
+    return !!activeMember && sheetKey === activeMember;
   }
 
   async function deleteRefsInBatches(refs) {
@@ -250,7 +251,6 @@ export function initGroupReview(ctx) {
 
     try {
       await createGroupReviewProject(`그룹리뷰 ${compactDateTimeLabel()}`);
-      createProjectAfterLoad = false;
     } catch (error) {
       projectsError = error.message || String(error);
       throw error;
@@ -297,6 +297,52 @@ export function initGroupReview(ctx) {
     });
   }
 
+  async function releaseOwnMemberLock(member) {
+    const project = getSelectedProject();
+    if (!project || !member) return;
+
+    const ref = sheetRef(project.id, member);
+    await runTransaction(db, async transaction => {
+      const snap = await transaction.get(ref);
+      const data = snap.data() || {};
+      if (data.lockSessionId && data.lockSessionId !== sessionId && !isAdmin(getCurrentUser())) return;
+
+      transaction.set(ref, removeUndefinedDeep({
+        type: "member",
+        memberName: member,
+        lockSessionId: "",
+        lockedBy: "",
+        lockedAt: "",
+        updatedByEmail: getCurrentUser()?.email || ""
+      }), { merge: true });
+    });
+
+    if (sheetsData[member]) {
+      sheetsData[member].lockSessionId = "";
+      sheetsData[member].lockedBy = "";
+      sheetsData[member].lockedAt = "";
+    }
+  }
+
+  function clearLocalOwnLocksExcept(memberToKeep) {
+    fixedMembers.forEach(member => {
+      if (member === memberToKeep) return;
+      const lock = getLockState(member);
+      if (!lock.own || !sheetsData[member]) return;
+
+      sheetsData[member].lockSessionId = "";
+      sheetsData[member].lockedBy = "";
+      sheetsData[member].lockedAt = "";
+    });
+  }
+
+  async function releaseOwnLocksExcept(memberToKeep) {
+    const membersToRelease = fixedMembers.filter(member => member !== memberToKeep && getLockState(member).own);
+    for (const member of membersToRelease) {
+      await releaseOwnMemberLock(member);
+    }
+  }
+
   function subscribeSheets(projectId) {
     if (unsubscribeSheets) {
       unsubscribeSheets();
@@ -320,7 +366,7 @@ export function initGroupReview(ctx) {
         });
         sheetsData = nextSheets;
 
-        if (selectedMember && !selectedSheetKey) selectedSheetKey = selectedMember;
+        if ((activeMember || selectedMember) && !selectedSheetKey) selectedSheetKey = activeMember || selectedMember;
         renderGroupReviewUI();
       },
       error => {
@@ -362,13 +408,7 @@ export function initGroupReview(ctx) {
 
     if (projects.length) {
       ensureSelectedProject();
-      selectedSheetKey = selectedMember || "";
-    }
-
-    if (createProjectAfterLoad && selectedMember && !projects.length) {
-      createProjectAfterLoad = false;
-      void createDefaultProjectForSelectedMember();
-      return;
+      selectedSheetKey = activeMember || selectedMember || "";
     }
 
     if (selectedProjectId !== subscribedProjectId) {
@@ -427,6 +467,10 @@ export function initGroupReview(ctx) {
     try {
       if (!canUse()) return alert("리뷰 계정 또는 관리자만 사용할 수 있습니다.");
       if (!fixedMembers.includes(member)) return;
+      if (activeMember && member !== activeMember && !isAdmin(getCurrentUser())) {
+        alert("이미 사용 중인 이름이 있습니다. 완료 버튼을 누른 뒤 다른 이름을 선택하세요.");
+        return;
+      }
 
       const lock = getLockState(member);
       if (lock.active && !lock.own && !isAdmin(getCurrentUser())) {
@@ -434,39 +478,41 @@ export function initGroupReview(ctx) {
         return;
       }
 
-      const prevMember = selectedMember;
-      const prevSheetKey = selectedSheetKey;
       selectedMember = member;
-      selectedSheetKey = member;
+      selectedSheetKey = activeMember || "";
       sessionStorage.setItem(memberStorageKey, member);
+      clearLocalOwnLocksExcept(member);
       renderGroupReviewUI();
-
-      ensureSelectedProject();
-      if (selectedProjectId !== subscribedProjectId) {
-        subscribeSheets(selectedProjectId);
-      }
-
-      try {
-        await lockSelectedMember(member);
-      } catch (lockError) {
-        if (String(lockError?.message || lockError).includes("사용 중")) {
-          selectedMember = prevMember;
-          selectedSheetKey = prevSheetKey;
-          if (prevMember) {
-            sessionStorage.setItem(memberStorageKey, prevMember);
-          } else {
-            sessionStorage.removeItem(memberStorageKey);
-          }
-          renderGroupReviewUI();
-          alert(lockError.message || lockError);
-          return;
-        }
-
-        console.warn("리뷰 이름 사용 표시 저장 실패:", lockError);
-      }
+      void releaseOwnLocksExcept(member).catch(error => console.warn("이전 리뷰 이름 잠금 해제 실패:", error));
     } catch (error) {
       console.error("리뷰 이름 선택 실패:", error);
       alert("리뷰 이름 선택 실패: " + (error.message || error));
+    }
+  };
+
+  window.startGroupReviewUse = async function() {
+    try {
+      if (!canUse()) return alert("리뷰 계정 또는 관리자만 사용할 수 있습니다.");
+      if (!selectedMember) return alert("먼저 이름을 선택하세요.");
+      if (activeMember) return alert("이미 사용 중입니다. 완료 버튼을 누른 뒤 다시 시작하세요.");
+
+      let project = ensureSelectedProject();
+      if (!project) {
+        await createDefaultProjectForSelectedMember();
+        project = ensureSelectedProject();
+      }
+      if (!project) return alert("그룹리뷰 프로젝트를 만들지 못했습니다. Firestore 권한을 확인하세요.");
+
+      await lockSelectedMember(selectedMember);
+
+      activeMember = selectedMember;
+      selectedSheetKey = activeMember;
+      sessionStorage.setItem(memberStorageKey, selectedMember);
+      sessionStorage.setItem(activeMemberStorageKey, activeMember);
+      renderGroupReviewUI();
+    } catch (error) {
+      console.error("그룹리뷰 사용 시작 실패:", error);
+      alert("그룹리뷰 사용 시작 실패: " + (error.message || error));
     }
   };
 
@@ -518,6 +564,10 @@ export function initGroupReview(ctx) {
   };
 
   window.selectGroupReviewSheet = function(sheetKey) {
+    if (activeMember && sheetKey !== activeMember && !isAdmin(getCurrentUser())) {
+      alert("사용 중에는 선택한 본인 시트만 볼 수 있습니다. 완료 후 다른 이름을 선택하세요.");
+      return;
+    }
     selectedSheetKey = sheetKey === "_qna" ? selectedMember : sheetKey;
     renderGroupReviewUI();
   };
@@ -543,40 +593,72 @@ export function initGroupReview(ctx) {
     renderGroupReviewUI();
   };
 
+  async function persistGroupReviewSheet({ silent = false, keepLock = true } = {}) {
+    if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) {
+      throw new Error("선택한 본인 시트만 저장할 수 있습니다.");
+    }
+
+    let project = ensureSelectedProject();
+    if (!project) {
+      await createDefaultProjectForSelectedMember();
+      project = ensureSelectedProject();
+    }
+    if (!project) throw new Error("그룹리뷰 프로젝트를 만들지 못했습니다. Firestore 권한을 확인하세요.");
+
+    const sheet = ensureLocalSheet(selectedSheetKey);
+    await setDoc(
+      sheetRef(project.id, selectedSheetKey),
+      removeUndefinedDeep({
+        type: "member",
+        memberName: selectedSheetKey,
+        rows: sheet.rows,
+        updatedAt: nowIso(),
+        updatedBy: activeMember || selectedMember || selectedSheetKey,
+        updatedByEmail: getCurrentUser()?.email || "",
+        lockSessionId: keepLock ? sessionId : "",
+        lockedBy: keepLock ? (activeMember || selectedMember || selectedSheetKey) : "",
+        lockedAt: keepLock ? nowIso() : ""
+      }),
+      { merge: true }
+    );
+
+    if (!silent) alert(`${selectedSheetKey} 시트가 저장되었습니다.`);
+    return project;
+  }
+
   window.saveGroupReviewSheet = async function() {
     try {
-      if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) {
-        return alert("선택한 본인 시트만 저장할 수 있습니다.");
-      }
-
-      let project = ensureSelectedProject();
-      if (!project) {
-        await createDefaultProjectForSelectedMember();
-        project = ensureSelectedProject();
-      }
-      if (!project) return alert("그룹리뷰 프로젝트를 만들지 못했습니다. Firestore 권한을 확인하세요.");
-
-      const sheet = ensureLocalSheet(selectedSheetKey);
-      await setDoc(
-        sheetRef(project.id, selectedSheetKey),
-        removeUndefinedDeep({
-          type: "member",
-          memberName: selectedSheetKey,
-          rows: sheet.rows,
-          updatedAt: nowIso(),
-          updatedBy: selectedMember || selectedSheetKey,
-          updatedByEmail: getCurrentUser()?.email || "",
-          lockSessionId: sessionId,
-          lockedBy: selectedMember || selectedSheetKey,
-          lockedAt: nowIso()
-        }),
-        { merge: true }
-      );
-
-      alert(`${selectedSheetKey} 시트가 저장되었습니다.`);
+      await persistGroupReviewSheet({ silent: false, keepLock: true });
     } catch (error) {
       console.error("그룹리뷰 저장 실패:", error);
       alert("그룹리뷰 저장 실패: " + (error.message || error));
+    }
+  };
+
+  window.completeGroupReviewUse = async function() {
+    try {
+      if (!activeMember) return alert("사용 중인 이름이 없습니다.");
+      selectedMember = activeMember;
+      selectedSheetKey = activeMember;
+
+      await persistGroupReviewSheet({ silent: true, keepLock: false });
+
+      if (sheetsData[selectedSheetKey]) {
+        sheetsData[selectedSheetKey].lockSessionId = "";
+        sheetsData[selectedSheetKey].lockedBy = "";
+        sheetsData[selectedSheetKey].lockedAt = "";
+      }
+
+      activeMember = "";
+      selectedMember = "";
+      selectedSheetKey = "";
+      sessionStorage.removeItem(activeMemberStorageKey);
+      sessionStorage.removeItem(memberStorageKey);
+      renderGroupReviewUI();
+      alert("저장 완료되었습니다. 이름 사용이 해제되었습니다.");
+    } catch (error) {
+      console.error("그룹리뷰 완료 실패:", error);
+      alert("그룹리뷰 완료 실패: " + (error.message || error));
     }
   };
 
@@ -633,19 +715,46 @@ export function initGroupReview(ctx) {
   function renderMemberSelector() {
     const memberOptions = fixedMembers.map(member => {
       const lock = getLockState(member);
-      const active = member === selectedMember;
-      const className = "work-badge review-member-btn" + (active ? " active" : "") + (lock.active && !lock.own ? " review-locked" : "");
-      const lockLabel = lock.label ? ` · ${lock.label}` : "";
-      return `<button class="${className}" onclick="selectGroupReviewMember(${jsArg(member)})">${escapeHtml(member + lockLabel)}</button>`;
+      const active = member === (activeMember || selectedMember);
+      const disabled = activeMember
+        ? member !== activeMember && !isAdmin(getCurrentUser())
+        : lock.active && !lock.own && !isAdmin(getCurrentUser());
+      const className =
+        "work-badge review-member-btn" +
+        (active ? " active" : "") +
+        (lock.active && !lock.own ? " review-locked" : "") +
+        (disabled ? " review-disabled" : "");
+      const stateLabel = activeMember === member
+        ? " · 사용 중"
+        : !activeMember && selectedMember === member
+          ? " · 선택됨"
+          : lock.label ? ` · ${lock.label}` : "";
+      const disabledAttr = disabled ? " disabled" : "";
+      return `<button class="${className}" onclick="selectGroupReviewMember(${jsArg(member)})"${disabledAttr}>${escapeHtml(member + stateLabel)}</button>`;
     }).join("");
+
+    const controlHtml = activeMember
+      ? `
+        <div class="review-use-controls active">
+          <span><strong>${escapeHtml(activeMember)}</strong> 사용 중입니다. 입력이 끝나면 완료를 눌러 저장하고 잠금을 해제하세요.</span>
+          <button class="action-btn danger" onclick="completeGroupReviewUse()">완료</button>
+        </div>
+      `
+      : `
+        <div class="review-use-controls">
+          <span>${selectedMember ? `<strong>${escapeHtml(selectedMember)}</strong> 선택됨` : "이름을 선택한 뒤 사용 시작을 누르세요."}</span>
+          <button class="action-btn" onclick="startGroupReviewUse()" ${selectedMember ? "" : "disabled"}>사용 시작</button>
+        </div>
+      `;
 
     return `
       <div class="work-info">
-        공용 리뷰 계정은 이름을 선택한 뒤 해당 이름 시트만 입력합니다. 사용 중 표시는 ${lockMinutes}분 뒤 자동 만료됩니다.
+        이름 선택 후 사용 시작을 누르면 해당 이름 시트만 입력할 수 있습니다. 사용 중 표시는 ${lockMinutes}분 뒤 자동 만료됩니다.
       </div>
       <div class="work-badges review-member-badges">
         ${memberOptions}
       </div>
+      ${controlHtml}
     `;
   }
 
@@ -654,7 +763,8 @@ export function initGroupReview(ctx) {
         const active = selectedSheetKey === member;
         const editable = canEditSheet(member);
         const suffix = editable ? " · 입력" : "";
-        return `<button class="work-badge review-sheet-btn${active ? " active" : ""}" onclick="selectGroupReviewSheet(${jsArg(member)})">${escapeHtml(member + suffix)}</button>`;
+        const disabled = activeMember && member !== activeMember && !isAdmin(getCurrentUser());
+        return `<button class="work-badge review-sheet-btn${active ? " active" : ""}${disabled ? " review-disabled" : ""}" onclick="selectGroupReviewSheet(${jsArg(member)})" ${disabled ? "disabled" : ""}>${escapeHtml(member + suffix)}</button>`;
       }).join("");
 
     return `<div class="work-badges review-sheet-tabs">${tabs}</div>`;
@@ -709,7 +819,8 @@ export function initGroupReview(ctx) {
 
       <div class="work-header-actions">
         <button class="action-btn" onclick="addGroupReviewRow()" ${editable ? "" : "disabled"}>행 추가</button>
-        <button class="action-btn" onclick="saveGroupReviewSheet()" ${editable ? "" : "disabled"}>현재 시트 저장</button>
+        <button class="action-btn" onclick="saveGroupReviewSheet()" ${editable ? "" : "disabled"}>임시저장</button>
+        <button class="action-btn danger" onclick="completeGroupReviewUse()" ${editable ? "" : "disabled"}>완료</button>
       </div>
 
       <div class="work-table-wrap">
@@ -757,13 +868,17 @@ export function initGroupReview(ctx) {
     subscribeProjects();
     renderProjectBadges();
 
+    if (activeMember && !selectedMember) {
+      selectedMember = activeMember;
+    }
+
     if (!selectedMember) {
       selectedSheetKey = "";
       body.innerHTML = `
         <div class="group-review-name-first">
           <div class="work-empty">
             <strong>리뷰 입력자 이름을 먼저 선택하세요.</strong><br>
-            선택한 이름의 개인 시트만 수정할 수 있습니다.
+            이름을 고른 뒤 사용 시작을 눌러야 입력 시트가 열립니다.
           </div>
           ${renderMemberSelector()}
         </div>
@@ -771,11 +886,30 @@ export function initGroupReview(ctx) {
       return;
     }
 
+    if (!activeMember) {
+      selectedSheetKey = "";
+      body.innerHTML = `
+        <div class="group-review-name-first">
+          <div class="work-empty">
+            <strong>${escapeHtml(selectedMember)}</strong> 이름이 선택되었습니다.<br>
+            아래의 <strong>사용 시작</strong>을 누르면 입력 시트가 열리고 다른 이름 선택이 잠깁니다.
+          </div>
+          ${renderMemberSelector()}
+        </div>
+      `;
+      return;
+    }
+
+    selectedMember = activeMember;
+
     if (!selectedSheetKey) {
-      selectedSheetKey = selectedMember;
+      selectedSheetKey = activeMember;
     }
     if (selectedSheetKey === "_qna") {
-      selectedSheetKey = selectedMember;
+      selectedSheetKey = activeMember;
+    }
+    if (selectedSheetKey !== activeMember && !isAdmin(getCurrentUser())) {
+      selectedSheetKey = activeMember;
     }
 
     const project = getDisplayProject();
@@ -807,6 +941,12 @@ export function initGroupReview(ctx) {
   }
 
   function requireMemberSelection() {
+    if (activeMember) {
+      selectedMember = activeMember;
+      selectedSheetKey = activeMember;
+      renderGroupReviewUI();
+      return;
+    }
     selectedMember = "";
     selectedSheetKey = "";
     sessionStorage.removeItem(memberStorageKey);

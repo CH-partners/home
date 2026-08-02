@@ -811,6 +811,35 @@ body {
   border-color:#15803d;
   color:#fff;
 }
+.work-badge.review-disabled,
+.work-badge.review-disabled:hover,
+.work-badge:disabled {
+  opacity:0.45;
+  cursor:not-allowed;
+  filter:grayscale(0.25);
+}
+.review-use-controls {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:10px 0 16px;
+  padding:12px 14px;
+  border:1px solid #cbd5e1;
+  border-radius:12px;
+  background:#f8fafc;
+  color:#475569;
+  font-size:13px;
+}
+.review-use-controls.active {
+  border-color:#86efac;
+  background:#f0fdf4;
+  color:#166534;
+}
+.review-use-controls span {
+  min-width:0;
+  line-height:1.5;
+}
 .review-sheet-tabs {
   grid-template-columns: repeat(6, minmax(90px, 1fr));
   gap:6px;
