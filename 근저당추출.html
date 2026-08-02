@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF 통합 Excel 변환 도구</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+  body { font-family: "Malgun Gothic", sans-serif; max-width: 900px; margin: 30px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 20px; }
+  .notice { background: #fff8e1; border: 1px solid #ffe082; padding: 10px 14px; border-radius: 6px; font-size: 13px; line-height: 1.6; margin-bottom: 20px; }
+  .row { margin: 12px 0; }
+  button { padding: 8px 18px; font-size: 14px; cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: 0.6; }
+  progress { width: 400px; height: 18px; vertical-align: middle; }
+  #statusLabel { color: #1565c0; margin: 6px 0; font-size: 13px; }
+  #logArea { width: 100%; height: 380px; overflow-y: auto; background: #111; color: #d4d4d4; font-family: Consolas, monospace; font-size: 12px; padding: 10px; box-sizing: border-box; white-space: pre-wrap; border-radius: 6px; }
+</style>
+</head>
+<body>
+<h1>PDF 통합 Excel 변환 도구 (근저당 추출)</h1>
+<div class="notice">
+  이 페이지는 로컬 파일에서 직접 열어 사용하는 도구입니다. 최초 로드 시 pdf.js / ExcelJS 라이브러리를 인터넷에서 불러오므로 인터넷 연결이 필요합니다.<br>
+  "저장 파일명 지정" 기능은 Chrome / Edge 등 File System Access API를 지원하는 브라우저에서만 배치마다 이어서 저장되며, 미지원 브라우저에서는 전체 처리가 끝난 뒤 한 번만 다운로드됩니다.<br>
+  PDF 텍스트 추출 엔진이 원본(Python PyPDF2)과 다르므로(pdf.js), 줄바꿈 등 세부 텍스트 배치가 미세하게 다를 수 있습니다.
+</div>
+
+<div class="row">
+  <input type="file" id="fileInput" multiple accept="application/pdf,.pdf">
+</div>
+<div class="row">
+  <button id="startBtn">PDF 파일 처리 시작</button>
+</div>
+<div class="row">
+  <progress id="progressBar" value="0" max="100"></progress>
+  <span id="progressLabel">0 / 0</span>
+</div>
+<div id="statusLabel">대기 중...</div>
+<pre id="logArea"></pre>
+
+<script>
+"use strict";
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ---------------------------
+// 정규표현식 패턴 정의
+// ---------------------------
+const MARKER1_REGEX = /【\s*갑\s*구\s*】/;
+const MARKER2_REGEX = /【\s*을\s*구\s*】/;
+const MARKER3_REGEX = /주요\s*등기사항\s*요약\s*\(참고용\)/;
+const MARKER4_REGEX = /\[\s*참\s*고\s*사\s*항\s*\]/;
+
+const OWNER_REGEX = /1\.\s*소유지분현황\s*\(\s*갑구\s*\)/;
+const RIGHTS_REGEX = /2\.\s*소유지분을\s*제외한\s*소유\s*권에\s*관한\s*사항\s*\(\s*갑구\s*\)/;
+const MORTGAGE_REGEX = /3\.\s*\(\s*근\s*\)\s*저당권\s*및\s*전세권\s*등\s*\(\s*을구\s*\)/;
+
+const MORTGAGE_KEYWORDS = ["근저당권설정", "근저당권이전", "근저당권변경", "근저당권일부이전", "전세권설정"];
+
+// ---------------------------
+// Python int()/float() 흉내 (전체 문자열이 숫자 형식이 아니면 실패)
+// ---------------------------
+function pyInt(s) {
+  const str = String(s).trim();
+  return /^[+-]?\d+$/.test(str) ? parseInt(str, 10) : NaN;
+}
+function pyFloat(s) {
+  const str = String(s).trim();
+  return /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(str) ? parseFloat(str) : NaN;
+}
+
+// ---------------------------
+// 공동담보 추출 함수
+// ---------------------------
+function extractJointCollateral(text) {
+  const keyword = "공동담보";
+  const idx = text.indexOf(keyword);
+  if (idx === -1) return "";
+  const after = text.slice(idx + keyword.length);
+  const idx1 = after.indexOf("[") !== -1 ? after.indexOf("[") : after.length;
+  const idx2 = after.indexOf("공장") !== -1 ? after.indexOf("공장") : after.length;
+  const idx3 = after.indexOf("【") !== -1 ? after.indexOf("【") : after.length;
+  const idx4 = after.indexOf("--") !== -1 ? after.indexOf("--") : after.length;
+  const cutIdx = Math.min(idx1, idx2, idx3, idx4);
+  return after.slice(0, cutIdx).trim();
+}
+
+// ---------------------------
+// PDF 파일 처리 및 텍스트 추출 (pdf.js)
+// ---------------------------
+async function extractPdfText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let text = "";
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    let lastY = null;
+    let pageText = "";
+    for (const item of content.items) {
+      const y = item.transform[5];
+      if (lastY !== null && Math.abs(y - lastY) > 1) pageText += "\n";
+      pageText += item.str;
+      lastY = y;
+    }
+    text += pageText + "\n";
+  }
+  return text;
+}
+
+// ---------------------------
+// PDF 텍스트에서 섹션 추출
+// ---------------------------
+function extractSections(text) {
+  const m1 = MARKER1_REGEX.exec(text);
+  const m2 = MARKER2_REGEX.exec(text);
+  const m3 = MARKER3_REGEX.exec(text);
+  const m4 = MARKER4_REGEX.exec(text);
+  if (!(m1 && m2 && m3 && m4)) {
+    return { error: "마커 누락으로 섹션 분할 실패" };
+  }
+  return {
+    sections: [
+      text.slice(0, m1.index),
+      text.slice(m1.index, m2.index),
+      text.slice(m2.index, m3.index),
+      text.slice(m3.index, m4.index),
+    ],
+  };
+}
+
+// ---------------------------
+// 워크시트 헬퍼 (openpyxl의 max_row/max_column을 흉내내는 트래커)
+// ---------------------------
+const dims = new WeakMap();
+function trackDims(ws) {
+  if (!dims.has(ws)) dims.set(ws, { maxRow: 1, maxCol: 1 });
+  return dims.get(ws);
+}
+function setCell(ws, row, col, value) {
+  ws.getRow(row).getCell(col).value = value === undefined ? null : value;
+  const d = trackDims(ws);
+  if (row > d.maxRow) d.maxRow = row;
+  if (col > d.maxCol) d.maxCol = col;
+}
+function getCell(ws, row, col) {
+  const v = ws.getRow(row).getCell(col).value;
+  return v === undefined ? null : v;
+}
+function maxRow(ws) { return trackDims(ws).maxRow; }
+function maxCol(ws) { return trackDims(ws).maxCol; }
+function deleteRow(ws, row) {
+  ws.spliceRows(row, 1);
+  const d = trackDims(ws);
+  if (d.maxRow > 0) d.maxRow -= 1;
+}
+function getLastColumn(ws, row) {
+  for (let col = maxCol(ws); col >= 2; col--) {
+    const v = getCell(ws, row, col);
+    if (v !== null && v !== undefined && v !== "") return col;
+  }
+  return 1;
+}
+function getLastRow(ws, col) {
+  for (let r = maxRow(ws); r >= 1; r--) {
+    const v = getCell(ws, r, col);
+    if (v !== null && v !== undefined && v !== "") return r;
+  }
+  return 0;
+}
+
+// ---------------------------
+// 엑셀 시트에 데이터 기록 함수
+// ---------------------------
+function writeSplitContent(ws, index, fileName, content, delimiter = "\n", vertical = false) {
+  const baseName = fileName.replace(/\.[^/.]+$/, "").trim().split(/\s+/)[0] || "";
+  const items = content.split(delimiter);
+  if (vertical) {
+    setCell(ws, 1, index, baseName);
+    items.forEach((item, i) => setCell(ws, i + 2, index, item.trim()));
+  } else {
+    setCell(ws, index, 1, baseName);
+    items.forEach((item, i) => setCell(ws, index, i + 2, item.trim()));
+  }
+}
+
+// ---------------------------
+// Sheet4 데이터 추가 처리 (소유자, 소유권, 근저당)
+// ---------------------------
+function processSheet4Data(ws4, wsOwner, wsRights, wsMortgage) {
+  for (let row = 2; row <= maxRow(ws4); row++) {
+    const fileName = getCell(ws4, row, 1);
+    if (!fileName) continue;
+    const parts = [];
+    for (let col = 2; col <= maxCol(ws4); col++) {
+      const v = getCell(ws4, row, col);
+      parts.push(v !== null && v !== undefined ? String(v) : "");
+    }
+    const content = parts.join("\n");
+    const rightsMatch = RIGHTS_REGEX.exec(content);
+    const mortgageMatch = MORTGAGE_REGEX.exec(content);
+    const ownerContent = rightsMatch ? content.slice(0, rightsMatch.index) : "";
+    const rightsContent = (rightsMatch && mortgageMatch) ? content.slice(rightsMatch.index, mortgageMatch.index) : "";
+    const mortgageContent = mortgageMatch ? content.slice(mortgageMatch.index) : "";
+    const rowIdx = maxRow(wsOwner) + 1;
+    setCell(wsOwner, rowIdx, 1, fileName);
+    setCell(wsRights, rowIdx, 1, fileName);
+    setCell(wsMortgage, rowIdx, 1, fileName);
+    ownerContent.split("\n").forEach((item, i) => setCell(wsOwner, rowIdx, i + 2, item.trim()));
+    rightsContent.split("\n").forEach((item, i) => setCell(wsRights, rowIdx, i + 2, item.trim()));
+    mortgageContent.split("\n").forEach((item, i) => setCell(wsMortgage, rowIdx, i + 2, item.trim()));
+  }
+}
+
+// ---------------------------
+// VBA Sheet3 처리 로직 (셀 병합)
+// ---------------------------
+function processSheet3Data(ws) {
+  const termMarker = "-- 이 하 여 백 --";
+  for (let r = 1; r <= maxRow(ws); r++) {
+    const lastCol = maxCol(ws);
+    let c = 2;
+    while (c <= lastCol) {
+      const cellVal = String(getCell(ws, r, c) || "");
+      if (cellVal.includes(termMarker)) break;
+      if (MORTGAGE_KEYWORDS.some((k) => cellVal.includes(k))) {
+        let mergedText = cellVal;
+        let c2 = c + 1;
+        let stopRow = false;
+        while (c2 <= lastCol) {
+          const nextVal = String(getCell(ws, r, c2) || "");
+          if (nextVal.includes(termMarker)) { stopRow = true; break; }
+          if (MORTGAGE_KEYWORDS.some((k) => nextVal.includes(k))) break;
+          mergedText += " " + nextVal;
+          setCell(ws, r, c2, "");
+          c2++;
+        }
+        setCell(ws, r, c, mergedText);
+        if (stopRow) break;
+        c = c2;
+      } else {
+        c++;
+      }
+    }
+  }
+}
+
+// ---------------------------
+// VBA "근저당_1_등본구간별배열정리"
+// ---------------------------
+function processArrayedData(sheets, wb) {
+  const sourceSheets = ["근저당", "소유자", "소유권"];
+  const targetSheets = ["근저당2", "소유자2", "소유권2"];
+  targetSheets.forEach((t) => {
+    if (sheets[t]) wb.removeWorksheet(sheets[t].id);
+    sheets[t] = wb.addWorksheet(t);
+  });
+  for (let i = 0; i < sourceSheets.length; i++) {
+    const source = sourceSheets[i], target = targetSheets[i];
+    const wsSource = sheets[source];
+    if (!wsSource) { console.log(`Sheet '${source}'를 찾을 수 없습니다.`); continue; }
+    const wsTarget = sheets[target];
+    setCell(wsTarget, 1, 1, "파일명");
+    setCell(wsTarget, 1, 2, "데이터");
+    let targetRow = 2;
+    for (let r = 2; r <= maxRow(wsSource); r++) {
+      const fileName = getCell(wsSource, r, 1);
+      if (fileName && String(fileName).trim() !== "") {
+        const lastCol = getLastColumn(wsSource, r);
+        for (let c = 2; c <= lastCol; c++) {
+          const cellValue = getCell(wsSource, r, c);
+          if (cellValue && String(cellValue).trim() !== "") {
+            setCell(wsTarget, targetRow, 1, fileName);
+            setCell(wsTarget, targetRow, 2, cellValue);
+            targetRow++;
+          }
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------
+// VBA "근저당_2_키워드추출"
+// ---------------------------
+function processKeywordExtraction(sheets) {
+  const ws = sheets["근저당2"];
+  if (!ws) { console.log("Sheet '근저당2'를 찾을 수 없습니다."); return; }
+  const lastRow = maxRow(ws);
+  for (let i = 2; i <= lastRow; i++) {
+    const cellB = getCell(ws, i, 2);
+    if (!cellB) continue;
+    const cellBStr = String(cellB);
+    for (const keyword of MORTGAGE_KEYWORDS) {
+      const pos = cellBStr.toLowerCase().indexOf(keyword.toLowerCase());
+      if (pos !== -1) {
+        setCell(ws, i, 11, cellBStr);
+        setCell(ws, i, 10, getCell(ws, i, 1));
+        setCell(ws, i, 19, cellBStr.slice(0, pos + keyword.length));
+        if (i + 1 <= lastRow) {
+          const nextB = getCell(ws, i + 1, 2);
+          if (nextB) setCell(ws, i, 11, getCell(ws, i, 11) + " " + String(nextB));
+        }
+        break;
+      }
+    }
+  }
+}
+
+// ---------------------------
+// VBA "근저당_3_유효설정추출_앞부분일치"
+// ---------------------------
+function extractKeywordDigits(txt) {
+  let result = "";
+  for (const ch of txt) {
+    if (/[0-9\-]/.test(ch)) result += ch;
+    else break;
+  }
+  return result.trim();
+}
+function extractJehoNumber(text, keyword) {
+  const textNoSpace = text.split(" ").join("");
+  const posKeyword = textNoSpace.indexOf(keyword);
+  if (posKeyword !== -1) {
+    const beforeStr = textNoSpace.slice(0, posKeyword);
+    const posJe = beforeStr.indexOf("제");
+    const posHo = beforeStr.indexOf("호");
+    if (posJe !== -1 && posHo !== -1 && posHo > posJe) return beforeStr.slice(posJe + 1, posHo).trim();
+  }
+  const posJe2 = textNoSpace.indexOf("제");
+  const posHo2 = textNoSpace.indexOf("호");
+  if (posJe2 !== -1 && posHo2 !== -1 && posHo2 > posJe2) return textNoSpace.slice(posJe2 + 1, posHo2).trim();
+  return "";
+}
+function extractAfterKeyword(text, keyword) {
+  const pos = text.indexOf(keyword);
+  if (pos !== -1) {
+    const temp = text.slice(pos + keyword.length).trim();
+    const posSpace = temp.indexOf(" ");
+    return posSpace !== -1 ? temp.slice(0, posSpace).trim() : temp;
+  }
+  return "";
+}
+function processValidExtraction(sheets) {
+  const wsSource = sheets["Sheet3"];
+  const wsTarget = sheets["근저당2"];
+  if (!wsSource || !wsTarget) { console.log("Sheet3 또는 근저당2 시트를 찾을 수 없습니다."); return; }
+  const srcLastRow = maxRow(wsSource);
+  const tgtLastRow = maxRow(wsTarget);
+  for (let tgtRow = 2; tgtRow <= tgtLastRow; tgtRow++) {
+    let tgtKeyword = getCell(wsTarget, tgtRow, 19);
+    if (tgtKeyword === null || tgtKeyword === undefined) continue;
+    tgtKeyword = String(tgtKeyword).trim();
+    if (tgtKeyword === "") continue;
+    const extracted = extractKeywordDigits(tgtKeyword);
+    if (extracted === "") continue;
+    const targetFile = getCell(wsTarget, tgtRow, 1);
+    if (targetFile === null || targetFile === undefined) continue;
+    for (let srcRow = 2; srcRow <= srcLastRow; srcRow++) {
+      if (getCell(wsSource, srcRow, 1) === targetFile) {
+        for (let col = 1; col <= maxCol(wsSource); col++) {
+          const cellVal = getCell(wsSource, srcRow, col);
+          if (cellVal === null || cellVal === undefined) continue;
+          const cellValStr = String(cellVal).trim();
+          if (cellValStr.startsWith(extracted)) { setCell(wsTarget, tgtRow, 21, cellVal); break; }
+        }
+        break;
+      }
+    }
+  }
+  console.log("앞부분 키워드 일치값 추출 완료!");
+}
+
+// ---------------------------
+// VBA "근저당_4_추출후정리"
+// ---------------------------
+function processPostExtraction(sheets, wb) {
+  const ws = sheets["근저당2"];
+  const lastRow = getLastRow(ws, 19);
+  for (let i = 2; i <= lastRow; i++) {
+    const sValStr = String(getCell(ws, i, 19) ?? "");
+    const kValStr = String(getCell(ws, i, 11) ?? "");
+    const uValStr = String(getCell(ws, i, 21) ?? "");
+    const jValStr = String(getCell(ws, i, 10) ?? "");
+
+    let sNew = "";
+    if (sValStr.length > 0) sNew = /[0-9]/.test(sValStr[0]) ? sValStr.slice(1) : sValStr;
+    setCell(ws, i, 23, sNew);
+
+    const wVal = getCell(ws, i, 23);
+    if (wVal !== null && wVal !== undefined && wVal !== "") setCell(ws, i, 22, jValStr);
+
+    const keywordList = ["설정", "변경", "이전", "전세권"];
+    const arrItems = kValStr.split(" ");
+    let keywordFound = false;
+    let dateStr = "";
+    for (let idx = 0; idx < arrItems.length - 1 && !keywordFound; idx++) {
+      for (const kw of keywordList) {
+        if (arrItems[idx].includes(kw)) { dateStr = arrItems[idx + 1]; keywordFound = true; break; }
+      }
+    }
+    if (keywordFound) {
+      let cleanedDate = dateStr.split("년").join("-").split("월").join("-").split("일").join("");
+      if (cleanedDate.endsWith("-")) cleanedDate = cleanedDate.slice(0, -1);
+      let formattedDate = cleanedDate;
+      const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(cleanedDate);
+      if (m) {
+        const yyyy = Number(m[1]), mm = Number(m[2]), dd = Number(m[3]);
+        const dt = new Date(yyyy, mm - 1, dd);
+        if (dt.getFullYear() === yyyy && dt.getMonth() === mm - 1 && dt.getDate() === dd) {
+          formattedDate = `${String(yyyy).padStart(4, "0")}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+        }
+      }
+      setCell(ws, i, 24, formattedDate);
+    }
+
+    let temp = extractJehoNumber(kValStr, "근저당권자");
+    if (temp === "") temp = extractJehoNumber(kValStr, "전세권자");
+    setCell(ws, i, 25, temp);
+
+    const posKeyword2 = kValStr.indexOf("채권최고액");
+    if (posKeyword2 !== -1) {
+      let temp2 = kValStr.slice(posKeyword2 + "채권최고액".length).trim();
+      const posSpaceAfter2 = temp2.indexOf(" ");
+      if (posSpaceAfter2 !== -1) temp2 = temp2.slice(0, posSpaceAfter2);
+      for (const rep of ["원정", "미합중국법화", "미화", "일화", "원", "달러", "불", "엔", "금"]) {
+        temp2 = temp2.split(rep).join("");
+      }
+      setCell(ws, i, 26, temp2);
+    }
+    const posKeyword3 = kValStr.indexOf("전세금");
+    if (posKeyword3 !== -1) {
+      let temp3 = kValStr.slice(posKeyword3 + "전세금".length).trim();
+      const posSpaceAfter = temp3.indexOf(" ");
+      if (posSpaceAfter !== -1) temp3 = temp3.slice(0, posSpaceAfter);
+      temp3 = temp3.split("금").join("").split("원").join("");
+      setCell(ws, i, 26, temp3);
+    }
+
+    let tempAfter = extractAfterKeyword(kValStr, "근저당권자");
+    if (tempAfter === "") tempAfter = extractAfterKeyword(kValStr, "전세권자");
+    setCell(ws, i, 27, tempAfter);
+
+    const posKeyword4 = uValStr.indexOf("채무자");
+    if (posKeyword4 !== -1) {
+      let temp4 = uValStr.slice(posKeyword4 + "채무자".length).trim();
+      const posSpaceAfter4 = temp4.indexOf(" ");
+      if (posSpaceAfter4 !== -1) {
+        setCell(ws, i, 28, temp4.slice(0, posSpaceAfter4));
+        temp4 = temp4.slice(posSpaceAfter4 + 1).trim();
+      }
+      const posKeyword5 = temp4.indexOf("근저당권자");
+      if (posKeyword5 !== -1) temp4 = temp4.slice(0, posKeyword5);
+      setCell(ws, i, 30, temp4);
+    }
+
+    setCell(ws, i, 34, extractJointCollateral(uValStr));
+
+    const pattern = /제\d+조 목록 제\s*\d{4}-\d{2,3}호/;
+    if (uValStr.includes("공장 및 광업재단 저당법")) {
+      const lastIdx = uValStr.lastIndexOf("공장 및 광업재단 저당법");
+      const afterText = uValStr.slice(lastIdx + "공장 및 광업재단 저당법".length);
+      const match = pattern.exec(afterText);
+      setCell(ws, i, 35, match ? "공장 및 광업재단 저당법 " + match[0].trim() : "");
+    } else {
+      setCell(ws, i, 35, "");
+    }
+  }
+
+  for (let i = 2; i <= lastRow; i++) {
+    const sVal = String(getCell(ws, i, 19) || "");
+    if (sVal.includes("일부이전")) {
+      for (let j = i - 1; j > 1; j--) {
+        const sUp = String(getCell(ws, j, 19) || "");
+        if (sUp.includes("설정")) {
+          const uText = String(getCell(ws, j, 21) || "");
+          if (uText.includes("변제액")) {
+            const temp = uText.slice(uText.indexOf("변제액") + "변제액".length);
+            const matchAmt = /금\s*([\d,]+)\s*원/.exec(temp);
+            if (matchAmt) {
+              const amount = matchAmt[1].split(",").join("");
+              const n = pyInt(amount);
+              setCell(ws, i, 26, isNaN(n) ? amount : n);
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  const lastRowV = getLastRow(ws, 22);
+  const data = [];
+  for (let r = 2; r <= lastRowV; r++) {
+    const rowData = [];
+    for (let c = 22; c <= 28; c++) rowData.push(getCell(ws, r, c));
+    if (rowData[0] || rowData[1]) data.push(rowData);
+  }
+
+  let wsNew = sheets["근저당"];
+  if (wsNew) {
+    wsNew.eachRow({ includeEmpty: true }, (row) => {
+      row.eachCell({ includeEmpty: true }, (cell) => { cell.value = null; });
+    });
+    dims.set(wsNew, { maxRow: 1, maxCol: 1 });
+  } else {
+    wsNew = wb.addWorksheet("근저당");
+  }
+  sheets["근저당"] = wsNew;
+  const headers = ["파일명", "등기원인", "설정일", "접수번호", "채권최고액", "채권자", "채무자", "비고", "설정순위", "공동담보", "기계기구", "일부이전일", "변제액", "근저당권자"];
+  headers.forEach((h, idx) => setCell(wsNew, 1, idx + 1, h));
+  data.forEach((rowData, rIdx) => rowData.forEach((value, cIdx) => setCell(wsNew, rIdx + 2, cIdx + 1, value)));
+}
+
+// ---------------------------
+// VBA "근저당_5_마무리정리"
+// ---------------------------
+function processFinalCleanup(sheets) {
+  const ws = sheets["근저당"];
+  let lastRow = getLastRow(ws, 2);
+  for (let i = lastRow; i > 1; i--) {
+    const cellB = String(getCell(ws, i, 2) ?? "");
+    if (cellB.includes("근저당권이전")) {
+      let foundRow = 0;
+      for (let j = i - 1; j > 0; j--) {
+        const cellBj = String(getCell(ws, j, 2) ?? "");
+        if (cellBj.includes("근저당권설정")) { foundRow = j; break; }
+      }
+      if (foundRow !== 0) {
+        const tempVal = getCell(ws, i, 6);
+        setCell(ws, i, 6, getCell(ws, foundRow, 6));
+        setCell(ws, foundRow, 6, tempVal);
+        const cVal = getCell(ws, i, 3);
+        const fVal = getCell(ws, i, 6);
+        const newText = String(cVal) + " " + String(fVal) + "에서 이전";
+        const hVal = getCell(ws, foundRow, 8);
+        if (hVal !== null && hVal !== undefined && String(hVal).trim() !== "") {
+          setCell(ws, foundRow, 8, String(hVal) + "\n" + newText);
+        } else {
+          setCell(ws, foundRow, 8, newText);
+        }
+        deleteRow(ws, i);
+      }
+    } else if (cellB.includes("전세권설정")) {
+      setCell(ws, i, 8, "전세권");
+    }
+  }
+
+  lastRow = getLastRow(ws, 2);
+  const deleteRowsArr = [];
+  for (let i = 2; i <= lastRow; i++) {
+    const cellB2 = String(getCell(ws, i, 2) ?? "");
+    if (cellB2.includes("근저당권변경")) {
+      let foundRow = 0;
+      for (let k = i - 1; k > 0; k--) {
+        const cellBk = String(getCell(ws, k, 2) ?? "");
+        if (cellBk.includes("근저당권설정")) { foundRow = k; break; }
+      }
+      if (foundRow !== 0) {
+        const tempVal = getCell(ws, i, 5);
+        setCell(ws, i, 5, getCell(ws, foundRow, 5));
+        setCell(ws, foundRow, 5, tempVal);
+        const cVal = getCell(ws, i, 3);
+        const eVal = getCell(ws, i, 5);
+        const eNum = pyFloat(eVal);
+        const formattedE = !isNaN(eNum) ? Math.trunc(eNum).toLocaleString("en-US") : String(eVal);
+        const newText = String(cVal) + " 채권최고액 " + formattedE + "원에서 변경";
+        const hFound = getCell(ws, foundRow, 8);
+        if (hFound !== null && hFound !== undefined && String(hFound).trim() !== "") {
+          setCell(ws, foundRow, 8, String(hFound) + "\n" + newText);
+        } else {
+          setCell(ws, foundRow, 8, newText);
+        }
+        deleteRowsArr.push(i);
+      }
+    }
+  }
+  deleteRowsArr.slice().sort((a, b) => b - a).forEach((idx) => deleteRow(ws, idx));
+
+  const ws2 = sheets["근저당2"];
+  const lastRow3 = getLastRow(ws, 2);
+  for (let i = 2; i <= lastRow3; i++) {
+    const valA = String(getCell(ws, i, 1)).trim();
+    const valB = String(getCell(ws, i, 2)).trim();
+    const valD = String(getCell(ws, i, 4)).trim();
+    const j10 = getCell(ws, i, 10);
+    if (j10 !== null && j10 !== undefined && j10 !== "") continue;
+    for (let j = 2; j <= maxRow(ws2); j++) {
+      const valV = String(getCell(ws2, j, 22)).trim();
+      const valW = String(getCell(ws2, j, 23)).trim();
+      const valY = String(getCell(ws2, j, 25)).trim();
+      if (valA === valV && valB === valW && valD === valY) {
+        setCell(ws, i, 10, getCell(ws2, j, 34));
+        break;
+      }
+    }
+  }
+  for (let i = 2; i <= lastRow3; i++) {
+    const valA = String(getCell(ws, i, 1)).trim();
+    const valB = String(getCell(ws, i, 2)).trim();
+    const valD = String(getCell(ws, i, 4)).trim();
+    for (let j = 2; j <= maxRow(ws2); j++) {
+      const valV = String(getCell(ws2, j, 22)).trim();
+      const valW = String(getCell(ws2, j, 23)).trim();
+      const valY = String(getCell(ws2, j, 25)).trim();
+      if (valA === valV && valB === valW && valD === valY) {
+        setCell(ws, i, 11, getCell(ws2, j, 35));
+        break;
+      }
+    }
+  }
+
+  for (let i = 2; i <= maxRow(ws); i++) {
+    const dVal = getCell(ws, i, 4);
+    if (dVal) {
+      const cleanedD = String(dVal).split(",").join("").split("호").join("").trim();
+      const n = pyInt(cleanedD);
+      if (!isNaN(n)) setCell(ws, i, 4, n);
+    }
+    const eVal = getCell(ws, i, 5);
+    if (eVal) {
+      const cleanedE = String(eVal).split(",").join("").split("원").join("").split(" ").join("").trim();
+      const n = pyInt(cleanedE);
+      if (!isNaN(n)) setCell(ws, i, 5, n);
+    }
+    autoFormat근저당(ws); // 원본 파이썬 코드가 루프 내부에서 매번 호출하는 구조를 그대로 유지
+  }
+
+  // 원본의 들여쓰기상 break가 if문 밖(설정 여부와 무관하게 j=i-1에서 바로 종료)에 있어, 실제로는 바로 윗줄만 검사함 — 원본 동작 그대로 재현
+  for (let i = 2; i <= maxRow(ws); i++) {
+    const bVal = String(getCell(ws, i, 2) || "");
+    if (bVal.includes("일부이전")) {
+      const cVal = String(getCell(ws, i, 3) || "").trim();
+      const fVal = String(getCell(ws, i, 6) || "").trim();
+      for (let j = i - 1; j > 1; j--) {
+        const bUp = String(getCell(ws, j, 2) || "");
+        if (bUp.includes("설정")) {
+          const hVal = getCell(ws, j, 8);
+          const hStr = hVal ? String(hVal).trim() : "";
+          const newText = `${cVal} ${fVal} 일부이전`;
+          setCell(ws, j, 8, hStr ? hStr + "\n" + newText : newText);
+        }
+        break;
+      }
+    }
+  }
+
+  lastRow = getLastRow(ws, 2);
+  const rowsToDelete = [];
+  for (let i = 2; i <= lastRow; i++) {
+    const bVal = String(getCell(ws, i, 2) || "");
+    if (bVal.includes("일부이전")) {
+      const cVal = getCell(ws, i, 3);
+      const eVal = getCell(ws, i, 5);
+      const fVal = getCell(ws, i, 6);
+      for (let j = i - 1; j > 1; j--) {
+        const bUp = String(getCell(ws, j, 2) || "");
+        if (bUp.includes("설정")) {
+          setCell(ws, j, 12, cVal);
+          setCell(ws, j, 13, eVal);
+          setCell(ws, j, 14, fVal);
+          break;
+        }
+      }
+      rowsToDelete.push(i);
+    }
+  }
+  rowsToDelete.slice().reverse().forEach((idx) => deleteRow(ws, idx));
+
+  for (let i = 2; i <= maxRow(ws); i++) {
+    const cellVal = getCell(ws, i, 10);
+    if (cellVal && String(cellVal).includes("공동담보")) {
+      const cv = String(cellVal);
+      const lastIdx = cv.lastIndexOf("공동담보");
+      const posLand = cv.indexOf("표시변경", lastIdx);
+      const posChange = cv.indexOf("변경", lastIdx);
+      const posMarker = cv.indexOf("【", lastIdx);
+      const indices = [];
+      if (posLand !== -1) indices.push(posLand);
+      if (posChange !== -1) indices.push(posChange);
+      if (posMarker !== -1) indices.push(posMarker);
+      const newVal = indices.length ? cv.slice(lastIdx, Math.min(...indices)) : cv.slice(lastIdx);
+      setCell(ws, i, 10, newVal);
+    }
+  }
+
+  for (let i = 2; i <= maxRow(ws); i++) {
+    const cellVal = getCell(ws, i, 10);
+    if (cellVal) {
+      let newVal = String(cellVal).split("공동담보").join("").split("목록").join("");
+      if (newVal.endsWith("보")) newVal = newVal.slice(0, -1);
+      setCell(ws, i, 10, newVal.trim());
+    }
+  }
+
+  const removeKeywords = ["[집합건물]", "[건물]", "[토지]"];
+  for (let i = 2; i <= maxRow(ws); i++) {
+    const cellVal = getCell(ws, i, 7);
+    if (cellVal) {
+      let newVal = String(cellVal);
+      removeKeywords.forEach((kw) => { newVal = newVal.split(kw).join(""); });
+      setCell(ws, i, 7, newVal.trim());
+    }
+  }
+}
+
+function autoFormat근저당(ws) {
+  for (let i = 2; i <= maxRow(ws); i++) {
+    const dVal = getCell(ws, i, 4);
+    if (dVal) {
+      const cleanedD = String(dVal).split(",").join("").split("호").join("").trim();
+      const n = pyInt(cleanedD);
+      if (!isNaN(n)) setCell(ws, i, 4, n);
+    }
+  }
+  for (let i = 2; i <= maxRow(ws); i++) {
+    const eVal = getCell(ws, i, 5);
+    if (eVal) {
+      const cleanedE = String(eVal).split(",").join("").split("원").join("").trim();
+      const n = pyInt(cleanedE);
+      if (!isNaN(n)) {
+        setCell(ws, i, 5, n);
+        ws.getRow(i).getCell(5).numFmt = "#,##0";
+      } else {
+        ws.getRow(i).getCell(5).numFmt = "#,##0";
+      }
+    }
+  }
+  for (let i = 2; i <= maxRow(ws); i++) {
+    const mCell = ws.getRow(i).getCell(13);
+    const mVal = mCell.value;
+    if (mVal !== null && mVal !== undefined) {
+      const cleaned = String(mVal).replace(/[^\d]/g, "");
+      if (/^\d+$/.test(cleaned)) {
+        mCell.value = parseInt(cleaned, 10);
+        mCell.numFmt = "#,##0";
+      }
+    }
+  }
+  ws.getColumn(12).width = 12;
+  ws.getColumn(13).width = 15;
+  ws.getColumn(14).width = 20;
+  for (let i = 2; i <= maxRow(ws); i++) {
+    ws.getRow(i).getCell(12).font = { size: 9 };
+    ws.getRow(i).getCell(14).font = { size: 9 };
+  }
+  const columnWidths = {};
+  for (let r = 1; r <= maxRow(ws); r++) {
+    for (let c = 1; c <= maxCol(ws); c++) {
+      const v = getCell(ws, r, c);
+      if (v) {
+        const len = String(v).length;
+        if (!(c in columnWidths) || len > columnWidths[c]) columnWidths[c] = len;
+      }
+    }
+  }
+  for (const [colIdx, width] of Object.entries(columnWidths)) {
+    const c = Number(colIdx);
+    if (![10, 12, 13, 14].includes(c)) ws.getColumn(c).width = width + 2.5;
+  }
+  ws.getColumn(10).width = 31;
+  for (let r = 2; r <= maxRow(ws); r++) {
+    for (let c = 1; c <= maxCol(ws); c++) {
+      const cell = ws.getRow(r).getCell(c);
+      if (!cell.font || cell.font.size !== 9) cell.font = { size: 9 };
+    }
+  }
+  ws.getRow(1).eachCell({ includeEmpty: true }, (cell) => {
+    cell.alignment = { horizontal: "center", vertical: "middle" };
+  });
+}
+
+// ---------------------------
+// 새 기능들
+// ---------------------------
+function deleteEmptyRowsInSheet(ws, col = 1) {
+  const lastRow = getLastRow(ws, col);
+  for (let row = lastRow; row >= 1; row--) {
+    const cellValue = getCell(ws, row, col);
+    if (cellValue === null || cellValue === undefined || String(cellValue).trim() === "") deleteRow(ws, row);
+  }
+}
+function createSettingOrder(sheets) {
+  const ws = sheets["근저당"];
+  if (!ws) { console.log("Sheet '근저당'를 찾을 수 없습니다."); return; }
+  const lastRow = getLastRow(ws, 1);
+  let prevValue = "";
+  let counter = 0;
+  for (let i = 2; i <= lastRow; i++) {
+    let currentValue = getCell(ws, i, 1);
+    if (currentValue === null || currentValue === undefined) currentValue = "";
+    counter = currentValue !== prevValue ? 1 : counter + 1;
+    setCell(ws, i, 9, counter);
+    prevValue = currentValue;
+  }
+}
+function convertDateColumns(sheets, sheetName = "근저당", columns = [3, 12]) {
+  const ws = sheets[sheetName];
+  if (!ws) return;
+  for (let i = 2; i <= maxRow(ws); i++) {
+    for (const col of columns) {
+      const cell = ws.getRow(i).getCell(col);
+      const cVal = cell.value;
+      if (!cVal) continue;
+      if (cVal instanceof Date) { cell.numFmt = "yyyy-mm-dd"; continue; }
+      const s = String(cVal).trim();
+      const m = /^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})$/.exec(s);
+      if (m) {
+        const yyyy = Number(m[1]), mm = Number(m[2]), dd = Number(m[3]);
+        const dt = new Date(yyyy, mm - 1, dd);
+        if (dt.getFullYear() === yyyy && dt.getMonth() === mm - 1 && dt.getDate() === dd) {
+          cell.value = dt;
+          cell.numFmt = "yyyy-mm-dd";
+        }
+      }
+    }
+  }
+}
+function hideAllExceptSheet(wb, visibleSheetTitle = "근저당") {
+  wb.worksheets.forEach((ws) => { if (ws.name !== visibleSheetTitle) ws.state = "hidden"; });
+}
+
+// ---------------------------
+// 배치 크기
+// ---------------------------
+const BATCH_SIZE = 50;
+
+// ---------------------------
+// 누적된 섹션 데이터로 워크북을 새로 빌드
+// ---------------------------
+function buildWorkbook(sheet1Data, sheet2Data, sheet3Data, sheet4Data, failedFiles, logFn) {
+  const wb = new ExcelJS.Workbook();
+  const sheets = {};
+  sheets["Sheet1"] = wb.addWorksheet("Sheet1");
+  sheets["Sheet2"] = wb.addWorksheet("Sheet2");
+  sheets["Sheet3"] = wb.addWorksheet("Sheet3");
+  sheets["Sheet4"] = wb.addWorksheet("Sheet4");
+  sheets["소유자"] = wb.addWorksheet("소유자");
+  sheets["소유권"] = wb.addWorksheet("소유권");
+  sheets["근저당"] = wb.addWorksheet("근저당");
+
+  sheet1Data.forEach(([fileName, content], i) => writeSplitContent(sheets["Sheet1"], i + 2, fileName, content, "\n", true));
+  sheet2Data.forEach(([fileName, content], i) => writeSplitContent(sheets["Sheet2"], i + 2, fileName, content, "\n", true));
+  sheet3Data.forEach(([fileName, content], i) => writeSplitContent(sheets["Sheet3"], i + 2, fileName, content));
+  sheet4Data.forEach(([fileName, content], i) => writeSplitContent(sheets["Sheet4"], i + 2, fileName, content));
+
+  processSheet3Data(sheets["Sheet3"]);
+  processSheet4Data(sheets["Sheet4"], sheets["소유자"], sheets["소유권"], sheets["근저당"]);
+  processArrayedData(sheets, wb);
+  processKeywordExtraction(sheets);
+  processValidExtraction(sheets);
+  processPostExtraction(sheets, wb);
+  processFinalCleanup(sheets);
+
+  if (sheets["근저당"]) {
+    deleteEmptyRowsInSheet(sheets["근저당"], 1);
+    createSettingOrder(sheets);
+    convertDateColumns(sheets);
+    hideAllExceptSheet(wb, "근저당");
+  }
+
+  const wsFail = wb.addWorksheet("실패리포트");
+  setCell(wsFail, 1, 1, "파일명");
+  setCell(wsFail, 1, 2, "실패 사유");
+  if (failedFiles.length) {
+    failedFiles.forEach(([filename, reason], idx) => {
+      setCell(wsFail, idx + 2, 1, filename);
+      setCell(wsFail, idx + 2, 2, reason);
+    });
+    logFn(`❗ 실패 파일 수: ${failedFiles.length} → '실패리포트' 시트에 정리되었습니다.`);
+  } else {
+    setCell(wsFail, 2, 1, "모든 파일이 성공적으로 처리되었습니다.");
+    logFn("✅ 모든 파일이 성공적으로 처리되었습니다. (실패리포트 시트에 결과 기록됨)");
+  }
+  return wb;
+}
+
+// ---------------------------
+// 파일 저장
+// ---------------------------
+async function saveBuffer(fileHandle, buffer) {
+  const writable = await fileHandle.createWritable();
+  await writable.write(buffer);
+  await writable.close();
+}
+function downloadBuffer(buffer, filename) {
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------
+// 파일 선택 및 전체 처리 (배치 처리 + 진행바 + 실패 리포트)
+// ---------------------------
+async function runPipeline(files, fileHandle, downloadName, logFn, progressFn) {
+  const totalFiles = files.length;
+  progressFn(0, totalFiles);
+  const failedFiles = [];
+  const sheet1Data = [], sheet2Data = [], sheet3Data = [], sheet4Data = [];
+  let lastBuffer = null;
+
+  for (let batchStart = 0; batchStart < totalFiles; batchStart += BATCH_SIZE) {
+    const batch = files.slice(batchStart, batchStart + BATCH_SIZE);
+    const batchNo = Math.floor(batchStart / BATCH_SIZE) + 1;
+    const totalBatches = Math.floor((totalFiles - 1) / BATCH_SIZE) + 1;
+
+    logFn(`\n=== 배치 ${batchNo}/${totalBatches} 처리 시작 (${batch.length}개 파일) ===`);
+
+    for (let offset = 0; offset < batch.length; offset++) {
+      const idx = batchStart + offset + 1;
+      const file = batch[offset];
+      const fileName = file.name;
+      logFn(`[${idx}/${totalFiles}] ${fileName} 처리 중...`);
+
+      let text = null;
+      try {
+        text = await extractPdfText(file);
+      } catch (e) {
+        logFn(`❌ 파일 처리 실패: ${fileName} - ${e}`);
+        failedFiles.push([fileName, `파일 처리 실패: ${e}`]);
+      }
+      if (text !== null) {
+        const result = extractSections(text);
+        if (result.error) {
+          logFn(`⚠ 마커 누락: ${fileName}`);
+          failedFiles.push([fileName, result.error]);
+        } else {
+          const [s1, s2, s3, s4] = result.sections;
+          sheet1Data.push([fileName, s1]);
+          sheet2Data.push([fileName, s2]);
+          sheet3Data.push([fileName, s3]);
+          sheet4Data.push([fileName, s4]);
+        }
+      }
+      progressFn(idx, totalFiles);
+    }
+
+    logFn(`\n📄 배치 ${batchNo}/${totalBatches} 처리 완료! 지금까지 처리된 ${sheet1Data.length}개 파일 기준으로 엑셀에 이어서 저장 중...`);
+    const wb = buildWorkbook(sheet1Data, sheet2Data, sheet3Data, sheet4Data, failedFiles, logFn);
+    lastBuffer = await wb.xlsx.writeBuffer();
+    if (fileHandle) {
+      await saveBuffer(fileHandle, lastBuffer);
+      logFn(`✅ 엑셀 저장 완료`);
+    }
+  }
+
+  if (!fileHandle && lastBuffer) {
+    downloadBuffer(lastBuffer, downloadName);
+    logFn(`✅ 엑셀 다운로드 완료: ${downloadName}`);
+  }
+
+  logFn(`\n🎉 전체 ${totalFiles}개 파일 처리 및 저장이 모두 완료되었습니다!`);
+}
+
+// ---------------------------
+// UI 연결
+// ---------------------------
+const fileInput = document.getElementById("fileInput");
+const startBtn = document.getElementById("startBtn");
+const progressBar = document.getElementById("progressBar");
+const progressLabel = document.getElementById("progressLabel");
+const statusLabel = document.getElementById("statusLabel");
+const logArea = document.getElementById("logArea");
+
+function logFn(msg) {
+  logArea.textContent += msg + "\n";
+  logArea.scrollTop = logArea.scrollHeight;
+}
+function progressFn(value, total) {
+  progressBar.max = total || 1;
+  progressBar.value = value;
+  progressLabel.textContent = `${value} / ${total}`;
+}
+
+startBtn.addEventListener("click", async () => {
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) { alert("PDF 파일을 선택하세요."); return; }
+
+  let fileHandle = null;
+  const supportsFS = "showSaveFilePicker" in window;
+  if (supportsFS) {
+    try {
+      fileHandle = await window.showSaveFilePicker({
+        suggestedName: "근저당추출결과.xlsx",
+        types: [{
+          description: "Excel Workbook",
+          accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
+        }],
+      });
+    } catch (e) {
+      return; // 사용자가 취소함
+    }
+  }
+
+  logArea.textContent = "";
+  startBtn.disabled = true;
+  fileInput.disabled = true;
+  statusLabel.textContent = "처리 중...";
+
+  try {
+    await runPipeline(files, fileHandle, "근저당추출결과.xlsx", logFn, progressFn);
+    statusLabel.textContent = "완료";
+  } catch (e) {
+    logFn(`\n❌ 처리 중 오류 발생: ${e}`);
+    statusLabel.textContent = "오류 발생";
+    console.error(e);
+  } finally {
+    startBtn.disabled = false;
+    fileInput.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
