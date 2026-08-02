@@ -421,6 +421,16 @@ body {
   background:#f8fafc;
   color:#94a3b8;
 }
+.action-btn.danger {
+  color:#b91c1c;
+  border-color:#fecaca;
+  background:#fff5f5;
+}
+.action-btn.danger:hover {
+  color:#991b1b;
+  border-color:#fca5a5;
+  background:#fee2e2;
+}
 .hidden { display:none !important; }
 
 .iframe-card {

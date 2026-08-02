@@ -1,4 +1,4 @@
-import { collection, doc, setDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { collection, doc, setDoc, onSnapshot, runTransaction, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 export function initGroupReview(ctx) {
   const {
@@ -160,6 +160,33 @@ export function initGroupReview(ctx) {
     if (!canUse()) return false;
     if (isAdmin(getCurrentUser())) return true;
     return !!selectedMember && sheetKey === selectedMember;
+  }
+
+  async function deleteRefsInBatches(refs) {
+    let batch = writeBatch(db);
+    let count = 0;
+
+    for (const ref of refs) {
+      batch.delete(ref);
+      count += 1;
+
+      if (count >= 450) {
+        await batch.commit();
+        batch = writeBatch(db);
+        count = 0;
+      }
+    }
+
+    if (count > 0) {
+      await batch.commit();
+    }
+  }
+
+  async function deleteGroupReviewProjectById(projectId) {
+    const sheetSnap = await getDocs(sheetsColRef(projectId));
+    const refs = sheetSnap.docs.map(sheetDoc => sheetDoc.ref);
+    refs.push(projectRef(projectId));
+    await deleteRefsInBatches(refs);
   }
 
   async function lockSelectedMember(member) {
@@ -334,15 +361,81 @@ export function initGroupReview(ctx) {
         return;
       }
 
-      await lockSelectedMember(member);
-
+      const prevMember = selectedMember;
+      const prevSheetKey = selectedSheetKey;
       selectedMember = member;
       selectedSheetKey = member;
       sessionStorage.setItem(memberStorageKey, member);
       renderGroupReviewUI();
+
+      try {
+        await lockSelectedMember(member);
+      } catch (lockError) {
+        if (String(lockError?.message || lockError).includes("사용 중")) {
+          selectedMember = prevMember;
+          selectedSheetKey = prevSheetKey;
+          if (prevMember) {
+            sessionStorage.setItem(memberStorageKey, prevMember);
+          } else {
+            sessionStorage.removeItem(memberStorageKey);
+          }
+          renderGroupReviewUI();
+          alert(lockError.message || lockError);
+          return;
+        }
+
+        console.warn("리뷰 이름 사용 표시 저장 실패:", lockError);
+      }
     } catch (error) {
       console.error("리뷰 이름 선택 실패:", error);
       alert("리뷰 이름 선택 실패: " + (error.message || error));
+    }
+  };
+
+  window.deleteSelectedGroupReviewProject = async function() {
+    try {
+      if (!canUse()) return alert("리뷰 계정 또는 관리자만 사용할 수 있습니다.");
+
+      const project = getSelectedProject();
+      if (!project) return alert("삭제할 프로젝트를 먼저 선택하세요.");
+
+      const ok = confirm(`"${project.name}" 프로젝트와 모든 개인 시트를 삭제할까요?`);
+      if (!ok) return;
+
+      await deleteGroupReviewProjectById(project.id);
+
+      selectedProjectId = null;
+      selectedSheetKey = selectedMember || "";
+      sheetsData = {};
+      renderGroupReviewUI();
+      alert("선택한 그룹리뷰 프로젝트가 삭제되었습니다.");
+    } catch (error) {
+      console.error("그룹리뷰 프로젝트 삭제 실패:", error);
+      alert("그룹리뷰 프로젝트 삭제 실패: " + (error.message || error));
+    }
+  };
+
+  window.deleteAllGroupReviewProjects = async function() {
+    try {
+      if (!canUse()) return alert("리뷰 계정 또는 관리자만 사용할 수 있습니다.");
+      if (!projects.length) return alert("삭제할 그룹리뷰 프로젝트가 없습니다.");
+
+      const typed = prompt(`전체 ${projects.length}개 그룹리뷰 프로젝트와 모든 개인 시트를 삭제하려면 "전체삭제"를 입력하세요.`);
+      if (typed !== "전체삭제") return;
+
+      const targetIds = projects.map(project => project.id);
+      for (const projectId of targetIds) {
+        await deleteGroupReviewProjectById(projectId);
+      }
+
+      selectedProjectId = null;
+      selectedSheetKey = selectedMember || "";
+      sheetsData = {};
+      renderGroupReviewUI();
+      alert("전체 그룹리뷰 프로젝트가 삭제되었습니다.");
+    } catch (error) {
+      console.error("전체 그룹리뷰 프로젝트 삭제 실패:", error);
+      alert("전체 그룹리뷰 프로젝트 삭제 실패: " + (error.message || error));
     }
   };
 
