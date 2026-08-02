@@ -693,7 +693,7 @@ function ensureDynamicPanels() {
         <header class="sheet-header">
           <h1>${escapeHtml(menu.title || "메뉴")}</h1>
           <div class="sheet-tools">
-            <button class="action-btn hidden panel-edit-btn dynamic-panel-edit-btn" data-dynamic-key="${getDynamicPanelKey(menu)}">내용 수정</button>
+            <button class="action-btn hidden panel-edit-btn dynamic-panel-edit-btn" data-content-key="${getDynamicPanelKey(menu)}">내용 수정</button>
           </div>
         </header>
         <section class="major-card"></section>
@@ -715,27 +715,25 @@ function ensureDynamicPanels() {
         }
       }
       if (editBtn) {
-        editBtn.setAttribute("data-dynamic-key", getDynamicPanelKey(menu));
+        editBtn.setAttribute("data-content-key", getDynamicPanelKey(menu));
       }
     }
 
     const panelKey = getDynamicPanelKey(menu);
     if (!pageContents[panelKey]) {
-  pageContents[panelKey] = {
-    majorTitle: menu.title || "메뉴",
-    bodyHtml: `<p>내용을 입력하세요.</p>`,
-    tableData: {
-      enabled: false,
-      rows: []
-    },
-    html: `<p>내용을 입력하세요.</p>`
-  };
-}
+      pageContents[panelKey] = createDefaultPageContentEntry(panelKey, menu.title || "메뉴");
+    } else {
+      pageContents[panelKey] = normalizePageContentEntry(panelKey, pageContents[panelKey], menu.title || "메뉴");
+    }
   });
 
-  document.querySelectorAll(".dynamic-panel-edit-btn").forEach(btn => {
+  bindContentEditButtons();
+}
+
+function bindContentEditButtons() {
+  document.querySelectorAll(".panel-edit-btn[data-content-key]").forEach(btn => {
     btn.onclick = () => {
-      const key = btn.getAttribute("data-dynamic-key");
+      const key = btn.getAttribute("data-content-key");
       window.openContentEditor(key);
     };
   });
@@ -797,8 +795,8 @@ function ensureDynamicPanels() {
   window.allocationApi?.renderAllocationUI();
 }
 
-function initEditors() {
-  const fullToolbar = [
+function getEditorToolbar() {
+  return [
     [{ size: ["small", false, "large", "huge"] }],
     ["bold", "italic", "underline"],
     [{ color: [] }, { background: [] }],
@@ -806,16 +804,65 @@ function initEditors() {
     [{ align: [] }],
     ["link", "clean"]
   ];
+}
 
-  noticeEditor = new Quill("#noticeEditor", {
-    theme: "snow",
-    modules: { toolbar: fullToolbar }
-  });
+function createEditor(selector) {
+  if (typeof Quill === "undefined") {
+    throw new Error("Quill 편집기를 불러오지 못했습니다.");
+  }
 
-  contentEditor = new Quill("#contentEditor", {
+  if (!document.querySelector(selector)) {
+    throw new Error(`${selector} 영역을 찾을 수 없습니다.`);
+  }
+
+  return new Quill(selector, {
     theme: "snow",
-    modules: { toolbar: fullToolbar }
+    modules: { toolbar: getEditorToolbar() }
   });
+}
+
+function initEditors() {
+  try {
+    if (!noticeEditor?.root) {
+      noticeEditor = createEditor("#noticeEditor");
+    }
+  } catch (error) {
+    console.error("공지 편집기 초기화 실패:", error);
+  }
+
+  try {
+    if (!contentEditor?.root) {
+      contentEditor = createEditor("#contentEditor");
+    }
+  } catch (error) {
+    console.error("내용 편집기 초기화 실패:", error);
+  }
+}
+
+function ensureNoticeEditorReady() {
+  if (noticeEditor?.root) return true;
+
+  try {
+    noticeEditor = createEditor("#noticeEditor");
+    return true;
+  } catch (error) {
+    console.error("공지 편집기 준비 실패:", error);
+    alert("공지 편집기를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+    return false;
+  }
+}
+
+function ensureContentEditorReady() {
+  if (contentEditor?.root) return true;
+
+  try {
+    contentEditor = createEditor("#contentEditor");
+    return true;
+  } catch (error) {
+    console.error("내용 편집기 준비 실패:", error);
+    alert("내용 편집기를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+    return false;
+  }
 }
 
 function hasContentTableValue(rows) {
@@ -916,6 +963,85 @@ function buildContentTableHtml(tableData) {
       </table>
     </div>
   `;
+}
+
+function createDefaultPageContentEntry(panelKey, title) {
+  const defaultEntry = defaultPageContents[panelKey];
+  if (defaultEntry && typeof defaultEntry === "object" && !Array.isArray(defaultEntry)) {
+    return structuredClone(defaultEntry);
+  }
+
+  const bodyHtml = `<p>내용을 입력하세요.</p>`;
+  return {
+    majorTitle: title || getPanelTitleByKey(panelKey),
+    bodyHtml,
+    tableData: {
+      enabled: false,
+      rows: []
+    },
+    html: bodyHtml
+  };
+}
+
+function normalizePageContentEntry(panelKey, entry, title) {
+  const fallback = createDefaultPageContentEntry(panelKey, title);
+
+  if (typeof entry === "string") {
+    const bodyHtml = entry || fallback.bodyHtml;
+    return {
+      ...fallback,
+      bodyHtml,
+      tableData: {
+        enabled: false,
+        rows: []
+      },
+      html: bodyHtml
+    };
+  }
+
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    return fallback;
+  }
+
+  const bodyHtml =
+    typeof entry.bodyHtml === "string" && entry.bodyHtml.trim()
+      ? entry.bodyHtml
+      : typeof entry.html === "string" && entry.html.trim()
+        ? entry.html
+        : fallback.bodyHtml;
+
+  const tableData = deserializeTableData(entry.tableData || fallback.tableData);
+  const html =
+    typeof entry.html === "string" && entry.html.trim()
+      ? entry.html
+      : bodyHtml + buildContentTableHtml(tableData);
+
+  return {
+    ...fallback,
+    ...entry,
+    majorTitle: entry.majorTitle || title || fallback.majorTitle || getPanelTitleByKey(panelKey),
+    bodyHtml,
+    tableData,
+    html
+  };
+}
+
+function normalizePageContents(rawContents) {
+  const source =
+    rawContents && typeof rawContents === "object" && !Array.isArray(rawContents)
+      ? rawContents
+      : {};
+  const keys = new Set([
+    ...Object.keys(defaultPageContents),
+    ...Object.keys(source)
+  ]);
+  const normalized = {};
+
+  keys.forEach(key => {
+    normalized[key] = normalizePageContentEntry(key, source[key]);
+  });
+
+  return normalized;
 }
 
 function renderContentTableEditor() {
@@ -1071,6 +1197,7 @@ window.closeLoginModal = () => closeModal("loginModal");
 
 window.openNoticeEditor = function() {
   if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
+  if (!ensureNoticeEditorReady()) return;
   document.getElementById("noticeFormTitle").value = noticeData.title || "";
   document.getElementById("noticeFormDate").value = noticeData.date || "";
   noticeEditor.root.innerHTML = noticeData.html || "";
@@ -1352,42 +1479,27 @@ function getPanelTitleByKey(panelKey) {
 }
 
 window.openContentEditor = function(panelKey) {
-  if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
-  currentContentPanelKey = panelKey;
+  try {
+    if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
+    if (!ensureContentEditorReady()) return;
 
-  if (!pageContents[panelKey]) {
-    pageContents[panelKey] = {
-      majorTitle: getPanelTitleByKey(panelKey),
-      html: `<p>내용을 입력하세요.</p>`,
-      bodyHtml: `<p>내용을 입력하세요.</p>`,
-      tableData: {
-        enabled: false,
-        rows: []
-      }
-    };
+    currentContentPanelKey = panelKey;
+    pageContents[panelKey] = normalizePageContentEntry(panelKey, pageContents[panelKey]);
+
+    const config = pageContents[panelKey];
+
+    document.getElementById("contentModalTitle").textContent = `${getPanelTitleByKey(panelKey)} 내용 수정`;
+    document.getElementById("contentMajorTitle").value = config.majorTitle || "";
+    contentEditor.root.innerHTML = config.bodyHtml || config.html || "";
+
+    currentContentTableData = deserializeTableData(config.tableData);
+    renderContentTableEditor();
+
+    openModal("contentModal");
+  } catch (error) {
+    console.error("내용 수정 창 열기 실패:", error);
+    alert("내용 수정 창 열기 실패: " + (error.message || error));
   }
-
-  const config = pageContents[panelKey];
-
-  if (!config.bodyHtml) {
-    config.bodyHtml = config.html || `<p>내용을 입력하세요.</p>`;
-  }
-
-  if (!config.tableData) {
-    config.tableData = {
-      enabled: false,
-      rows: []
-    };
-  }
-
-  document.getElementById("contentModalTitle").textContent = `${getPanelTitleByKey(panelKey)} 내용 수정`;
-  document.getElementById("contentMajorTitle").value = config.majorTitle || "";
-  contentEditor.root.innerHTML = config.bodyHtml || config.html || "";
-
-  currentContentTableData = deserializeTableData(config.tableData);
-  renderContentTableEditor();
-
-  openModal("contentModal");
 };
   
 window.closeContentEditor = function() { closeModal("contentModal"); };
@@ -1502,19 +1614,7 @@ onSnapshot(settingsRef, snap => {
   menuData = Array.isArray(data.menus) && data.menus.length ? data.menus : [...defaultMenus];
   ensureFixedMenus();
   noticeData = data.notice || { title: "공지 제목", date: "", html: "<li>공지 내용이 없습니다.</li>" };
-  pageContents = data.pageContents ? data.pageContents : structuredClone(defaultPageContents);
-
-Object.keys(pageContents).forEach(key => {
-  if (!pageContents[key].bodyHtml) {
-    pageContents[key].bodyHtml = pageContents[key].html || "";
-  }
-  if (!pageContents[key].tableData) {
-    pageContents[key].tableData = {
-      enabled: false,
-      rows: []
-    };
-  }
-});
+  pageContents = normalizePageContents(data.pageContents || defaultPageContents);
 
   renderMenus();
   renderNotice();
