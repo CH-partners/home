@@ -818,6 +818,200 @@ function initEditors() {
   });
 }
 
+function hasContentTableValue(rows) {
+  return rows.some(row => row.some(cell => String(cell || "").trim() !== ""));
+}
+
+function getContentTableColumnCount(rows) {
+  return Math.max(2, ...rows.map(row => row.length), 2);
+}
+
+function createBlankContentTable(rowCount = 2, colCount = 2) {
+  return Array.from({ length: rowCount }, () => Array.from({ length: colCount }, () => ""));
+}
+
+function deserializeTableData(tableData) {
+  const sourceRows = Array.isArray(tableData)
+    ? tableData
+    : Array.isArray(tableData?.rows)
+      ? tableData.rows
+      : [];
+
+  const rows = sourceRows
+    .filter(row => Array.isArray(row))
+    .map(row => row.map(cell => String(cell ?? "")));
+
+  const colCount = getContentTableColumnCount(rows);
+  const normalizedRows = rows.map(row => {
+    const normalizedRow = [...row];
+    while (normalizedRow.length < colCount) normalizedRow.push("");
+    return normalizedRow;
+  });
+
+  const enabled = Boolean(tableData?.enabled || hasContentTableValue(normalizedRows));
+
+  return {
+    enabled,
+    rows: enabled && normalizedRows.length ? normalizedRows : []
+  };
+}
+
+function serializeTableData(tableData) {
+  const normalized = deserializeTableData(tableData);
+  return {
+    enabled: normalized.enabled,
+    rows: normalized.rows
+  };
+}
+
+function ensureEditableContentTable() {
+  if (!currentContentTableData.enabled) {
+    currentContentTableData = {
+      enabled: true,
+      rows: createBlankContentTable()
+    };
+    return;
+  }
+
+  if (!currentContentTableData.rows.length) {
+    currentContentTableData.rows = createBlankContentTable();
+    return;
+  }
+
+  const colCount = getContentTableColumnCount(currentContentTableData.rows);
+  currentContentTableData.rows = currentContentTableData.rows.map(row => {
+    const nextRow = [...row];
+    while (nextRow.length < colCount) nextRow.push("");
+    return nextRow;
+  });
+}
+
+function buildContentTableHtml(tableData) {
+  const normalized = deserializeTableData(tableData);
+  if (!normalized.enabled || !normalized.rows.length || !hasContentTableValue(normalized.rows)) {
+    return "";
+  }
+
+  const [headerRow, ...bodyRows] = normalized.rows;
+  const headerHtml = `
+    <thead>
+      <tr>${headerRow.map(cell => `<th>${escapeHtml(cell)}</th>`).join("")}</tr>
+    </thead>
+  `;
+  const bodyHtml = bodyRows.length
+    ? `
+      <tbody>
+        ${bodyRows.map(row => `
+          <tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>
+        `).join("")}
+      </tbody>
+    `
+    : "";
+
+  return `
+    <div class="content-table-preview">
+      <table>
+        ${headerHtml}
+        ${bodyHtml}
+      </table>
+    </div>
+  `;
+}
+
+function renderContentTableEditor() {
+  const table = document.getElementById("contentTableEditor");
+  if (!table) return;
+
+  if (!currentContentTableData.enabled) {
+    table.innerHTML = `
+      <tbody>
+        <tr>
+          <td class="note">표를 사용하려면 표 사용을 눌러주세요.</td>
+        </tr>
+      </tbody>
+    `;
+    return;
+  }
+
+  ensureEditableContentTable();
+  const colCount = getContentTableColumnCount(currentContentTableData.rows);
+
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>구분</th>
+        ${Array.from({ length: colCount }, (_, colIndex) => `<th>열 ${colIndex + 1}</th>`).join("")}
+      </tr>
+    </thead>
+    <tbody>
+      ${currentContentTableData.rows.map((row, rowIndex) => `
+        <tr>
+          <th>${rowIndex === 0 ? "제목" : `행 ${rowIndex + 1}`}</th>
+          ${row.map((cell, colIndex) => `
+            <td>
+              <input
+                type="text"
+                data-content-row="${rowIndex}"
+                data-content-col="${colIndex}"
+                value="${escapeHtml(cell)}"
+              >
+            </td>
+          `).join("")}
+        </tr>
+      `).join("")}
+    </tbody>
+  `;
+
+  table.querySelectorAll("input[data-content-row][data-content-col]").forEach(input => {
+    input.addEventListener("input", () => {
+      const rowIndex = Number(input.getAttribute("data-content-row"));
+      const colIndex = Number(input.getAttribute("data-content-col"));
+      if (!currentContentTableData.rows[rowIndex]) return;
+      currentContentTableData.rows[rowIndex][colIndex] = input.value;
+    });
+  });
+}
+
+window.enableContentTable = function() {
+  ensureEditableContentTable();
+  renderContentTableEditor();
+};
+
+window.addContentTableRow = function() {
+  ensureEditableContentTable();
+  const colCount = getContentTableColumnCount(currentContentTableData.rows);
+  currentContentTableData.rows.push(Array.from({ length: colCount }, () => ""));
+  renderContentTableEditor();
+};
+
+window.addContentTableColumn = function() {
+  ensureEditableContentTable();
+  currentContentTableData.rows.forEach(row => row.push(""));
+  renderContentTableEditor();
+};
+
+window.removeLastContentTableRow = function() {
+  if (!currentContentTableData.enabled || currentContentTableData.rows.length <= 1) return;
+  currentContentTableData.rows.pop();
+  renderContentTableEditor();
+};
+
+window.removeLastContentTableColumn = function() {
+  if (!currentContentTableData.enabled) return;
+  const colCount = getContentTableColumnCount(currentContentTableData.rows);
+  if (colCount <= 2) return;
+  currentContentTableData.rows.forEach(row => row.pop());
+  renderContentTableEditor();
+};
+
+window.clearContentTable = function() {
+  currentContentTableData = {
+    enabled: false,
+    rows: []
+  };
+  renderContentTableEditor();
+};
+
 function openModal(id) { document.getElementById(id).classList.add("show"); }
 function closeModal(id) { document.getElementById(id).classList.remove("show"); }
 let logUnsubscribe = null;
