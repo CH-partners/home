@@ -1170,6 +1170,23 @@ body {
   background:#2563eb;
   color:#fff;
 }
+
+.nav-item-review {
+  background:#facc15;
+  color:#713f12;
+  font-weight:800;
+  text-align:center;
+}
+
+.nav-item-review:hover {
+  background:#eab308;
+  color:#422006;
+}
+
+.nav-item-review.active {
+  background:#ca8a04;
+  color:#fff7ed;
+}
 .menu-table select {
   width:100%;
   border:1px solid #cbd5e1;

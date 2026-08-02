@@ -739,7 +739,7 @@ function createMenuButton(menu, isChild = false) {
     btn.classList.add("nav-item-schedule");
     btn.textContent = "📅 스케줄";
   } else if (fixedKind === "review") {
-    btn.classList.add("nav-item-blue");
+    btn.classList.add("nav-item-blue", "nav-item-review");
     btn.textContent = "📝 그룹리뷰";
   } else {
     btn.textContent = menu.title || "메뉴";
