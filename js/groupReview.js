@@ -63,7 +63,11 @@ export function initGroupReview(ctx) {
   }
 
   function jsArg(value) {
-    return JSON.stringify(String(value ?? ""));
+    return JSON.stringify(String(value ?? ""))
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
   }
 
   function nowIso() {
