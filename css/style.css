@@ -784,6 +784,58 @@ body {
 .review-sheet-tabs {
   margin:12px 0;
 }
+.review-member-badges {
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap:10px;
+  padding:12px;
+  border:1px solid #bbf7d0;
+  border-radius:14px;
+  background:#f0fdf4;
+}
+.work-badge.review-member-btn {
+  height:52px;
+  border-radius:14px;
+  background:#dcfce7;
+  border-color:#86efac;
+  color:#166534;
+  font-size:15px;
+  font-weight:800;
+}
+.work-badge.review-member-btn:hover {
+  background:#bbf7d0;
+  border-color:#4ade80;
+  color:#14532d;
+}
+.work-badge.review-member-btn.active {
+  background:#16a34a;
+  border-color:#15803d;
+  color:#fff;
+}
+.review-sheet-tabs {
+  grid-template-columns: repeat(6, minmax(90px, 1fr));
+  gap:6px;
+  padding-top:8px;
+  border-top:1px solid #e5e7eb;
+}
+.work-badge.review-sheet-btn {
+  height:34px;
+  border-radius:8px;
+  background:#f8fafc;
+  border-color:#cbd5e1;
+  color:#475569;
+  font-size:12px;
+  font-weight:700;
+}
+.work-badge.review-sheet-btn:hover {
+  background:#eff6ff;
+  border-color:#bfdbfe;
+  color:#1d4ed8;
+}
+.work-badge.review-sheet-btn.active {
+  background:#2563eb;
+  border-color:#1d4ed8;
+  color:#fff;
+}
 .work-badge.review-locked {
   opacity:0.55;
   border-style:dashed;
@@ -830,6 +882,19 @@ body {
   white-space:pre-wrap;
   line-height:1.55;
   word-break:break-word;
+}
+.review-table tbody tr.review-row-checked td {
+  background:#f1f5f9;
+  color:#64748b;
+}
+.review-table tbody tr.review-row-checked input[type="text"],
+.review-table tbody tr.review-row-checked textarea {
+  background:#e5e7eb;
+  border-color:#cbd5e1;
+  color:#64748b;
+}
+.review-table tbody tr.review-row-checked .review-content-cell {
+  color:#64748b;
 }
 .review-table input[type="text"] {
   min-width:0;
@@ -996,6 +1061,9 @@ body {
 @media (max-width: 920px) {
   .work-badges {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .review-sheet-tabs {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 .drag-handle {

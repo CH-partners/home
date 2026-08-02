@@ -518,7 +518,7 @@ export function initGroupReview(ctx) {
   };
 
   window.selectGroupReviewSheet = function(sheetKey) {
-    selectedSheetKey = sheetKey;
+    selectedSheetKey = sheetKey === "_qna" ? selectedMember : sheetKey;
     renderGroupReviewUI();
   };
 
@@ -586,32 +586,6 @@ export function initGroupReview(ctx) {
     if (typeof XLSX === "undefined") return alert("엑셀 다운로드 라이브러리를 불러오지 못했습니다.");
 
     const wb = XLSX.utils.book_new();
-    const qnaRows = [["확인", "Collateral #", "Sheet", "Field no", "내용", "답변"]];
-
-    fixedMembers.forEach(member => {
-      const sheet = ensureLocalSheet(member);
-      sheet.rows.filter(rowHasValue).forEach(row => {
-        qnaRows.push([
-          row.checked ? "확인" : "",
-          row.collateralNo || "",
-          row.sheet || "",
-          row.fieldNo || "",
-          row.changeText || "",
-          ""
-        ]);
-      });
-    });
-
-    const qnaWs = XLSX.utils.aoa_to_sheet(qnaRows);
-    qnaWs["!cols"] = [
-      { wch: 8 },
-      { wch: 12 },
-      { wch: 10 },
-      { wch: 8 },
-      { wch: 80 },
-      { wch: 14 }
-    ];
-    XLSX.utils.book_append_sheet(wb, qnaWs, "Q&A");
 
     fixedMembers.forEach(member => {
       const sheet = ensureLocalSheet(member);
@@ -660,7 +634,7 @@ export function initGroupReview(ctx) {
     const memberOptions = fixedMembers.map(member => {
       const lock = getLockState(member);
       const active = member === selectedMember;
-      const className = "work-badge" + (active ? " active" : "") + (lock.active && !lock.own ? " review-locked" : "");
+      const className = "work-badge review-member-btn" + (active ? " active" : "") + (lock.active && !lock.own ? " review-locked" : "");
       const lockLabel = lock.label ? ` · ${lock.label}` : "";
       return `<button class="${className}" onclick="selectGroupReviewMember(${jsArg(member)})">${escapeHtml(member + lockLabel)}</button>`;
     }).join("");
@@ -676,70 +650,14 @@ export function initGroupReview(ctx) {
   }
 
   function renderSheetTabs() {
-    const qnaActive = selectedSheetKey === "_qna";
-    const tabs = [
-      `<button class="work-badge${qnaActive ? " active" : ""}" onclick="selectGroupReviewSheet('_qna')">Q&A 전체</button>`,
-      ...fixedMembers.map(member => {
+    const tabs = fixedMembers.map(member => {
         const active = selectedSheetKey === member;
         const editable = canEditSheet(member);
         const suffix = editable ? " · 입력" : "";
-        return `<button class="work-badge${active ? " active" : ""}" onclick="selectGroupReviewSheet(${jsArg(member)})">${escapeHtml(member + suffix)}</button>`;
-      })
-    ].join("");
+        return `<button class="work-badge review-sheet-btn${active ? " active" : ""}" onclick="selectGroupReviewSheet(${jsArg(member)})">${escapeHtml(member + suffix)}</button>`;
+      }).join("");
 
     return `<div class="work-badges review-sheet-tabs">${tabs}</div>`;
-  }
-
-  function renderQnaSheet() {
-    const rows = [];
-
-    fixedMembers.forEach(member => {
-      const sheet = ensureLocalSheet(member);
-      sheet.rows.filter(rowHasValue).forEach(row => {
-        rows.push({ ...row });
-      });
-    });
-
-    const bodyRows = rows.length
-      ? rows.map(row => `
-          <tr>
-            <td class="review-check-cell">
-              <input type="checkbox" ${row.checked ? "checked" : ""} disabled>
-            </td>
-            <td>${escapeHtml(row.collateralNo)}</td>
-            <td>${escapeHtml(row.sheet)}</td>
-            <td>${escapeHtml(row.fieldNo)}</td>
-            <td class="review-content-cell">${escapeHtml(row.changeText)}</td>
-          </tr>
-        `).join("")
-      : `<tr><td colspan="5" class="note">아직 입력된 리뷰가 없습니다.</td></tr>`;
-
-    return `
-      <div class="work-info">
-        Q&A 전체는 개인 시트 입력 내용을 취합해서 보여주는 읽기 전용 화면입니다.
-      </div>
-      <div class="work-table-wrap">
-        <table class="work-table review-table review-qna-table">
-          <colgroup>
-            <col class="review-col-check">
-            <col class="review-col-collateral">
-            <col class="review-col-sheet">
-            <col class="review-col-field">
-            <col class="review-col-content">
-          </colgroup>
-          <thead>
-            <tr>
-              <th>확인</th>
-              <th>Collateral #</th>
-              <th>Sheet</th>
-              <th>Field no</th>
-              <th>내용</th>
-            </tr>
-          </thead>
-          <tbody>${bodyRows}</tbody>
-        </table>
-      </div>
-    `;
   }
 
   function renderMemberSheet(sheetKey) {
@@ -748,10 +666,10 @@ export function initGroupReview(ctx) {
     const lock = getLockState(sheetKey);
 
     const rowsHtml = sheet.rows.map((row, rowIndex) => `
-      <tr>
+      <tr class="${row.checked ? "review-row-checked" : ""}">
         <td class="review-check-cell">
           <input type="checkbox" ${row.checked ? "checked" : ""} ${editable ? "" : "disabled"}
-            onchange="updateGroupReviewCell(${rowIndex}, 'checked', this.checked)">
+            onchange="updateGroupReviewCell(${rowIndex}, 'checked', this.checked); this.closest('tr')?.classList.toggle('review-row-checked', this.checked)">
         </td>
         <td>
           <input type="text" value="${escapeHtml(row.collateralNo)}" ${editable ? "" : "readonly"}
@@ -856,6 +774,9 @@ export function initGroupReview(ctx) {
     if (!selectedSheetKey) {
       selectedSheetKey = selectedMember;
     }
+    if (selectedSheetKey === "_qna") {
+      selectedSheetKey = selectedMember;
+    }
 
     const project = getDisplayProject();
     const projectNote = projectsError
@@ -868,9 +789,7 @@ export function initGroupReview(ctx) {
             ? "아직 프로젝트가 없습니다. 저장하면 기본 프로젝트가 자동 생성됩니다."
             : "프로젝트별/사람별 문서로 따로 저장되어 다른 사람 시트를 덮어쓰지 않습니다.";
 
-    const sheetContent = selectedSheetKey === "_qna"
-      ? renderQnaSheet()
-      : renderMemberSheet(selectedSheetKey);
+    const sheetContent = renderMemberSheet(selectedSheetKey);
 
     body.innerHTML = `
       <div class="work-project-header">
