@@ -836,6 +836,11 @@ body {
   background:#f0fdf4;
   color:#166534;
 }
+.review-use-controls.completed {
+  border-color:#fcd34d;
+  background:#fffbeb;
+  color:#92400e;
+}
 .review-use-controls span {
   min-width:0;
   line-height:1.5;
