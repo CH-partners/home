@@ -256,6 +256,13 @@ export function initGroupReview(ctx) {
     }
   }
 
+  function getDisplayProject() {
+    return ensureSelectedProject() || {
+      id: "",
+      name: creatingDefaultProject ? "프로젝트 생성 중" : "임시 입력 시트"
+    };
+  }
+
   async function lockSelectedMember(member) {
     const project = getSelectedProject();
     if (!project || !member) return;
@@ -430,16 +437,6 @@ export function initGroupReview(ctx) {
       sessionStorage.setItem(memberStorageKey, member);
       renderGroupReviewUI();
 
-      if (!projectsLoaded) {
-        createProjectAfterLoad = true;
-        return;
-      }
-
-      if (!projects.length) {
-        await createDefaultProjectForSelectedMember();
-        return;
-      }
-
       ensureSelectedProject();
       if (selectedProjectId !== subscribedProjectId) {
         subscribeSheets(selectedProjectId);
@@ -548,8 +545,12 @@ export function initGroupReview(ctx) {
         return alert("선택한 본인 시트만 저장할 수 있습니다.");
       }
 
-      const project = getSelectedProject();
-      if (!project) return alert("먼저 프로젝트를 선택하세요.");
+      let project = ensureSelectedProject();
+      if (!project) {
+        await createDefaultProjectForSelectedMember();
+        project = ensureSelectedProject();
+      }
+      if (!project) return alert("그룹리뷰 프로젝트를 만들지 못했습니다. Firestore 권한을 확인하세요.");
 
       const sheet = ensureLocalSheet(selectedSheetKey);
       await setDoc(
@@ -848,54 +849,20 @@ export function initGroupReview(ctx) {
       return;
     }
 
-    if (projectsError) {
-      body.innerHTML = `
-        <div class="work-empty">
-          그룹리뷰 프로젝트를 불러오거나 생성하지 못했습니다.<br>
-          <strong>Firestore 규칙에서 groupReviewProjects 읽기/쓰기를 허용해야 합니다.</strong><br>
-          <span class="note">${escapeHtml(projectsError)}</span>
-        </div>
-      `;
-      return;
-    }
-
-    if (creatingDefaultProject) {
-      body.innerHTML = `
-        <div class="work-empty">
-          입력할 그룹리뷰 프로젝트를 생성하는 중입니다.
-        </div>
-      `;
-      return;
-    }
-
-    if (!projectsLoaded) {
-      body.innerHTML = `
-        <div class="work-empty">
-          그룹리뷰 프로젝트 목록을 불러오는 중입니다.
-        </div>
-      `;
-      return;
-    }
-
-    if (!projects.length) {
-      body.innerHTML = `
-        <div class="work-empty">
-          생성된 그룹리뷰 프로젝트가 없습니다.<br>
-          상단의 <strong>리뷰 프로젝트 생성</strong> 버튼으로 프로젝트를 먼저 만들면 입력 시트가 열립니다.
-        </div>
-      `;
-      return;
-    }
-
-    const project = ensureSelectedProject();
-    if (!project) {
-      body.innerHTML = `<div class="work-empty">선택된 그룹리뷰 프로젝트가 없습니다.</div>`;
-      return;
-    }
-
     if (!selectedSheetKey) {
       selectedSheetKey = selectedMember;
     }
+
+    const project = getDisplayProject();
+    const projectNote = projectsError
+      ? `프로젝트 목록을 불러오지 못했습니다. 저장 시 다시 시도합니다: ${projectsError}`
+      : creatingDefaultProject
+        ? "프로젝트를 생성하는 중입니다. 입력은 계속할 수 있습니다."
+        : !projectsLoaded
+          ? "프로젝트 목록을 불러오는 중입니다. 입력은 먼저 할 수 있습니다."
+          : !projects.length
+            ? "아직 프로젝트가 없습니다. 저장하면 기본 프로젝트가 자동 생성됩니다."
+            : "프로젝트별/사람별 문서로 따로 저장되어 다른 사람 시트를 덮어쓰지 않습니다.";
 
     const sheetContent = selectedSheetKey === "_qna"
       ? renderQnaSheet()
@@ -905,7 +872,7 @@ export function initGroupReview(ctx) {
       <div class="work-project-header">
         <div>
           <div class="work-project-title">${escapeHtml(project.name)}</div>
-          <div class="note">프로젝트별/사람별 문서로 따로 저장되어 다른 사람 시트를 덮어쓰지 않습니다.</div>
+          <div class="note">${escapeHtml(projectNote)}</div>
         </div>
       </div>
 
