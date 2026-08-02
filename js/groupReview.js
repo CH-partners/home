@@ -29,6 +29,7 @@ export function initGroupReview(ctx) {
   let projectsLoaded = false;
   let projectsError = "";
   let creatingDefaultProject = false;
+  const dirtySheetKeys = new Set();
 
   let sessionId = localStorage.getItem(sessionStorageKey);
   if (!sessionId) {
@@ -137,6 +138,23 @@ export function initGroupReview(ctx) {
     }
 
     return sheetsData[sheetKey];
+  }
+
+  function markSheetDirty(sheetKey) {
+    if (sheetKey) dirtySheetKeys.add(sheetKey);
+  }
+
+  function preserveDirtyLocalSheets(nextSheets) {
+    dirtySheetKeys.forEach(sheetKey => {
+      if (!sheetsData[sheetKey]) return;
+      nextSheets[sheetKey] = {
+        ...(nextSheets[sheetKey] || normalizeSheetDoc(sheetKey)),
+        ...sheetsData[sheetKey],
+        rows: sheetsData[sheetKey].rows
+      };
+    });
+
+    return nextSheets;
   }
 
   function rowHasValue(row) {
@@ -364,7 +382,7 @@ export function initGroupReview(ctx) {
         snap.forEach(sheetDoc => {
           nextSheets[sheetDoc.id] = normalizeSheetDoc(sheetDoc.id, sheetDoc.data() || {});
         });
-        sheetsData = nextSheets;
+        sheetsData = preserveDirtyLocalSheets(nextSheets);
 
         if ((activeMember || selectedMember) && !selectedSheetKey) selectedSheetKey = activeMember || selectedMember;
         renderGroupReviewUI();
@@ -577,11 +595,13 @@ export function initGroupReview(ctx) {
     const sheet = ensureLocalSheet(selectedSheetKey);
     if (!sheet.rows[rowIndex]) return;
     sheet.rows[rowIndex][field] = field === "checked" ? Boolean(value) : value;
+    markSheetDirty(selectedSheetKey);
   };
 
   window.addGroupReviewRow = function() {
     if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return alert("선택한 본인 시트만 수정할 수 있습니다.");
     ensureLocalSheet(selectedSheetKey).rows.push(createMemberRow());
+    markSheetDirty(selectedSheetKey);
     renderGroupReviewUI();
   };
 
@@ -590,6 +610,7 @@ export function initGroupReview(ctx) {
     const sheet = ensureLocalSheet(selectedSheetKey);
     if (sheet.rows.length <= 1) return;
     sheet.rows.splice(rowIndex, 1);
+    markSheetDirty(selectedSheetKey);
     renderGroupReviewUI();
   };
 
@@ -622,6 +643,7 @@ export function initGroupReview(ctx) {
       { merge: true }
     );
 
+    dirtySheetKeys.delete(selectedSheetKey);
     if (!silent) alert(`${selectedSheetKey} 시트가 저장되었습니다.`);
     return project;
   }
