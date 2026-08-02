@@ -462,7 +462,7 @@ function showSheet(index, title = "") {
     requestAnimationFrame(() => window.scheduleApi.updateSize());
   }
   if (Number(index) === 13) {
-    window.groupReviewApi?.renderGroupReviewUI();
+    window.groupReviewApi?.requireMemberSelection?.();
   }
 }
 window.showSheet = showSheet;

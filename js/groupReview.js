@@ -19,7 +19,7 @@ export function initGroupReview(ctx) {
   let projects = [];
   let selectedProjectId = null;
   let selectedSheetKey = null;
-  let selectedMember = localStorage.getItem(memberStorageKey) || "";
+  let selectedMember = sessionStorage.getItem(memberStorageKey) || "";
   let sheetsData = {};
   let unsubscribeProjects = null;
   let unsubscribeSheets = null;
@@ -65,6 +65,7 @@ export function initGroupReview(ctx) {
       collateralNo: "",
       sheet: "",
       fieldNo: "",
+      checked: false,
       changeText: ""
     };
   }
@@ -81,6 +82,7 @@ export function initGroupReview(ctx) {
       collateralNo: String(row?.collateralNo ?? ""),
       sheet: String(row?.sheet ?? ""),
       fieldNo: String(row?.fieldNo ?? ""),
+      checked: Boolean(row?.checked),
       changeText: String(row?.changeText ?? "")
     }));
   }
@@ -116,10 +118,22 @@ export function initGroupReview(ctx) {
   }
 
   function rowHasValue(row) {
-    return ["collateralNo", "sheet", "fieldNo", "changeText"].some(field =>
+    return row?.checked || ["collateralNo", "sheet", "fieldNo", "changeText"].some(field =>
       String(row?.[field] || "").trim() !== ""
     );
   }
+
+  function fitReviewTextarea(el) {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(72, el.scrollHeight)}px`;
+  }
+
+  function fitReviewTextareas() {
+    document.querySelectorAll(".review-textarea").forEach(fitReviewTextarea);
+  }
+
+  window.fitGroupReviewTextarea = fitReviewTextarea;
 
   function getLockState(member) {
     const sheet = sheetsData[member];
@@ -241,7 +255,7 @@ export function initGroupReview(ctx) {
 
     if (!selectedProjectId || !projects.some(project => project.id === selectedProjectId)) {
       selectedProjectId = projects[0]?.id || null;
-      selectedSheetKey = selectedMember || fixedMembers[0];
+      selectedSheetKey = selectedMember || "";
     }
 
     if (selectedProjectId !== subscribedProjectId) {
@@ -293,7 +307,7 @@ export function initGroupReview(ctx) {
       );
 
       selectedProjectId = id;
-      selectedSheetKey = selectedMember || fixedMembers[0];
+      selectedSheetKey = selectedMember || "";
       subscribeSheets(id);
       renderGroupReviewUI();
     } catch (error) {
@@ -304,7 +318,7 @@ export function initGroupReview(ctx) {
 
   window.selectGroupReviewProject = function(projectId) {
     selectedProjectId = projectId;
-    selectedSheetKey = selectedMember || fixedMembers[0];
+    selectedSheetKey = selectedMember || "";
     subscribeSheets(projectId);
     renderGroupReviewUI();
   };
@@ -320,11 +334,11 @@ export function initGroupReview(ctx) {
         return;
       }
 
+      await lockSelectedMember(member);
+
       selectedMember = member;
       selectedSheetKey = member;
-      localStorage.setItem(memberStorageKey, member);
-
-      await lockSelectedMember(member);
+      sessionStorage.setItem(memberStorageKey, member);
       renderGroupReviewUI();
     } catch (error) {
       console.error("리뷰 이름 선택 실패:", error);
@@ -341,7 +355,7 @@ export function initGroupReview(ctx) {
     if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
     const sheet = ensureLocalSheet(selectedSheetKey);
     if (!sheet.rows[rowIndex]) return;
-    sheet.rows[rowIndex][field] = value;
+    sheet.rows[rowIndex][field] = field === "checked" ? Boolean(value) : value;
   };
 
   window.addGroupReviewRow = function() {
@@ -397,28 +411,39 @@ export function initGroupReview(ctx) {
     if (typeof XLSX === "undefined") return alert("엑셀 다운로드 라이브러리를 불러오지 못했습니다.");
 
     const wb = XLSX.utils.book_new();
-    const qnaRows = [["Collateral #", "Sheet", "Field no", "내용", "답변"]];
+    const qnaRows = [["확인", "Collateral #", "Sheet", "Field no", "내용", "답변"]];
 
     fixedMembers.forEach(member => {
       const sheet = ensureLocalSheet(member);
       sheet.rows.filter(rowHasValue).forEach(row => {
         qnaRows.push([
+          row.checked ? "확인" : "",
           row.collateralNo || "",
           row.sheet || "",
           row.fieldNo || "",
-          `[${member}] ${row.changeText || ""}`.trim(),
+          row.changeText || "",
           ""
         ]);
       });
     });
 
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(qnaRows), "Q&A");
+    const qnaWs = XLSX.utils.aoa_to_sheet(qnaRows);
+    qnaWs["!cols"] = [
+      { wch: 8 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 8 },
+      { wch: 80 },
+      { wch: 14 }
+    ];
+    XLSX.utils.book_append_sheet(wb, qnaWs, "Q&A");
 
     fixedMembers.forEach(member => {
       const sheet = ensureLocalSheet(member);
-      const rows = [["Collateral #", "Sheet", "Field no", "변경내용"]];
+      const rows = [["확인", "Collateral #", "Sheet", "Field no", "변경내용"]];
       sheet.rows.filter(rowHasValue).forEach(row => {
         rows.push([
+          row.checked ? "확인" : "",
           row.collateralNo || "",
           row.sheet || "",
           row.fieldNo || "",
@@ -426,7 +451,15 @@ export function initGroupReview(ctx) {
         ]);
       });
 
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), member.slice(0, 31));
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws["!cols"] = [
+        { wch: 8 },
+        { wch: 12 },
+        { wch: 10 },
+        { wch: 8 },
+        { wch: 80 }
+      ];
+      XLSX.utils.book_append_sheet(wb, ws, member.slice(0, 31));
     });
 
     const safeName = String(project.name || "그룹리뷰").replace(/[\\/?*[\]:]/g, "_");
@@ -488,18 +521,20 @@ export function initGroupReview(ctx) {
     fixedMembers.forEach(member => {
       const sheet = ensureLocalSheet(member);
       sheet.rows.filter(rowHasValue).forEach(row => {
-        rows.push({ member, ...row });
+        rows.push({ ...row });
       });
     });
 
     const bodyRows = rows.length
       ? rows.map(row => `
           <tr>
+            <td class="review-check-cell">
+              <input type="checkbox" ${row.checked ? "checked" : ""} disabled>
+            </td>
             <td>${escapeHtml(row.collateralNo)}</td>
             <td>${escapeHtml(row.sheet)}</td>
             <td>${escapeHtml(row.fieldNo)}</td>
-            <td>${escapeHtml(row.changeText)}</td>
-            <td>${escapeHtml(row.member)}</td>
+            <td class="review-content-cell">${escapeHtml(row.changeText)}</td>
           </tr>
         `).join("")
       : `<tr><td colspan="5" class="note">아직 입력된 리뷰가 없습니다.</td></tr>`;
@@ -509,14 +544,21 @@ export function initGroupReview(ctx) {
         Q&A 전체는 개인 시트 입력 내용을 취합해서 보여주는 읽기 전용 화면입니다.
       </div>
       <div class="work-table-wrap">
-        <table class="work-table">
+        <table class="work-table review-table review-qna-table">
+          <colgroup>
+            <col class="review-col-check">
+            <col class="review-col-collateral">
+            <col class="review-col-sheet">
+            <col class="review-col-field">
+            <col class="review-col-content">
+          </colgroup>
           <thead>
             <tr>
+              <th>확인</th>
               <th>Collateral #</th>
               <th>Sheet</th>
               <th>Field no</th>
               <th>내용</th>
-              <th>작성자</th>
             </tr>
           </thead>
           <tbody>${bodyRows}</tbody>
@@ -532,6 +574,10 @@ export function initGroupReview(ctx) {
 
     const rowsHtml = sheet.rows.map((row, rowIndex) => `
       <tr>
+        <td class="review-check-cell">
+          <input type="checkbox" ${row.checked ? "checked" : ""} ${editable ? "" : "disabled"}
+            onchange="updateGroupReviewCell(${rowIndex}, 'checked', this.checked)">
+        </td>
         <td>
           <input type="text" value="${escapeHtml(row.collateralNo)}" ${editable ? "" : "readonly"}
             oninput="updateGroupReviewCell(${rowIndex}, 'collateralNo', this.value)">
@@ -544,9 +590,9 @@ export function initGroupReview(ctx) {
           <input type="text" value="${escapeHtml(row.fieldNo)}" ${editable ? "" : "readonly"}
             oninput="updateGroupReviewCell(${rowIndex}, 'fieldNo', this.value)">
         </td>
-        <td>
-          <input type="text" value="${escapeHtml(row.changeText)}" ${editable ? "" : "readonly"}
-            oninput="updateGroupReviewCell(${rowIndex}, 'changeText', this.value)">
+        <td class="review-content-cell">
+          <textarea class="review-textarea" ${editable ? "" : "readonly"}
+            oninput="updateGroupReviewCell(${rowIndex}, 'changeText', this.value); fitGroupReviewTextarea(this)">${escapeHtml(row.changeText)}</textarea>
         </td>
         <td>
           ${editable ? `<button class="small-btn danger" onclick="removeGroupReviewRow(${rowIndex})">삭제</button>` : ""}
@@ -574,9 +620,18 @@ export function initGroupReview(ctx) {
       </div>
 
       <div class="work-table-wrap">
-        <table class="work-table">
+        <table class="work-table review-table review-member-table">
+          <colgroup>
+            <col class="review-col-check">
+            <col class="review-col-collateral">
+            <col class="review-col-sheet">
+            <col class="review-col-field">
+            <col class="review-col-content">
+            <col class="review-col-manage">
+          </colgroup>
           <thead>
             <tr>
+              <th>확인</th>
               <th>Collateral #</th>
               <th>Sheet</th>
               <th>Field no</th>
@@ -609,6 +664,20 @@ export function initGroupReview(ctx) {
     subscribeProjects();
     renderProjectBadges();
 
+    if (!selectedMember) {
+      selectedSheetKey = "";
+      body.innerHTML = `
+        <div class="group-review-name-first">
+          <div class="work-empty">
+            <strong>리뷰 입력자 이름을 먼저 선택하세요.</strong><br>
+            선택한 이름의 개인 시트만 수정할 수 있습니다.
+          </div>
+          ${renderMemberSelector()}
+        </div>
+      `;
+      return;
+    }
+
     if (!projects.length) {
       body.innerHTML = `
         <div class="work-empty">
@@ -626,7 +695,7 @@ export function initGroupReview(ctx) {
     }
 
     if (!selectedSheetKey) {
-      selectedSheetKey = selectedMember || fixedMembers[0];
+      selectedSheetKey = selectedMember;
     }
 
     const sheetContent = selectedSheetKey === "_qna"
@@ -645,11 +714,20 @@ export function initGroupReview(ctx) {
       ${renderSheetTabs()}
       ${sheetContent}
     `;
+    requestAnimationFrame(fitReviewTextareas);
+  }
+
+  function requireMemberSelection() {
+    selectedMember = "";
+    selectedSheetKey = "";
+    sessionStorage.removeItem(memberStorageKey);
+    renderGroupReviewUI();
   }
 
   renderGroupReviewUI();
 
   return {
-    renderGroupReviewUI
+    renderGroupReviewUI,
+    requireMemberSelection
   };
 }
