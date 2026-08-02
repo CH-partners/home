@@ -988,6 +988,7 @@ startBtn.addEventListener("click", async () => {
     try {
       fileHandle = await window.showSaveFilePicker({
         suggestedName: "근저당추출결과.xlsx",
+        startIn: "desktop",
         types: [{
           description: "Excel Workbook",
           accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
