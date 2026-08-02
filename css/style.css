@@ -415,6 +415,12 @@ body {
   color:#1d4ed8;
   border-color:#bfdbfe;
 }
+.action-btn:disabled {
+  opacity:0.45;
+  cursor:not-allowed;
+  background:#f8fafc;
+  color:#94a3b8;
+}
 .hidden { display:none !important; }
 
 .iframe-card {
@@ -763,6 +769,14 @@ body {
   gap:8px;
   flex-wrap:wrap;
   margin-bottom:14px;
+}
+.review-member-badges,
+.review-sheet-tabs {
+  margin:12px 0;
+}
+.work-badge.review-locked {
+  opacity:0.55;
+  border-style:dashed;
 }
 .work-project-title {
   font-size:20px;

@@ -3,6 +3,7 @@ import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from
 import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 import { initAllocation } from "./allocation.js";
 import { initSchedule } from "./schedule.js";
+import { initGroupReview } from "./groupReview.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDr_SfWtjfRPqfguJ6yvwBo-e3r8bGAs_M",
@@ -18,6 +19,10 @@ const ADMIN_EMAILS = [
   "admin@admin.com",
   "eastspring1979@gmail.com",
   "sora@jeju.com"
+].map(v => v.toLowerCase());
+
+const REVIEW_EMAILS = [
+  "review@ch.com"
 ].map(v => v.toLowerCase());
 
 const fixedMembers = [
@@ -63,7 +68,8 @@ const defaultMenus = [
   { title: "기계기구Q&A", panelIndex: 9, location: "top", kind: "panel" },
   { title: "소액조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" },
   { title: "", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" },
-  { title: "스케줄", panelIndex: 12, location: "bottom", kind: "panel", theme: "purple" }
+  { title: "스케줄", panelIndex: 12, location: "bottom", kind: "panel", theme: "purple" },
+  { title: "그룹리뷰", panelIndex: 13, location: "bottom", kind: "panel", theme: "blue" }
 ];
 
 const defaultPageContents = {
@@ -169,6 +175,14 @@ function isAdmin(user) {
   return !!(user && ADMIN_EMAILS.includes((user.email || "").toLowerCase()));
 }
 
+function isReviewUser(user) {
+  return !!(user && REVIEW_EMAILS.includes((user.email || "").toLowerCase()));
+}
+
+function canUseGroupReview(user) {
+  return isAdmin(user) || isReviewUser(user);
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -268,6 +282,7 @@ function getMenusByDashboardGroup(groupKey) {
       return (
         Number(menu.panelIndex) === 11 ||
         Number(menu.panelIndex) === 12 ||
+        Number(menu.panelIndex) === 13 ||
         title === "소액조회" ||
         title.includes("전월세") ||
         title.includes("최우선임금") ||
@@ -345,6 +360,7 @@ function getMenuIcon(title) {
 
   if (title.includes("분배표")) return "📊";
   if (title.includes("스케줄")) return "📅";
+  if (title.includes("그룹리뷰") || title.includes("Group Review")) return "📝";
   if (title.includes("소액")) return "🏠";
   if (title.includes("전월세")) return "🏢";
   if (title.includes("최우선")) return "💰";
@@ -420,15 +436,19 @@ function createDashboardCard(menu) {
 
 function updateAdminUI() {
   const admin = isAdmin(currentUser);
+  const review = isReviewUser(currentUser);
   document.getElementById("adminStatus").textContent = admin
     ? `관리자 로그인됨: ${currentUser.email}`
-    : "관리자 로그인 전";
-  document.getElementById("loginBtn").classList.toggle("hidden", admin);
-  document.getElementById("logoutBtn").classList.toggle("hidden", !admin);
+    : review
+      ? `리뷰 로그인됨: ${currentUser.email}`
+      : "로그인 전";
+  document.getElementById("loginBtn").classList.toggle("hidden", !!currentUser);
+  document.getElementById("logoutBtn").classList.toggle("hidden", !currentUser);
   document.getElementById("menuEditBtn").classList.toggle("hidden", !admin);
   document.getElementById("logBtn")?.classList.toggle("hidden", !admin);
   document.getElementById("noticeEditBtn").classList.toggle("hidden", !admin);
   document.querySelectorAll(".panel-edit-btn").forEach(btn => btn.classList.toggle("hidden", !admin));
+  window.groupReviewApi?.renderGroupReviewUI();
 }
 
 function showSheet(index, title = "") {
@@ -440,6 +460,9 @@ function showSheet(index, title = "") {
   if (matchedButton) matchedButton.classList.add("active");
   if (Number(index) === 12 && window.scheduleApi) {
     requestAnimationFrame(() => window.scheduleApi.updateSize());
+  }
+  if (Number(index) === 13) {
+    window.groupReviewApi?.renderGroupReviewUI();
   }
 }
 window.showSheet = showSheet;
@@ -463,11 +486,19 @@ function ensureFixedMenus() {
     kind: "panel",
     theme: "purple"
   };
+  const fixedReviewMenu = {
+    title: "그룹리뷰",
+    panelIndex: 13,
+    location: "bottom",
+    kind: "panel",
+    theme: "blue"
+  };
 
   menuData = menuData.filter(menu => {
     const title = (menu.title || "").trim();
     if ((title === "Project 분배표" || title === "Project분배표" || title === "분배표") && Number(menu.panelIndex) !== 11) return false;
     if (title === "스케줄" && Number(menu.panelIndex) !== 12) return false;
+    if ((title === "그룹리뷰" || title === "Group Review") && Number(menu.panelIndex) !== 13) return false;
     return true;
   });
 
@@ -481,6 +512,11 @@ function ensureFixedMenus() {
   const hasScheduleMenu = menuData.some(menu =>
     Number(menu.panelIndex) === 12 ||
     (menu.title || "").trim() === "스케줄"
+  );
+  const hasReviewMenu = menuData.some(menu =>
+    Number(menu.panelIndex) === 13 ||
+    (menu.title || "").trim() === "그룹리뷰" ||
+    (menu.title || "").trim() === "Group Review"
   );
 
   if (!hasWorkMenu) {
@@ -504,6 +540,16 @@ function ensureFixedMenus() {
     menuData = menuData.map(menu => {
       const title = (menu.title || "").trim();
       if (Number(menu.panelIndex) === 12 || title === "스케줄") return fixedScheduleMenu;
+      return menu;
+    });
+  }
+
+  if (!hasReviewMenu) {
+    menuData.push(fixedReviewMenu);
+  } else {
+    menuData = menuData.map(menu => {
+      const title = (menu.title || "").trim();
+      if (Number(menu.panelIndex) === 13 || title === "그룹리뷰" || title === "Group Review") return fixedReviewMenu;
       return menu;
     });
   }
@@ -535,6 +581,9 @@ function createMenuButton(menu, isChild = false) {
   } else if (Number(menu.panelIndex) === 12) {
     btn.classList.add("nav-item-schedule");
     btn.textContent = "📅 스케줄";
+  } else if (Number(menu.panelIndex) === 13) {
+    btn.classList.add("nav-item-blue");
+    btn.textContent = "📝 그룹리뷰";
   } else {
     btn.textContent = menu.title || "메뉴";
   }
@@ -564,6 +613,7 @@ function createMenuButton(menu, isChild = false) {
     }
     renderAllContents();
     if (Number(menu.panelIndex) === 11) window.allocationApi?.renderAllocationUI();
+    if (Number(menu.panelIndex) === 13) window.groupReviewApi?.renderGroupReviewUI();
     showSheet(Number(menu.panelIndex || 0), menu.title);
   });
 
@@ -675,7 +725,7 @@ function ensureDynamicPanels() {
   const main = document.querySelector(".main");
   if (!main) return;
 
-  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12]);
+  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12,13]);
 
   menuData.forEach(menu => {
     const panelIndex = Number(menu.panelIndex);
@@ -763,7 +813,7 @@ function bindContentEditButtons() {
 
   ensureDynamicPanels();
 
-  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12]);
+  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12,13]);
 
   menuData.forEach(menu => {
     const panelIndex = Number(menu.panelIndex);
@@ -1232,7 +1282,8 @@ function renderMenuTable() {
     titleTrim === "Project분배표" ||
     titleTrim === "분배표";
     const isSchedule = Number(menu.panelIndex) === 12 || titleTrim === "스케줄";
-    const isFixedMenu = isWork || isSchedule;
+    const isReviewMenu = Number(menu.panelIndex) === 13 || titleTrim === "그룹리뷰" || titleTrim === "Group Review";
+    const isFixedMenu = isWork || isSchedule || isReviewMenu;
 
     tr.innerHTML = `
       <td>
@@ -1243,6 +1294,7 @@ function renderMenuTable() {
         value="${escapeHtml(
           isWork ? "분배표" :
           isSchedule ? "스케줄" :
+          isReviewMenu ? "그룹리뷰" :
           (menu.title || "").includes("소액") ? "소액조회" :
           (menu.title || "")
         )}"
@@ -1257,7 +1309,7 @@ function renderMenuTable() {
       >
     </td>
       <td>
-        <input data-field="panelIndex" data-index="${realIndex}" value="${escapeHtml(String(isWork ? 11 : isSchedule ? 12 : (menu.panelIndex ?? "")))}" ${isFixedMenu ? "readonly" : ""}>
+        <input data-field="panelIndex" data-index="${realIndex}" value="${escapeHtml(String(isWork ? 11 : isSchedule ? 12 : isReviewMenu ? 13 : (menu.panelIndex ?? "")))}" ${isFixedMenu ? "readonly" : ""}>
       </td>
       <td>
         <select data-field="theme" data-index="${realIndex}" ${isFixedMenu ? "disabled" : ""}>
@@ -1328,6 +1380,10 @@ window.removeMenuRow = function(index) {
     alert("스케줄 메뉴는 삭제할 수 없습니다.");
     return;
   }
+  if (Number(target.panelIndex) === 13 || titleTrim === "그룹리뷰" || titleTrim === "Group Review") {
+    alert("그룹리뷰 메뉴는 삭제할 수 없습니다.");
+    return;
+  }
   menuData.splice(index, 1);
   renderMenuTable();
 };
@@ -1393,19 +1449,30 @@ function syncMenuDataFromTable() {
       Number(rawPanelIndex) === 12 ||
       prevTitle === "스케줄";
 
+    const isReviewMenu =
+      rawTitle === "그룹리뷰" ||
+      rawTitle === "Group Review" ||
+      Number(rawPanelIndex) === 13 ||
+      prevTitle === "그룹리뷰" ||
+      prevTitle === "Group Review";
+
     const title = isWorkAllocation
       ? "분배표"
       : isSchedule
         ? "스케줄"
-        : (rawTitle || prev.title || "");
+        : isReviewMenu
+          ? "그룹리뷰"
+          : (rawTitle || prev.title || "");
 
     const panelIndex = isWorkAllocation
       ? 11
       : isSchedule
         ? 12
-        : (rawPanelIndex === "" ? Number(prev.panelIndex || 0) : Number(rawPanelIndex));
+        : isReviewMenu
+          ? 13
+          : (rawPanelIndex === "" ? Number(prev.panelIndex || 0) : Number(rawPanelIndex));
 
-    const location = (isWorkAllocation || isSchedule)
+    const location = (isWorkAllocation || isSchedule || isReviewMenu)
       ? "bottom"
       : (rawLocation || prev.location || "top");
 
@@ -1416,16 +1483,18 @@ function syncMenuDataFromTable() {
       location,
       kind: rawUrl
         ? "iframe"
-        : ((isWorkAllocation || isSchedule) ? "panel" : (location === "bottom" ? "iframe" : "panel"))
+        : ((isWorkAllocation || isSchedule || isReviewMenu) ? "panel" : (location === "bottom" ? "iframe" : "panel"))
     };
 
-    if (rawUrl && !(isWorkAllocation || isSchedule)) {
+    if (rawUrl && !(isWorkAllocation || isSchedule || isReviewMenu)) {
       item.url = rawUrl;
     } else if (!rawUrl && prev.url && item.kind === "iframe") {
       item.url = prev.url;
     }
 
-    if (isWorkAllocation || isSchedule) {
+    if (isReviewMenu) {
+      item.theme = "blue";
+    } else if (isWorkAllocation || isSchedule) {
       item.theme = "purple";
     } else if (location === "bottom") {
       item.theme = rawTheme || "green";
@@ -1559,9 +1628,9 @@ window.loginAdmin = async function() {
   const password = document.getElementById("loginPassword").value;
   try {
     const cred = await signInWithEmailAndPassword(auth, email, password);
-    if (!isAdmin(cred.user)) {
+    if (!isAdmin(cred.user) && !isReviewUser(cred.user)) {
       await signOut(auth);
-      alert("등록된 관리자 계정이 아닙니다.");
+      alert("등록된 관리자 또는 리뷰 계정이 아닙니다.");
       return;
     }
     closeModal("loginModal");
@@ -1607,6 +1676,7 @@ onAuthStateChanged(auth, async user => {
   } else {
     window.allocationApi?.renderAllocationUI();
   }
+  window.groupReviewApi?.renderGroupReviewUI();
 });
 
 onSnapshot(settingsRef, snap => {
@@ -1647,6 +1717,16 @@ window.scheduleApi = initSchedule({
   addEditLog,
   openModal,
   closeModal,
+  getCurrentUser: () => currentUser
+});
+
+window.groupReviewApi = initGroupReview({
+  db,
+  fixedMembers,
+  isAdmin,
+  canUseGroupReview,
+  escapeHtml,
+  removeUndefinedDeep,
   getCurrentUser: () => currentUser
 });
 
