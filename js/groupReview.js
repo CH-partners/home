@@ -24,6 +24,10 @@ export function initGroupReview(ctx) {
   let unsubscribeProjects = null;
   let unsubscribeSheets = null;
   let subscribedProjectId = null;
+  let projectsLoaded = false;
+  let projectsError = "";
+  let createProjectAfterLoad = false;
+  let creatingDefaultProject = false;
 
   let sessionId = localStorage.getItem(sessionStorageKey);
   if (!sessionId) {
@@ -51,12 +55,25 @@ export function initGroupReview(ctx) {
     return projects.find(project => project.id === selectedProjectId) || null;
   }
 
+  function ensureSelectedProject() {
+    if (!selectedProjectId || !projects.some(project => project.id === selectedProjectId)) {
+      selectedProjectId = projects[0]?.id || null;
+    }
+    return getSelectedProject();
+  }
+
   function jsArg(value) {
     return JSON.stringify(String(value ?? ""));
   }
 
   function nowIso() {
     return new Date().toISOString();
+  }
+
+  function compactDateTimeLabel() {
+    const d = new Date();
+    const pad = value => String(value).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
   function createMemberRow() {
@@ -189,6 +206,56 @@ export function initGroupReview(ctx) {
     await deleteRefsInBatches(refs);
   }
 
+  async function createGroupReviewProject(name) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) throw new Error("프로젝트 이름이 없습니다.");
+
+    const id = "review_project_" + Date.now();
+    const project = {
+      id,
+      name: trimmed,
+      members: [...fixedMembers],
+      createdAt: nowIso(),
+      createdByEmail: getCurrentUser()?.email || "",
+      createdBy: selectedMember || getCurrentUser()?.email || "unknown"
+    };
+
+    await setDoc(
+      projectRef(id),
+      removeUndefinedDeep(project)
+    );
+
+    if (!projects.some(item => item.id === id)) {
+      projects.push(project);
+      projects.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    }
+    projectsLoaded = true;
+    projectsError = "";
+    selectedProjectId = id;
+    selectedSheetKey = selectedMember || "";
+    subscribeSheets(id);
+    return id;
+  }
+
+  async function createDefaultProjectForSelectedMember() {
+    if (!selectedMember || creatingDefaultProject) return;
+
+    creatingDefaultProject = true;
+    projectsError = "";
+    renderGroupReviewUI();
+
+    try {
+      await createGroupReviewProject(`그룹리뷰 ${compactDateTimeLabel()}`);
+      createProjectAfterLoad = false;
+    } catch (error) {
+      projectsError = error.message || String(error);
+      throw error;
+    } finally {
+      creatingDefaultProject = false;
+      renderGroupReviewUI();
+    }
+  }
+
   async function lockSelectedMember(member) {
     const project = getSelectedProject();
     if (!project || !member) return;
@@ -268,6 +335,8 @@ export function initGroupReview(ctx) {
 
   function handleProjectsSnapshot(snap) {
     projects = [];
+    projectsLoaded = true;
+    projectsError = "";
     snap.forEach(projectDoc => {
       const data = projectDoc.data() || {};
       projects.push({
@@ -280,9 +349,15 @@ export function initGroupReview(ctx) {
 
     projects.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
 
-    if (!selectedProjectId || !projects.some(project => project.id === selectedProjectId)) {
-      selectedProjectId = projects[0]?.id || null;
+    if (projects.length) {
+      ensureSelectedProject();
       selectedSheetKey = selectedMember || "";
+    }
+
+    if (createProjectAfterLoad && selectedMember && !projects.length) {
+      createProjectAfterLoad = false;
+      void createDefaultProjectForSelectedMember();
+      return;
     }
 
     if (selectedProjectId !== subscribedProjectId) {
@@ -301,6 +376,8 @@ export function initGroupReview(ctx) {
       error => {
         console.error("그룹리뷰 프로젝트 구독 실패:", error);
         unsubscribeProjects = null;
+        projectsLoaded = true;
+        projectsError = error.message || String(error);
         projects = [];
         renderGroupReviewUI();
       }
@@ -320,22 +397,7 @@ export function initGroupReview(ctx) {
         return;
       }
 
-      const id = "review_project_" + Date.now();
-      await setDoc(
-        projectRef(id),
-        removeUndefinedDeep({
-          id,
-          name: trimmed,
-          members: [...fixedMembers],
-          createdAt: nowIso(),
-          createdByEmail: getCurrentUser()?.email || "",
-          createdBy: selectedMember || getCurrentUser()?.email || "unknown"
-        })
-      );
-
-      selectedProjectId = id;
-      selectedSheetKey = selectedMember || "";
-      subscribeSheets(id);
+      await createGroupReviewProject(trimmed);
       renderGroupReviewUI();
     } catch (error) {
       console.error("그룹리뷰 프로젝트 생성 실패:", error);
@@ -367,6 +429,21 @@ export function initGroupReview(ctx) {
       selectedSheetKey = member;
       sessionStorage.setItem(memberStorageKey, member);
       renderGroupReviewUI();
+
+      if (!projectsLoaded) {
+        createProjectAfterLoad = true;
+        return;
+      }
+
+      if (!projects.length) {
+        await createDefaultProjectForSelectedMember();
+        return;
+      }
+
+      ensureSelectedProject();
+      if (selectedProjectId !== subscribedProjectId) {
+        subscribeSheets(selectedProjectId);
+      }
 
       try {
         await lockSelectedMember(member);
@@ -771,17 +848,46 @@ export function initGroupReview(ctx) {
       return;
     }
 
-    if (!projects.length) {
+    if (projectsError) {
       body.innerHTML = `
         <div class="work-empty">
-          생성된 그룹리뷰 프로젝트가 없습니다.<br>
-          상단의 <strong>리뷰 프로젝트 생성</strong> 버튼으로 프로젝트를 먼저 만드세요.
+          그룹리뷰 프로젝트를 불러오거나 생성하지 못했습니다.<br>
+          <strong>Firestore 규칙에서 groupReviewProjects 읽기/쓰기를 허용해야 합니다.</strong><br>
+          <span class="note">${escapeHtml(projectsError)}</span>
         </div>
       `;
       return;
     }
 
-    const project = getSelectedProject();
+    if (creatingDefaultProject) {
+      body.innerHTML = `
+        <div class="work-empty">
+          입력할 그룹리뷰 프로젝트를 생성하는 중입니다.
+        </div>
+      `;
+      return;
+    }
+
+    if (!projectsLoaded) {
+      body.innerHTML = `
+        <div class="work-empty">
+          그룹리뷰 프로젝트 목록을 불러오는 중입니다.
+        </div>
+      `;
+      return;
+    }
+
+    if (!projects.length) {
+      body.innerHTML = `
+        <div class="work-empty">
+          생성된 그룹리뷰 프로젝트가 없습니다.<br>
+          상단의 <strong>리뷰 프로젝트 생성</strong> 버튼으로 프로젝트를 먼저 만들면 입력 시트가 열립니다.
+        </div>
+      `;
+      return;
+    }
+
+    const project = ensureSelectedProject();
     if (!project) {
       body.innerHTML = `<div class="work-empty">선택된 그룹리뷰 프로젝트가 없습니다.</div>`;
       return;
