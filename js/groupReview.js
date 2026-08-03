@@ -98,6 +98,66 @@ export function initGroupReview(ctx) {
     return value === true || value === "true" || value === 1 || value === "1";
   }
 
+  function textToReviewTextHtml(text, bold = false) {
+    const html = escapeHtml(String(text ?? "")).replace(/\r\n|\r|\n/g, "<br>");
+    return bold && html ? `<strong>${html}</strong>` : html;
+  }
+
+  function sanitizeReviewTextHtml(html) {
+    const raw = String(html || "");
+    if (!raw.trim()) return "";
+
+    const template = document.createElement("template");
+    const output = document.createElement("div");
+    template.innerHTML = raw;
+
+    const appendLineBreak = target => {
+      if (target.childNodes.length && target.lastChild?.nodeName !== "BR") {
+        target.appendChild(document.createElement("br"));
+      }
+    };
+
+    const appendCleanNode = (node, target) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        target.appendChild(document.createTextNode(node.textContent || ""));
+        return;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+      const tag = node.tagName.toLowerCase();
+      if (tag === "br") {
+        target.appendChild(document.createElement("br"));
+        return;
+      }
+      if (tag === "strong" || tag === "b") {
+        const strong = document.createElement("strong");
+        node.childNodes.forEach(child => appendCleanNode(child, strong));
+        if (strong.textContent || strong.querySelector("br")) target.appendChild(strong);
+        return;
+      }
+      if (["div", "p", "li"].includes(tag)) {
+        appendLineBreak(target);
+        node.childNodes.forEach(child => appendCleanNode(child, target));
+        return;
+      }
+
+      node.childNodes.forEach(child => appendCleanNode(child, target));
+    };
+
+    template.content.childNodes.forEach(node => appendCleanNode(node, output));
+    return output.innerHTML.replace(/(<br>)+$/g, "").trim();
+  }
+
+  function reviewTextHtmlToText(html) {
+    const box = document.createElement("div");
+    box.innerHTML = sanitizeReviewTextHtml(html);
+    return (box.innerText || box.textContent || "").replace(/\u00a0/g, " ").replace(/\n$/, "");
+  }
+
+  function getReviewEditorText(editor) {
+    return (editor?.innerText || editor?.textContent || "").replace(/\u00a0/g, " ").replace(/\n$/, "");
+  }
+
   function getReviewTextSizeOptions(selectedSize) {
     const activeSize = normalizeReviewTextSize(selectedSize);
     return reviewTextSizes.map(size =>
@@ -105,18 +165,21 @@ export function initGroupReview(ctx) {
     ).join("");
   }
 
-  function getReviewTextareaClass(row) {
+  function getReviewTextEditorClass(row) {
     const size = normalizeReviewTextSize(row?.changeTextSize);
-    return `review-textarea review-text-size-${size}${normalizeReviewBold(row?.changeTextBold) ? " review-text-bold" : ""}`;
+    return `review-rich-editor review-text-size-${size}`;
   }
 
-  function applyReviewTextStyle(textarea, row) {
-    if (!textarea || !row) return;
+  function getReviewTextHtml(row) {
+    return sanitizeReviewTextHtml(row?.changeTextHtml || textToReviewTextHtml(row?.changeText || ""));
+  }
+
+  function applyReviewTextStyle(editor, row) {
+    if (!editor || !row) return;
     reviewTextSizes.forEach(size => {
-      textarea.classList.toggle(`review-text-size-${size.value}`, normalizeReviewTextSize(row.changeTextSize) === size.value);
+      editor.classList.toggle(`review-text-size-${size.value}`, normalizeReviewTextSize(row.changeTextSize) === size.value);
     });
-    textarea.classList.toggle("review-text-bold", normalizeReviewBold(row.changeTextBold));
-    fitReviewTextarea(textarea);
+    fitReviewTextarea(editor);
   }
 
   function createMemberRow() {
@@ -127,8 +190,8 @@ export function initGroupReview(ctx) {
       fieldNo: "",
       checked: false,
       changeText: "",
-      changeTextSize: "normal",
-      changeTextBold: false
+      changeTextHtml: "",
+      changeTextSize: "normal"
     };
   }
 
@@ -139,16 +202,21 @@ export function initGroupReview(ctx) {
   function normalizeMemberRows(rows) {
     if (!Array.isArray(rows)) return [];
 
-    return rows.map(row => ({
-      id: row?.id || "row_" + Date.now() + "_" + Math.random().toString(36).slice(2),
-      collateralNo: String(row?.collateralNo ?? ""),
-      sheet: String(row?.sheet ?? ""),
-      fieldNo: String(row?.fieldNo ?? ""),
-      checked: Boolean(row?.checked),
-      changeText: String(row?.changeText ?? ""),
-      changeTextSize: normalizeReviewTextSize(row?.changeTextSize),
-      changeTextBold: normalizeReviewBold(row?.changeTextBold)
-    }));
+    return rows.map(row => {
+      const html = sanitizeReviewTextHtml(
+        row?.changeTextHtml || textToReviewTextHtml(row?.changeText ?? "", normalizeReviewBold(row?.changeTextBold))
+      );
+      return {
+        id: row?.id || "row_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+        collateralNo: String(row?.collateralNo ?? ""),
+        sheet: String(row?.sheet ?? ""),
+        fieldNo: String(row?.fieldNo ?? ""),
+        checked: Boolean(row?.checked),
+        changeText: String(row?.changeText ?? reviewTextHtmlToText(html)),
+        changeTextHtml: html,
+        changeTextSize: normalizeReviewTextSize(row?.changeTextSize)
+      };
+    });
   }
 
   function normalizeSheetDoc(sheetKey, data = {}) {
@@ -212,10 +280,11 @@ export function initGroupReview(ctx) {
   }
 
   function fitReviewTextareas() {
-    document.querySelectorAll(".review-textarea").forEach(fitReviewTextarea);
+    document.querySelectorAll(".review-textarea, .review-rich-editor").forEach(fitReviewTextarea);
   }
 
   window.fitGroupReviewTextarea = fitReviewTextarea;
+  window.fitGroupReviewTextEditor = fitReviewTextarea;
 
   function getLockState(member) {
     const sheet = sheetsData[member];
@@ -696,25 +765,65 @@ export function initGroupReview(ctx) {
     markSheetDirty(selectedSheetKey);
   };
 
+  window.updateGroupReviewRichText = function(rowIndex, editor) {
+    if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
+
+    const sheet = ensureLocalSheet(selectedSheetKey);
+    const row = sheet.rows[rowIndex];
+    if (!row || !editor) return;
+
+    row.changeTextHtml = sanitizeReviewTextHtml(editor.innerHTML);
+    row.changeText = getReviewEditorText(editor);
+    markSheetDirty(selectedSheetKey);
+    fitReviewTextarea(editor);
+  };
+
+  window.handleGroupReviewTextPaste = function(event, rowIndex, editor) {
+    event.preventDefault();
+    const text = event.clipboardData?.getData("text/plain") || "";
+    document.execCommand("insertText", false, text);
+    if (editor) window.updateGroupReviewRichText(rowIndex, editor);
+  };
+
+  window.toggleGroupReviewSelectionBold = function(rowIndex, button) {
+    if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
+
+    const contentCell = button?.closest(".review-content-cell");
+    const editor = contentCell?.querySelector(".review-rich-editor");
+    if (!editor) return;
+
+    editor.focus();
+    const selection = window.getSelection();
+    if (
+      !selection ||
+      !selection.rangeCount ||
+      !editor.contains(selection.anchorNode) ||
+      !editor.contains(selection.focusNode)
+    ) {
+      return;
+    }
+
+    document.execCommand("bold", false, null);
+    window.updateGroupReviewRichText(rowIndex, editor);
+  };
+
   window.updateGroupReviewTextStyle = function(rowIndex, field, value, cell) {
     if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
-    if (!["changeTextSize", "changeTextBold"].includes(field)) return;
+    if (field !== "changeTextSize") return;
 
     const sheet = ensureLocalSheet(selectedSheetKey);
     const row = sheet.rows[rowIndex];
     if (!row) return;
 
-    row[field] = field === "changeTextBold" ? Boolean(value) : normalizeReviewTextSize(value);
+    row.changeTextSize = normalizeReviewTextSize(value);
     markSheetDirty(selectedSheetKey);
 
     const contentCell = cell || document.querySelector(`[data-review-content-row="${rowIndex}"]`);
-    const textarea = contentCell?.querySelector(".review-textarea");
+    const editor = contentCell?.querySelector(".review-rich-editor");
     const sizeSelect = contentCell?.querySelector(".review-text-size-select");
-    const boldBtn = contentCell?.querySelector(".review-format-btn");
 
-    applyReviewTextStyle(textarea, row);
+    applyReviewTextStyle(editor, row);
     if (sizeSelect) sizeSelect.value = normalizeReviewTextSize(row.changeTextSize);
-    if (boldBtn) boldBtn.classList.toggle("active", normalizeReviewBold(row.changeTextBold));
   };
 
   window.addGroupReviewRow = function() {
@@ -1061,15 +1170,14 @@ export function initGroupReview(ctx) {
 
     const rowsHtml = sheet.rows.map((row, rowIndex) => {
       const textSize = normalizeReviewTextSize(row.changeTextSize);
-      const textBold = normalizeReviewBold(row.changeTextBold);
       const textToolbar = editable ? `
         <div class="review-text-toolbar">
           <select class="review-text-size-select" aria-label="글씨 크기" title="글씨 크기"
             onchange="updateGroupReviewTextStyle(${rowIndex}, 'changeTextSize', this.value, this.closest('.review-content-cell'))">
             ${getReviewTextSizeOptions(textSize)}
           </select>
-          <button type="button" class="review-format-btn${textBold ? " active" : ""}" aria-label="굵게" title="굵게"
-            onclick="updateGroupReviewTextStyle(${rowIndex}, 'changeTextBold', !this.classList.contains('active'), this.closest('.review-content-cell'))">B</button>
+          <button type="button" class="review-format-btn" aria-label="선택 글자 굵게" title="선택 글자 굵게"
+            onmousedown="event.preventDefault(); toggleGroupReviewSelectionBold(${rowIndex}, this)">B</button>
         </div>
       ` : "";
 
@@ -1093,8 +1201,10 @@ export function initGroupReview(ctx) {
         </td>
         <td class="review-content-cell" data-review-content-row="${rowIndex}">
           ${textToolbar}
-          <textarea class="${getReviewTextareaClass(row)}" ${editable ? "" : "readonly"}
-            oninput="updateGroupReviewCell(${rowIndex}, 'changeText', this.value); fitGroupReviewTextarea(this)">${escapeHtml(row.changeText)}</textarea>
+          <div class="${getReviewTextEditorClass(row)}" contenteditable="${editable ? "true" : "false"}"
+            role="textbox" aria-multiline="true" data-placeholder="변경내용 입력"
+            oninput="updateGroupReviewRichText(${rowIndex}, this)"
+            onpaste="handleGroupReviewTextPaste(event, ${rowIndex}, this)">${getReviewTextHtml(row)}</div>
         </td>
         <td>
           ${editable ? `<button class="small-btn danger" onclick="removeGroupReviewRow(${rowIndex})">삭제</button>` : ""}
