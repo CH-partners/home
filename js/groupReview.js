@@ -1407,6 +1407,7 @@ export function initGroupReview(ctx) {
 
   return {
     renderGroupReviewUI,
-    requireMemberSelection
+    requireMemberSelection,
+    fitTextareas: fitReviewTextareas
   };
 }

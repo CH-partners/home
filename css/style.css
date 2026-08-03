@@ -10,6 +10,12 @@ body {
   grid-template-columns:290px minmax(0,1fr);
   min-height:100vh;
 }
+body.workspace-fullscreen .app {
+  grid-template-columns:1fr;
+}
+body.workspace-fullscreen .sidebar {
+  display:none;
+}
 .sidebar {
   background:#fcfcfd;
   border-right:1px solid #e5e7eb;
@@ -301,9 +307,16 @@ body {
 .main {
   padding:34px 36px 48px;
 }
+body.workspace-fullscreen .main {
+  min-height:100vh;
+  padding:18px 20px 32px;
+}
 .sheet-panel {
   display:none;
   max-width:1280px;
+}
+body.workspace-fullscreen .sheet-panel {
+  max-width:none;
 }
 .sheet-panel.active {
   display:block;
@@ -323,6 +336,11 @@ body {
   gap:8px;
   flex-wrap:wrap;
 }
+.workspace-fullscreen-btn.active {
+  background:#0f172a;
+  border-color:#0f172a;
+  color:#fff;
+}
 .major-card {
   background:#fff;
   border:1px solid #e9eef5;
@@ -330,6 +348,9 @@ body {
   padding:24px 26px;
   margin-bottom:18px;
   box-shadow:0 10px 30px rgba(15,23,42,0.04);
+}
+body.workspace-fullscreen .major-card {
+  padding:18px 20px;
 }
 .major-title {
   font-size:22px;

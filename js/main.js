@@ -54,6 +54,7 @@ let noticeData = {
   html: "<li>공지 내용이 없습니다.</li>"
 };
 let navGroupState = {};
+let workspaceFullscreen = false;
 
 const defaultMenus = [
   { title: "청현 공지사항", panelIndex: 0, location: "top", kind: "panel" },
@@ -450,6 +451,31 @@ function updateAdminUI() {
   document.querySelectorAll(".panel-edit-btn").forEach(btn => btn.classList.toggle("hidden", !admin));
   window.groupReviewApi?.renderGroupReviewUI();
 }
+
+function updateWorkspaceFullscreenUI() {
+  document.body.classList.toggle("workspace-fullscreen", workspaceFullscreen);
+  const btn = document.getElementById("workspaceFullscreenBtn");
+  if (btn) {
+    btn.textContent = workspaceFullscreen ? "원래 화면" : "오른쪽 창 전체화면";
+    btn.classList.toggle("active", workspaceFullscreen);
+  }
+  requestAnimationFrame(() => {
+    window.groupReviewApi?.fitTextareas?.();
+    window.scheduleApi?.updateSize?.();
+  });
+}
+
+window.toggleWorkspaceFullscreen = function() {
+  workspaceFullscreen = !workspaceFullscreen;
+  updateWorkspaceFullscreenUI();
+};
+
+window.addEventListener("keydown", event => {
+  if (event.key === "Escape" && workspaceFullscreen) {
+    workspaceFullscreen = false;
+    updateWorkspaceFullscreenUI();
+  }
+});
 
 function showSheet(index, title = "") {
   document.querySelectorAll(".sheet-panel").forEach(el => el.classList.remove("active"));
