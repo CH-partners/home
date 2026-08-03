@@ -215,6 +215,36 @@ export function initGroupReview(ctx) {
     return canUseActiveSheet(sheetKey);
   }
 
+  function isAdminReviewingSheet(sheetKey = selectedSheetKey) {
+    return isAdmin(getCurrentUser()) && !!sheetKey && sheetKey !== activeMember;
+  }
+
+  function getFirstReviewSheetKey() {
+    return fixedMembers.find(member => sheetsData[member]?.rows?.some(rowHasValue)) || fixedMembers[0] || "";
+  }
+
+  function ensureAdminSelectedSheet() {
+    if (!selectedSheetKey || !fixedMembers.includes(selectedSheetKey)) {
+      selectedSheetKey = getFirstReviewSheetKey();
+    }
+    return selectedSheetKey;
+  }
+
+  function getSelectedSheetIndex() {
+    const index = fixedMembers.indexOf(selectedSheetKey);
+    return index >= 0 ? index : 0;
+  }
+
+  function getSheetProgress(sheetKey) {
+    const sheet = ensureLocalSheet(sheetKey);
+    const valueRows = sheet.rows.filter(rowHasValue);
+    const checkedRows = valueRows.filter(row => row.checked);
+    return {
+      total: valueRows.length,
+      checked: checkedRows.length
+    };
+  }
+
   async function deleteRefsInBatches(refs) {
     let batch = writeBatch(db);
     let count = 0;
@@ -681,12 +711,92 @@ export function initGroupReview(ctx) {
     return project;
   }
 
+  async function persistGroupReviewChecksOnly({ silent = false } = {}) {
+    if (!selectedSheetKey || !isAdminReviewingSheet(selectedSheetKey)) {
+      throw new Error("관리자 검토 중인 시트가 없습니다.");
+    }
+
+    const project = ensureSelectedProject();
+    if (!project) throw new Error("검토할 그룹리뷰 프로젝트가 없습니다.");
+
+    const sheet = ensureLocalSheet(selectedSheetKey);
+    const localRowsById = new Map(sheet.rows.map(row => [row.id, row]));
+    let nextRows = [];
+
+    await runTransaction(db, async transaction => {
+      const ref = sheetRef(project.id, selectedSheetKey);
+      const snap = await transaction.get(ref);
+      const serverSheet = normalizeSheetDoc(selectedSheetKey, snap.data() || {});
+      const sourceRows = serverSheet.rows.length ? serverSheet.rows : sheet.rows;
+
+      nextRows = sourceRows.map((row, rowIndex) => {
+        const localRow = localRowsById.get(row.id) || sheet.rows[rowIndex];
+        return {
+          ...row,
+          checked: localRow ? Boolean(localRow.checked) : Boolean(row.checked)
+        };
+      });
+
+      transaction.set(ref, removeUndefinedDeep({
+        type: "member",
+        memberName: selectedSheetKey,
+        rows: nextRows,
+        updatedAt: nowIso(),
+        updatedBy: selectedSheetKey,
+        updatedByEmail: getCurrentUser()?.email || ""
+      }), { merge: true });
+    });
+
+    sheet.rows = nextRows;
+    sheet.updatedAt = nowIso();
+    sheet.updatedByEmail = getCurrentUser()?.email || "";
+    dirtySheetKeys.delete(selectedSheetKey);
+    if (!silent) alert(`${selectedSheetKey} 확인 상태가 저장되었습니다.`);
+    return project;
+  }
+
   window.saveGroupReviewSheet = async function() {
     try {
-      await persistGroupReviewSheet({ silent: false, keepLock: !isSheetCompleted(selectedSheetKey) });
+      if (isAdminReviewingSheet()) {
+        await persistGroupReviewChecksOnly({ silent: false });
+      } else {
+        await persistGroupReviewSheet({ silent: false, keepLock: !isSheetCompleted(selectedSheetKey) });
+      }
     } catch (error) {
       console.error("그룹리뷰 저장 실패:", error);
       alert("그룹리뷰 저장 실패: " + (error.message || error));
+    }
+  };
+
+  window.moveGroupReviewAdminSheet = function(direction) {
+    if (!isAdmin(getCurrentUser())) return alert("관리자만 사용할 수 있습니다.");
+    ensureAdminSelectedSheet();
+
+    const currentIndex = getSelectedSheetIndex();
+    const nextIndex = Math.min(
+      fixedMembers.length - 1,
+      Math.max(0, currentIndex + Number(direction || 0))
+    );
+
+    selectedSheetKey = fixedMembers[nextIndex] || selectedSheetKey;
+    selectedMember = "";
+    renderGroupReviewUI();
+  };
+
+  window.saveGroupReviewSheetAndMove = async function(direction = 1) {
+    try {
+      if (!isAdmin(getCurrentUser())) return alert("관리자만 사용할 수 있습니다.");
+
+      if (isAdminReviewingSheet()) {
+        await persistGroupReviewChecksOnly({ silent: true });
+      } else {
+        await persistGroupReviewSheet({ silent: true, keepLock: !isSheetCompleted(selectedSheetKey) });
+      }
+
+      window.moveGroupReviewAdminSheet(direction);
+    } catch (error) {
+      console.error("그룹리뷰 확인 저장 후 이동 실패:", error);
+      alert("그룹리뷰 확인 저장 후 이동 실패: " + (error.message || error));
     }
   };
 
@@ -835,11 +945,14 @@ export function initGroupReview(ctx) {
   }
 
   function renderSheetTabs() {
+    const adminMode = isAdmin(getCurrentUser());
     const tabs = fixedMembers.map(member => {
         const active = selectedSheetKey === member;
         const editable = canEditSheet(member);
         const completed = isSheetCompleted(member);
-        const suffix = completed ? " · 완료" : editable ? " · 입력" : "";
+        const suffix = adminMode
+          ? (completed ? " · 완료" : "")
+          : (completed ? " · 완료" : editable ? " · 입력" : "");
         const disabled = activeMember && !isSheetCompleted(activeMember) && member !== activeMember && !isAdmin(getCurrentUser());
         return `<button class="work-badge review-sheet-btn${active ? " active" : ""}${disabled ? " review-disabled" : ""}" onclick="selectGroupReviewSheet(${jsArg(member)})" ${disabled ? "disabled" : ""}>${escapeHtml(member + suffix)}</button>`;
       }).join("");
@@ -847,9 +960,39 @@ export function initGroupReview(ctx) {
     return `<div class="work-badges review-sheet-tabs">${tabs}</div>`;
   }
 
+  function renderAdminReviewControls() {
+    const sheetKey = ensureAdminSelectedSheet();
+    const currentIndex = getSelectedSheetIndex();
+    const progress = getSheetProgress(sheetKey);
+    const completed = isSheetCompleted(sheetKey);
+    const dirty = dirtySheetKeys.has(sheetKey);
+    const prevDisabled = currentIndex <= 0;
+    const nextDisabled = currentIndex >= fixedMembers.length - 1;
+
+    return `
+      <div class="review-admin-controls">
+        <div class="review-admin-summary">
+          <strong>관리자 검토</strong>
+          <span>${escapeHtml(sheetKey)}</span>
+          <span>${currentIndex + 1} / ${fixedMembers.length}</span>
+          <span>확인 ${progress.checked} / ${progress.total}</span>
+          <span>${completed ? "입력완료" : "입력중"}</span>
+          ${dirty ? `<span class="review-admin-dirty">저장 필요</span>` : ""}
+        </div>
+        <div class="review-admin-actions">
+          <button class="action-btn" onclick="moveGroupReviewAdminSheet(-1)" ${prevDisabled ? "disabled" : ""}>이전 사용자</button>
+          <button class="action-btn" onclick="moveGroupReviewAdminSheet(1)" ${nextDisabled ? "disabled" : ""}>다음 사용자</button>
+          <button class="action-btn" onclick="saveGroupReviewSheet()">확인 저장</button>
+          <button class="action-btn" onclick="saveGroupReviewSheetAndMove(1)" ${nextDisabled ? "disabled" : ""}>저장 후 다음</button>
+        </div>
+      </div>
+    `;
+  }
+
   function renderMemberSheet(sheetKey) {
     const sheet = ensureLocalSheet(sheetKey);
-    const editable = canEditSheet(sheetKey);
+    const adminReviewing = isAdminReviewingSheet(sheetKey);
+    const editable = canEditSheet(sheetKey) && !adminReviewing;
     const checkable = canCheckSheet(sheetKey);
     const completed = isSheetCompleted(sheetKey);
     const lock = getLockState(sheetKey);
@@ -889,7 +1032,11 @@ export function initGroupReview(ctx) {
       : "현재 사용 중 표시가 없습니다.";
     const statusText = completed
       ? "입력 완료 상태입니다. 입력칸은 잠겼고 확인 체크만 가능합니다."
-      : lockText;
+      : adminReviewing
+        ? "관리자 검토 모드입니다. 입력 내용은 읽기 전용이고 확인 체크만 저장됩니다."
+        : lockText;
+    const saveLabel = adminReviewing ? "관리자 확인 저장" : completed ? "확인 저장" : "임시저장";
+    const canReopen = completed && !adminReviewing && checkable;
 
     return `
       <div class="work-project-header">
@@ -901,8 +1048,8 @@ export function initGroupReview(ctx) {
 
       <div class="work-header-actions">
         <button class="action-btn" onclick="addGroupReviewRow()" ${editable ? "" : "disabled"}>행 추가</button>
-        <button class="action-btn" onclick="saveGroupReviewSheet()" ${checkable ? "" : "disabled"}>${completed ? "확인 저장" : "임시저장"}</button>
-        ${completed ? `<button class="action-btn" onclick="reopenGroupReviewUse()" ${checkable ? "" : "disabled"}>재수정</button>` : ""}
+        <button class="action-btn" onclick="saveGroupReviewSheet()" ${checkable ? "" : "disabled"}>${saveLabel}</button>
+        ${canReopen ? `<button class="action-btn" onclick="reopenGroupReviewUse()">재수정</button>` : ""}
         ${completed ? "" : `<button class="action-btn danger" onclick="completeGroupReviewUse()" ${editable ? "" : "disabled"}>완료</button>`}
       </div>
 
@@ -950,6 +1097,38 @@ export function initGroupReview(ctx) {
 
     subscribeProjects();
     renderProjectBadges();
+
+    if (isAdmin(getCurrentUser())) {
+      ensureAdminSelectedSheet();
+
+      const project = getDisplayProject();
+      const projectNote = projectsError
+        ? `프로젝트 목록을 불러오지 못했습니다. 저장 시 다시 시도합니다: ${projectsError}`
+        : creatingDefaultProject
+          ? "프로젝트를 생성하는 중입니다. 입력은 계속할 수 있습니다."
+          : !projectsLoaded
+            ? "프로젝트 목록을 불러오는 중입니다. 입력은 먼저 볼 수 있습니다."
+            : !projects.length
+              ? "아직 프로젝트가 없습니다. 리뷰 프로젝트를 먼저 생성하세요."
+              : "관리자는 사용자별 입력 내용을 넘겨보며 확인 체크를 저장할 수 있습니다.";
+
+      const sheetContent = renderMemberSheet(selectedSheetKey);
+
+      body.innerHTML = `
+        <div class="work-project-header">
+          <div>
+            <div class="work-project-title">${escapeHtml(project.name)}</div>
+            <div class="note">${escapeHtml(projectNote)}</div>
+          </div>
+        </div>
+
+        ${renderAdminReviewControls()}
+        ${renderSheetTabs()}
+        ${sheetContent}
+      `;
+      requestAnimationFrame(fitReviewTextareas);
+      return;
+    }
 
     if (activeMember && !selectedMember) {
       selectedMember = activeMember;
