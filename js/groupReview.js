@@ -16,6 +16,13 @@ export function initGroupReview(ctx) {
   const sessionStorageKey = "groupReviewSessionId";
   const memberStorageKey = "groupReviewSelectedMember";
   const activeMemberStorageKey = "groupReviewActiveMember";
+  const reviewTextSizes = [
+    { value: "small", label: "작게" },
+    { value: "normal", label: "기본" },
+    { value: "large", label: "크게" },
+    { value: "huge", label: "아주 크게" }
+  ];
+  const reviewTextSizeSet = new Set(reviewTextSizes.map(item => item.value));
 
   let projects = [];
   let selectedProjectId = null;
@@ -82,6 +89,36 @@ export function initGroupReview(ctx) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
+  function normalizeReviewTextSize(value) {
+    const size = String(value || "normal").trim();
+    return reviewTextSizeSet.has(size) ? size : "normal";
+  }
+
+  function normalizeReviewBold(value) {
+    return value === true || value === "true" || value === 1 || value === "1";
+  }
+
+  function getReviewTextSizeOptions(selectedSize) {
+    const activeSize = normalizeReviewTextSize(selectedSize);
+    return reviewTextSizes.map(size =>
+      `<option value="${size.value}" ${size.value === activeSize ? "selected" : ""}>${escapeHtml(size.label)}</option>`
+    ).join("");
+  }
+
+  function getReviewTextareaClass(row) {
+    const size = normalizeReviewTextSize(row?.changeTextSize);
+    return `review-textarea review-text-size-${size}${normalizeReviewBold(row?.changeTextBold) ? " review-text-bold" : ""}`;
+  }
+
+  function applyReviewTextStyle(textarea, row) {
+    if (!textarea || !row) return;
+    reviewTextSizes.forEach(size => {
+      textarea.classList.toggle(`review-text-size-${size.value}`, normalizeReviewTextSize(row.changeTextSize) === size.value);
+    });
+    textarea.classList.toggle("review-text-bold", normalizeReviewBold(row.changeTextBold));
+    fitReviewTextarea(textarea);
+  }
+
   function createMemberRow() {
     return {
       id: "row_" + Date.now() + "_" + Math.random().toString(36).slice(2),
@@ -89,7 +126,9 @@ export function initGroupReview(ctx) {
       sheet: "",
       fieldNo: "",
       checked: false,
-      changeText: ""
+      changeText: "",
+      changeTextSize: "normal",
+      changeTextBold: false
     };
   }
 
@@ -106,7 +145,9 @@ export function initGroupReview(ctx) {
       sheet: String(row?.sheet ?? ""),
       fieldNo: String(row?.fieldNo ?? ""),
       checked: Boolean(row?.checked),
-      changeText: String(row?.changeText ?? "")
+      changeText: String(row?.changeText ?? ""),
+      changeTextSize: normalizeReviewTextSize(row?.changeTextSize),
+      changeTextBold: normalizeReviewBold(row?.changeTextBold)
     }));
   }
 
@@ -655,6 +696,27 @@ export function initGroupReview(ctx) {
     markSheetDirty(selectedSheetKey);
   };
 
+  window.updateGroupReviewTextStyle = function(rowIndex, field, value, cell) {
+    if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
+    if (!["changeTextSize", "changeTextBold"].includes(field)) return;
+
+    const sheet = ensureLocalSheet(selectedSheetKey);
+    const row = sheet.rows[rowIndex];
+    if (!row) return;
+
+    row[field] = field === "changeTextBold" ? Boolean(value) : normalizeReviewTextSize(value);
+    markSheetDirty(selectedSheetKey);
+
+    const contentCell = cell || document.querySelector(`[data-review-content-row="${rowIndex}"]`);
+    const textarea = contentCell?.querySelector(".review-textarea");
+    const sizeSelect = contentCell?.querySelector(".review-text-size-select");
+    const boldBtn = contentCell?.querySelector(".review-format-btn");
+
+    applyReviewTextStyle(textarea, row);
+    if (sizeSelect) sizeSelect.value = normalizeReviewTextSize(row.changeTextSize);
+    if (boldBtn) boldBtn.classList.toggle("active", normalizeReviewBold(row.changeTextBold));
+  };
+
   window.addGroupReviewRow = function() {
     if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return alert("선택한 본인 시트만 수정할 수 있습니다.");
     ensureLocalSheet(selectedSheetKey).rows.push(createMemberRow());
@@ -997,7 +1059,21 @@ export function initGroupReview(ctx) {
     const completed = isSheetCompleted(sheetKey);
     const lock = getLockState(sheetKey);
 
-    const rowsHtml = sheet.rows.map((row, rowIndex) => `
+    const rowsHtml = sheet.rows.map((row, rowIndex) => {
+      const textSize = normalizeReviewTextSize(row.changeTextSize);
+      const textBold = normalizeReviewBold(row.changeTextBold);
+      const textToolbar = editable ? `
+        <div class="review-text-toolbar">
+          <select class="review-text-size-select" aria-label="글씨 크기" title="글씨 크기"
+            onchange="updateGroupReviewTextStyle(${rowIndex}, 'changeTextSize', this.value, this.closest('.review-content-cell'))">
+            ${getReviewTextSizeOptions(textSize)}
+          </select>
+          <button type="button" class="review-format-btn${textBold ? " active" : ""}" aria-label="굵게" title="굵게"
+            onclick="updateGroupReviewTextStyle(${rowIndex}, 'changeTextBold', !this.classList.contains('active'), this.closest('.review-content-cell'))">B</button>
+        </div>
+      ` : "";
+
+      return `
       <tr class="${row.checked ? "review-row-checked" : ""}">
         <td class="review-check-cell">
           <input type="checkbox" ${row.checked ? "checked" : ""} ${checkable ? "" : "disabled"}
@@ -1015,15 +1091,17 @@ export function initGroupReview(ctx) {
           <input type="text" value="${escapeHtml(row.fieldNo)}" ${editable ? "" : "readonly"}
             oninput="updateGroupReviewCell(${rowIndex}, 'fieldNo', this.value)">
         </td>
-        <td class="review-content-cell">
-          <textarea class="review-textarea" ${editable ? "" : "readonly"}
+        <td class="review-content-cell" data-review-content-row="${rowIndex}">
+          ${textToolbar}
+          <textarea class="${getReviewTextareaClass(row)}" ${editable ? "" : "readonly"}
             oninput="updateGroupReviewCell(${rowIndex}, 'changeText', this.value); fitGroupReviewTextarea(this)">${escapeHtml(row.changeText)}</textarea>
         </td>
         <td>
           ${editable ? `<button class="small-btn danger" onclick="removeGroupReviewRow(${rowIndex})">삭제</button>` : ""}
         </td>
       </tr>
-    `).join("");
+    `;
+    }).join("");
 
     const lockText = lock.active
       ? lock.own
