@@ -1079,7 +1079,7 @@ body.workspace-fullscreen .major-card {
   box-sizing:border-box;
   width:100%;
   min-width:0;
-  min-height:72px;
+  min-height:38px;
   overflow:hidden;
   resize:none;
   border:1px solid #cbd5e1;

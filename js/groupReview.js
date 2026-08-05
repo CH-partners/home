@@ -304,7 +304,7 @@ export function initGroupReview(ctx) {
   function fitReviewTextarea(el) {
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = `${Math.max(72, el.scrollHeight)}px`;
+    el.style.height = `${Math.max(38, el.scrollHeight)}px`;
   }
 
   function fitReviewTextareas() {
@@ -1226,9 +1226,8 @@ export function initGroupReview(ctx) {
     const completed = isSheetCompleted(sheetKey);
     const lock = getLockState(sheetKey);
 
-    const buildReviewContentSub = (row, rowIndex, field, label, placeholder) => `
+    const buildReviewContentSub = (row, rowIndex, field, placeholder) => `
       <div class="review-content-sub review-content-${field}">
-        <span class="review-content-label">${label}</span>
         <div class="review-rich-editor" contenteditable="${editable ? "true" : "false"}"
           role="textbox" aria-multiline="true" data-placeholder="${placeholder}"
           oninput="updateGroupReviewRichText(${rowIndex}, '${field}', this)"
