@@ -165,19 +165,28 @@ export function initGroupReview(ctx) {
     ).join("");
   }
 
-  function getReviewTextEditorClass(row) {
-    const size = normalizeReviewTextSize(row?.changeTextSize);
+  function reviewFieldKeys(field) {
+    return field === "before"
+      ? { text: "changeBeforeText", html: "changeBeforeHtml", size: "changeBeforeSize" }
+      : { text: "changeAfterText", html: "changeAfterHtml", size: "changeAfterSize" };
+  }
+
+  function getReviewTextEditorClass(row, field) {
+    const { size: sizeKey } = reviewFieldKeys(field);
+    const size = normalizeReviewTextSize(row?.[sizeKey]);
     return `review-rich-editor review-text-size-${size}`;
   }
 
-  function getReviewTextHtml(row) {
-    return sanitizeReviewTextHtml(row?.changeTextHtml || textToReviewTextHtml(row?.changeText || ""));
+  function getReviewTextHtml(row, field) {
+    const { text: textKey, html: htmlKey } = reviewFieldKeys(field);
+    return sanitizeReviewTextHtml(row?.[htmlKey] || textToReviewTextHtml(row?.[textKey] || ""));
   }
 
-  function applyReviewTextStyle(editor, row) {
+  function applyReviewTextStyle(editor, row, field) {
     if (!editor || !row) return;
+    const { size: sizeKey } = reviewFieldKeys(field);
     reviewTextSizes.forEach(size => {
-      editor.classList.toggle(`review-text-size-${size.value}`, normalizeReviewTextSize(row.changeTextSize) === size.value);
+      editor.classList.toggle(`review-text-size-${size.value}`, normalizeReviewTextSize(row[sizeKey]) === size.value);
     });
     fitReviewTextarea(editor);
   }
@@ -189,9 +198,12 @@ export function initGroupReview(ctx) {
       sheet: "",
       fieldNo: "",
       checked: false,
-      changeText: "",
-      changeTextHtml: "",
-      changeTextSize: "normal"
+      changeBeforeText: "",
+      changeBeforeHtml: "",
+      changeBeforeSize: "normal",
+      changeAfterText: "",
+      changeAfterHtml: "",
+      changeAfterSize: "normal"
     };
   }
 
@@ -203,18 +215,30 @@ export function initGroupReview(ctx) {
     if (!Array.isArray(rows)) return [];
 
     return rows.map(row => {
-      const html = sanitizeReviewTextHtml(
-        row?.changeTextHtml || textToReviewTextHtml(row?.changeText ?? "", normalizeReviewBold(row?.changeTextBold))
+      const hasSplitFields =
+        row?.changeBeforeText !== undefined || row?.changeBeforeHtml !== undefined ||
+        row?.changeAfterText !== undefined || row?.changeAfterHtml !== undefined;
+
+      // 이전 버전에는 변경내용 칸이 하나였음(row.changeText) — 기존 데이터는 "변경 후" 칸으로 이관.
+      const legacyHtml = row?.changeTextHtml || textToReviewTextHtml(row?.changeText ?? "", normalizeReviewBold(row?.changeTextBold));
+
+      const beforeHtml = sanitizeReviewTextHtml(row?.changeBeforeHtml || (hasSplitFields ? textToReviewTextHtml(row?.changeBeforeText ?? "") : ""));
+      const afterHtml = sanitizeReviewTextHtml(
+        row?.changeAfterHtml || (hasSplitFields ? textToReviewTextHtml(row?.changeAfterText ?? "") : legacyHtml)
       );
+
       return {
         id: row?.id || "row_" + Date.now() + "_" + Math.random().toString(36).slice(2),
         collateralNo: String(row?.collateralNo ?? ""),
         sheet: String(row?.sheet ?? ""),
         fieldNo: String(row?.fieldNo ?? ""),
         checked: Boolean(row?.checked),
-        changeText: String(row?.changeText ?? reviewTextHtmlToText(html)),
-        changeTextHtml: html,
-        changeTextSize: normalizeReviewTextSize(row?.changeTextSize)
+        changeBeforeText: String(row?.changeBeforeText ?? reviewTextHtmlToText(beforeHtml)),
+        changeBeforeHtml: beforeHtml,
+        changeBeforeSize: normalizeReviewTextSize(row?.changeBeforeSize),
+        changeAfterText: String(row?.changeAfterText ?? reviewTextHtmlToText(afterHtml)),
+        changeAfterHtml: afterHtml,
+        changeAfterSize: normalizeReviewTextSize(row?.changeAfterSize ?? row?.changeTextSize)
       };
     });
   }
@@ -268,7 +292,7 @@ export function initGroupReview(ctx) {
   }
 
   function rowHasValue(row) {
-    return row?.checked || ["collateralNo", "sheet", "fieldNo", "changeText"].some(field =>
+    return row?.checked || ["collateralNo", "sheet", "fieldNo", "changeBeforeText", "changeAfterText"].some(field =>
       String(row?.[field] || "").trim() !== ""
     );
   }
@@ -765,31 +789,32 @@ export function initGroupReview(ctx) {
     markSheetDirty(selectedSheetKey);
   };
 
-  window.updateGroupReviewRichText = function(rowIndex, editor) {
+  window.updateGroupReviewRichText = function(rowIndex, field, editor) {
     if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
 
     const sheet = ensureLocalSheet(selectedSheetKey);
     const row = sheet.rows[rowIndex];
     if (!row || !editor) return;
 
-    row.changeTextHtml = sanitizeReviewTextHtml(editor.innerHTML);
-    row.changeText = getReviewEditorText(editor);
+    const { text: textKey, html: htmlKey } = reviewFieldKeys(field);
+    row[htmlKey] = sanitizeReviewTextHtml(editor.innerHTML);
+    row[textKey] = getReviewEditorText(editor);
     markSheetDirty(selectedSheetKey);
     fitReviewTextarea(editor);
   };
 
-  window.handleGroupReviewTextPaste = function(event, rowIndex, editor) {
+  window.handleGroupReviewTextPaste = function(event, rowIndex, field, editor) {
     event.preventDefault();
     const text = event.clipboardData?.getData("text/plain") || "";
     document.execCommand("insertText", false, text);
-    if (editor) window.updateGroupReviewRichText(rowIndex, editor);
+    if (editor) window.updateGroupReviewRichText(rowIndex, field, editor);
   };
 
-  window.toggleGroupReviewSelectionBold = function(rowIndex, button) {
+  window.toggleGroupReviewSelectionBold = function(rowIndex, field, button) {
     if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
 
-    const contentCell = button?.closest(".review-content-cell");
-    const editor = contentCell?.querySelector(".review-rich-editor");
+    const contentSub = button?.closest(".review-content-sub");
+    const editor = contentSub?.querySelector(".review-rich-editor");
     if (!editor) return;
 
     editor.focus();
@@ -804,26 +829,27 @@ export function initGroupReview(ctx) {
     }
 
     document.execCommand("bold", false, null);
-    window.updateGroupReviewRichText(rowIndex, editor);
+    window.updateGroupReviewRichText(rowIndex, field, editor);
   };
 
-  window.updateGroupReviewTextStyle = function(rowIndex, field, value, cell) {
+  window.updateGroupReviewTextStyle = function(rowIndex, field, value, subCell) {
     if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
-    if (field !== "changeTextSize") return;
+    if (field !== "before" && field !== "after") return;
 
     const sheet = ensureLocalSheet(selectedSheetKey);
     const row = sheet.rows[rowIndex];
     if (!row) return;
 
-    row.changeTextSize = normalizeReviewTextSize(value);
+    const { size: sizeKey } = reviewFieldKeys(field);
+    row[sizeKey] = normalizeReviewTextSize(value);
     markSheetDirty(selectedSheetKey);
 
-    const contentCell = cell || document.querySelector(`[data-review-content-row="${rowIndex}"]`);
-    const editor = contentCell?.querySelector(".review-rich-editor");
-    const sizeSelect = contentCell?.querySelector(".review-text-size-select");
+    const contentSub = subCell || document.querySelector(`[data-review-content-row="${rowIndex}"] .review-content-${field}`);
+    const editor = contentSub?.querySelector(".review-rich-editor");
+    const sizeSelect = contentSub?.querySelector(".review-text-size-select");
 
-    applyReviewTextStyle(editor, row);
-    if (sizeSelect) sizeSelect.value = normalizeReviewTextSize(row.changeTextSize);
+    applyReviewTextStyle(editor, row, field);
+    if (sizeSelect) sizeSelect.value = normalizeReviewTextSize(row[sizeKey]);
   };
 
   window.addGroupReviewRow = function() {
@@ -1018,14 +1044,15 @@ export function initGroupReview(ctx) {
 
     fixedMembers.forEach(member => {
       const sheet = ensureLocalSheet(member);
-      const rows = [["확인", "Collateral #", "Sheet", "Field no", "변경내용"]];
+      const rows = [["확인", "Collateral #", "Sheet", "Field no", "변경 전", "변경 후"]];
       sheet.rows.filter(rowHasValue).forEach(row => {
         rows.push([
           row.checked ? "확인" : "",
           row.collateralNo || "",
           row.sheet || "",
           row.fieldNo || "",
-          row.changeText || ""
+          row.changeBeforeText || "",
+          row.changeAfterText || ""
         ]);
       });
 
@@ -1035,7 +1062,8 @@ export function initGroupReview(ctx) {
         { wch: 12 },
         { wch: 10 },
         { wch: 8 },
-        { wch: 80 }
+        { wch: 40 },
+        { wch: 40 }
       ];
       XLSX.utils.book_append_sheet(wb, ws, member.slice(0, 31));
     });
@@ -1168,19 +1196,36 @@ export function initGroupReview(ctx) {
     const completed = isSheetCompleted(sheetKey);
     const lock = getLockState(sheetKey);
 
-    const rowsHtml = sheet.rows.map((row, rowIndex) => {
-      const textSize = normalizeReviewTextSize(row.changeTextSize);
-      const textToolbar = editable ? `
+    const buildReviewContentField = (row, rowIndex, field, label, placeholder) => {
+      const size = normalizeReviewTextSize(row[reviewFieldKeys(field).size]);
+      const toolbar = editable ? `
         <div class="review-text-toolbar">
+          <span class="review-content-label">${label}</span>
           <select class="review-text-size-select" aria-label="글씨 크기" title="글씨 크기"
-            onchange="updateGroupReviewTextStyle(${rowIndex}, 'changeTextSize', this.value, this.closest('.review-content-cell'))">
-            ${getReviewTextSizeOptions(textSize)}
+            onchange="updateGroupReviewTextStyle(${rowIndex}, '${field}', this.value, this.closest('.review-content-sub'))">
+            ${getReviewTextSizeOptions(size)}
           </select>
           <button type="button" class="review-format-btn" aria-label="선택 글자 굵게" title="선택 글자 굵게"
-            onmousedown="event.preventDefault(); toggleGroupReviewSelectionBold(${rowIndex}, this)">B</button>
+            onmousedown="event.preventDefault(); toggleGroupReviewSelectionBold(${rowIndex}, '${field}', this)">B</button>
         </div>
-      ` : "";
+      ` : `
+        <div class="review-text-toolbar review-text-toolbar-readonly">
+          <span class="review-content-label">${label}</span>
+        </div>
+      `;
 
+      return `
+        <div class="review-content-sub review-content-${field}">
+          ${toolbar}
+          <div class="${getReviewTextEditorClass(row, field)}" contenteditable="${editable ? "true" : "false"}"
+            role="textbox" aria-multiline="true" data-placeholder="${placeholder}"
+            oninput="updateGroupReviewRichText(${rowIndex}, '${field}', this)"
+            onpaste="handleGroupReviewTextPaste(event, ${rowIndex}, '${field}', this)">${getReviewTextHtml(row, field)}</div>
+        </div>
+      `;
+    };
+
+    const rowsHtml = sheet.rows.map((row, rowIndex) => {
       return `
       <tr class="${row.checked ? "review-row-checked" : ""}">
         <td class="review-check-cell">
@@ -1200,11 +1245,8 @@ export function initGroupReview(ctx) {
             oninput="updateGroupReviewCell(${rowIndex}, 'fieldNo', this.value)">
         </td>
         <td class="review-content-cell" data-review-content-row="${rowIndex}">
-          ${textToolbar}
-          <div class="${getReviewTextEditorClass(row)}" contenteditable="${editable ? "true" : "false"}"
-            role="textbox" aria-multiline="true" data-placeholder="변경내용 입력"
-            oninput="updateGroupReviewRichText(${rowIndex}, this)"
-            onpaste="handleGroupReviewTextPaste(event, ${rowIndex}, this)">${getReviewTextHtml(row)}</div>
+          ${buildReviewContentField(row, rowIndex, "before", "전", "변경 전 입력")}
+          ${buildReviewContentField(row, rowIndex, "after", "후", "변경 후 입력")}
         </td>
         <td>
           ${editable ? `<button class="small-btn danger" onclick="removeGroupReviewRow(${rowIndex})">삭제</button>` : ""}
@@ -1257,7 +1299,7 @@ export function initGroupReview(ctx) {
               <th>Collateral #</th>
               <th>Sheet</th>
               <th>Field no</th>
-              <th>변경내용</th>
+              <th>변경내용 전/후</th>
               <th>관리</th>
             </tr>
           </thead>
