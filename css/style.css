@@ -990,6 +990,7 @@ body.workspace-fullscreen .major-card {
   min-width:22px;
   height:20px;
   padding:0 6px;
+  margin-bottom:4px;
   border-radius:5px;
   background:#eef2ff;
   color:#4338ca;
@@ -1000,10 +1001,11 @@ body.workspace-fullscreen .major-card {
   display:flex;
   align-items:center;
   gap:6px;
-  margin-bottom:6px;
+  margin-bottom:8px;
 }
-.review-text-toolbar-readonly {
-  margin-bottom:4px;
+.review-content-toolbar-hint {
+  font-size:11px;
+  color:#94a3b8;
 }
 .review-text-size-select {
   width:auto;
