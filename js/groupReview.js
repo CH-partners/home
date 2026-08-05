@@ -814,65 +814,61 @@ export function initGroupReview(ctx) {
     if (editor) window.updateGroupReviewRichText(rowIndex, field, editor);
   };
 
-  function findReviewEditorFromNode(node, rowIndex) {
+  // 완료 버튼 옆의 공용 툴바(글자크기·굵게) 하나로 시트 전체의 전/후 입력칸을 다 처리하기 때문에,
+  // 버튼을 누른 시점의 브라우저 선택영역을 거슬러 올라가 어느 행(rowIndex)·어느 칸(전/후)인지 판단한다.
+  function findReviewEditorContext(node) {
     let el = node && node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
     const editor = el?.closest?.(".review-rich-editor");
-    const cell = document.querySelector(`[data-review-content-row="${rowIndex}"]`);
-    if (!editor || !cell || !cell.contains(editor)) return null;
-    return editor;
+    if (!editor) return null;
+
+    const cell = editor.closest("[data-review-content-row]");
+    const rowIndex = cell ? Number(cell.dataset.reviewContentRow) : NaN;
+    if (!Number.isInteger(rowIndex)) return null;
+
+    const field = editor.closest(".review-content-before") ? "before" : "after";
+    return { editor, rowIndex, field };
   }
 
-  // 전/후 두 칸에 공용 툴바(글자크기·굵게)를 쓰기 때문에, 버튼을 누른 시점의 브라우저 선택영역으로
-  // 어느 칸(전/후)의 어느 텍스트에 적용할지 판단한다.
-  window.toggleGroupReviewSelectionBold = function(rowIndex) {
+  window.toggleGroupReviewSelectionBold = function() {
     if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
 
     const selection = window.getSelection();
     if (!selection || !selection.rangeCount || selection.isCollapsed) return;
 
-    const editor = findReviewEditorFromNode(selection.anchorNode, rowIndex);
-    if (!editor || !editor.contains(selection.anchorNode) || !editor.contains(selection.focusNode)) return;
-
-    const field = editor.closest(".review-content-before") ? "before" : "after";
+    const context = findReviewEditorContext(selection.anchorNode);
+    if (!context) return;
+    const { editor, rowIndex, field } = context;
+    if (!editor.contains(selection.anchorNode) || !editor.contains(selection.focusNode)) return;
 
     document.execCommand("bold", false, null);
     window.updateGroupReviewRichText(rowIndex, field, editor);
   };
 
-  const reviewSelectionSnapshots = {};
+  let reviewSelectionSnapshot = null;
 
   // 글자크기 select는 네이티브 드롭다운이라 mousedown에서 preventDefault를 걸면 열리지 않으므로,
   // 포커스가 옮겨가기 전(mousedown 시점)에 현재 선택영역을 미리 저장해뒀다가 onchange에서 복원해 적용한다.
-  window.captureGroupReviewSelection = function(rowIndex) {
+  window.captureGroupReviewSelection = function() {
+    reviewSelectionSnapshot = null;
+
     const selection = window.getSelection();
-    if (!selection || !selection.rangeCount || selection.isCollapsed) {
-      delete reviewSelectionSnapshots[rowIndex];
-      return;
-    }
+    if (!selection || !selection.rangeCount || selection.isCollapsed) return;
 
     const range = selection.getRangeAt(0);
-    const editor = findReviewEditorFromNode(range.commonAncestorContainer, rowIndex);
-    if (!editor) {
-      delete reviewSelectionSnapshots[rowIndex];
-      return;
-    }
+    const context = findReviewEditorContext(range.commonAncestorContainer);
+    if (!context) return;
 
-    reviewSelectionSnapshots[rowIndex] = {
-      field: editor.closest(".review-content-before") ? "before" : "after",
-      editor,
-      range: range.cloneRange()
-    };
+    reviewSelectionSnapshot = { ...context, range: range.cloneRange() };
   };
 
-  window.applyGroupReviewSelectionSize = function(rowIndex, value) {
-    if (!selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
-
-    const snapshot = reviewSelectionSnapshots[rowIndex];
-    delete reviewSelectionSnapshots[rowIndex];
-    if (!snapshot || !document.contains(snapshot.editor) || snapshot.range.collapsed) return;
+  window.applyGroupReviewSelectionSize = function(value) {
+    const snapshot = reviewSelectionSnapshot;
+    reviewSelectionSnapshot = null;
+    if (!snapshot || !selectedSheetKey || !canEditSheet(selectedSheetKey)) return;
+    if (!document.contains(snapshot.editor) || snapshot.range.collapsed) return;
 
     const size = normalizeReviewTextSize(value);
-    const { editor, field, range } = snapshot;
+    const { editor, field, rowIndex, range } = snapshot;
 
     const span = document.createElement("span");
     span.className = `review-text-size-${size}`;
@@ -1236,19 +1232,6 @@ export function initGroupReview(ctx) {
     `;
 
     const rowsHtml = sheet.rows.map((row, rowIndex) => {
-      const sharedToolbar = editable ? `
-        <div class="review-text-toolbar">
-          <span class="review-content-toolbar-hint">글자 선택 후 적용</span>
-          <select class="review-text-size-select" aria-label="선택한 글자 크기 변경" title="글자를 선택한 뒤 크기를 고르세요"
-            onmousedown="captureGroupReviewSelection(${rowIndex})"
-            onchange="applyGroupReviewSelectionSize(${rowIndex}, this.value); this.selectedIndex = 0;">
-            ${getReviewTextSizeOptions()}
-          </select>
-          <button type="button" class="review-format-btn" aria-label="선택한 글자 굵게" title="글자를 선택한 뒤 눌러 굵게"
-            onmousedown="event.preventDefault(); toggleGroupReviewSelectionBold(${rowIndex})">B</button>
-        </div>
-      ` : "";
-
       return `
       <tr class="${row.checked ? "review-row-checked" : ""}">
         <td class="review-check-cell">
@@ -1268,9 +1251,8 @@ export function initGroupReview(ctx) {
             oninput="updateGroupReviewCell(${rowIndex}, 'fieldNo', this.value)">
         </td>
         <td class="review-content-cell" data-review-content-row="${rowIndex}">
-          ${sharedToolbar}
-          ${buildReviewContentSub(row, rowIndex, "before", "전", "변경 전 입력")}
-          ${buildReviewContentSub(row, rowIndex, "after", "후", "변경 후 입력")}
+          ${buildReviewContentSub(row, rowIndex, "before", "변경 전 입력")}
+          ${buildReviewContentSub(row, rowIndex, "after", "변경 후 입력")}
         </td>
         <td>
           ${editable ? `<button class="small-btn danger" onclick="removeGroupReviewRow(${rowIndex})">삭제</button>` : ""}
@@ -1291,6 +1273,18 @@ export function initGroupReview(ctx) {
         : lockText;
     const saveLabel = adminReviewing ? "관리자 확인 저장" : completed ? "확인 저장" : "임시저장";
     const canReopen = completed && !adminReviewing && checkable;
+    const formatToolbar = editable ? `
+      <div class="review-text-toolbar review-text-toolbar-inline">
+        <span class="review-content-toolbar-hint">변경내용 글자 선택 후 적용</span>
+        <select class="review-text-size-select" aria-label="선택한 글자 크기 변경" title="변경내용 칸에서 글자를 선택한 뒤 크기를 고르세요"
+          onmousedown="captureGroupReviewSelection()"
+          onchange="applyGroupReviewSelectionSize(this.value); this.selectedIndex = 0;">
+          ${getReviewTextSizeOptions()}
+        </select>
+        <button type="button" class="review-format-btn" aria-label="선택한 글자 굵게" title="변경내용 칸에서 글자를 선택한 뒤 눌러 굵게"
+          onmousedown="event.preventDefault(); toggleGroupReviewSelectionBold()">B</button>
+      </div>
+    ` : "";
 
     return `
       <div class="work-project-header">
@@ -1304,6 +1298,7 @@ export function initGroupReview(ctx) {
         <button class="action-btn" onclick="addGroupReviewRow()" ${editable ? "" : "disabled"}>행 추가</button>
         <button class="action-btn" onclick="saveGroupReviewSheet()" ${checkable ? "" : "disabled"}>${saveLabel}</button>
         ${canReopen ? `<button class="action-btn" onclick="reopenGroupReviewUse()">재수정</button>` : ""}
+        ${formatToolbar}
         ${completed ? "" : `<button class="action-btn danger" onclick="completeGroupReviewUse()" ${editable ? "" : "disabled"}>완료</button>`}
       </div>
 
