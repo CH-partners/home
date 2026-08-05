@@ -978,10 +978,20 @@ body.workspace-fullscreen .major-card {
   line-height:1.55;
   word-break:break-word;
 }
+.review-content-sub {
+  border-radius:8px;
+  padding:6px;
+}
 .review-content-sub + .review-content-sub {
-  margin-top:10px;
-  padding-top:10px;
-  border-top:1px dashed #cbd5e1;
+  margin-top:8px;
+}
+.review-content-before {
+  background:#f1f5f9;
+  border:1px solid #dbe3ec;
+}
+.review-content-after {
+  background:#ecfdf3;
+  border:1px solid #bbf0cf;
 }
 .review-text-toolbar {
   display:flex;
@@ -1038,6 +1048,13 @@ body.workspace-fullscreen .major-card {
   background:#2563eb;
   color:#fff;
 }
+.review-table th,
+.review-table td {
+  border-bottom:2px solid #dde3ea;
+}
+.review-table tbody tr:nth-child(even) td {
+  background:#f8fafc;
+}
 .review-table tbody tr.review-row-checked td {
   background:#f1f5f9;
   color:#64748b;
@@ -1051,6 +1068,11 @@ body.workspace-fullscreen .major-card {
 }
 .review-table tbody tr.review-row-checked .review-content-cell {
   color:#64748b;
+}
+.review-table tbody tr.review-row-checked .review-content-before,
+.review-table tbody tr.review-row-checked .review-content-after {
+  background:#e5e7eb;
+  border-color:#cbd5e1;
 }
 .review-table input[type="text"] {
   min-width:0;
