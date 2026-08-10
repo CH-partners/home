@@ -64,6 +64,14 @@ export function initGroupReview(ctx) {
     return projects.find(project => project.id === selectedProjectId) || null;
   }
 
+  function isProjectCompleted(project = getSelectedProject()) {
+    return Boolean(project?.completed);
+  }
+
+  function projectLockedMessage() {
+    return "프로젝트 완료 상태입니다. 관리자가 재수정으로 전환해야 수정할 수 있습니다.";
+  }
+
   function ensureSelectedProject() {
     if (!selectedProjectId || !projects.some(project => project.id === selectedProjectId)) {
       selectedProjectId = projects[0]?.id || null;
@@ -340,7 +348,7 @@ export function initGroupReview(ctx) {
   }
 
   function canUseActiveSheet(sheetKey) {
-    if (!canUse()) return false;
+    if (!canUse() || isProjectCompleted()) return false;
     if (isAdmin(getCurrentUser())) return true;
     return !!activeMember && sheetKey === activeMember;
   }
@@ -419,6 +427,11 @@ export function initGroupReview(ctx) {
       id,
       name: trimmed,
       members: [...fixedMembers],
+      completed: false,
+      completedAt: "",
+      completedByEmail: "",
+      reopenedAt: "",
+      reopenedByEmail: "",
       createdAt: nowIso(),
       createdByEmail: getCurrentUser()?.email || "",
       createdBy: selectedMember || getCurrentUser()?.email || "unknown"
@@ -469,6 +482,7 @@ export function initGroupReview(ctx) {
   async function lockSelectedMember(member) {
     const project = getSelectedProject();
     if (!project || !member) return;
+    if (isProjectCompleted(project)) throw new Error(projectLockedMessage());
 
     const ref = sheetRef(project.id, member);
     await runTransaction(db, async transaction => {
@@ -599,6 +613,11 @@ export function initGroupReview(ctx) {
         id: projectDoc.id,
         name: data.name || projectDoc.id,
         members: Array.isArray(data.members) ? data.members : [...fixedMembers],
+        completed: Boolean(data.completed),
+        completedAt: data.completedAt || "",
+        completedByEmail: data.completedByEmail || "",
+        reopenedAt: data.reopenedAt || "",
+        reopenedByEmail: data.reopenedByEmail || "",
         createdAt: data.createdAt || ""
       });
     });
@@ -707,6 +726,7 @@ export function initGroupReview(ctx) {
         project = ensureSelectedProject();
       }
       if (!project) return alert("그룹리뷰 프로젝트를 만들지 못했습니다. Firestore 권한을 확인하세요.");
+      if (isProjectCompleted(project)) return alert(projectLockedMessage());
 
       const sheet = ensureLocalSheet(selectedMember);
       if (!sheet.completed) {
@@ -895,6 +915,7 @@ export function initGroupReview(ctx) {
   };
 
   async function persistGroupReviewSheet({ silent = false, keepLock = true, completed = null } = {}) {
+    if (isProjectCompleted()) throw new Error(projectLockedMessage());
     if (!selectedSheetKey || !canUseActiveSheet(selectedSheetKey)) {
       throw new Error("선택한 본인 시트만 저장할 수 있습니다.");
     }
@@ -905,6 +926,7 @@ export function initGroupReview(ctx) {
       project = ensureSelectedProject();
     }
     if (!project) throw new Error("그룹리뷰 프로젝트를 만들지 못했습니다. Firestore 권한을 확인하세요.");
+    if (isProjectCompleted(project)) throw new Error(projectLockedMessage());
 
     const sheet = ensureLocalSheet(selectedSheetKey);
     const nextCompleted = completed === null ? Boolean(sheet.completed) : Boolean(completed);
@@ -941,6 +963,7 @@ export function initGroupReview(ctx) {
 
     const project = ensureSelectedProject();
     if (!project) throw new Error("검토할 그룹리뷰 프로젝트가 없습니다.");
+    if (isProjectCompleted(project)) throw new Error(projectLockedMessage());
 
     const sheet = ensureLocalSheet(selectedSheetKey);
     const localRowsById = new Map(sheet.rows.map(row => [row.id, row]));
@@ -1042,6 +1065,7 @@ export function initGroupReview(ctx) {
   window.reopenGroupReviewUse = async function() {
     try {
       if (!activeMember) return alert("먼저 이름을 선택하고 사용 시작을 누르세요.");
+      if (isProjectCompleted()) return alert(projectLockedMessage());
       if (!isSheetCompleted(activeMember)) return alert("이미 수정 가능한 상태입니다.");
 
       selectedMember = activeMember;
@@ -1058,6 +1082,89 @@ export function initGroupReview(ctx) {
     } catch (error) {
       console.error("그룹리뷰 재수정 실패:", error);
       alert("그룹리뷰 재수정 실패: " + (error.message || error));
+    }
+  };
+
+  async function clearGroupReviewProjectLocks(projectId) {
+    const sheetSnap = await getDocs(sheetsColRef(projectId));
+    if (sheetSnap.empty) return;
+
+    const batch = writeBatch(db);
+    sheetSnap.docs.forEach(sheetDoc => {
+      batch.set(sheetDoc.ref, {
+        lockSessionId: "",
+        lockedBy: "",
+        lockedAt: ""
+      }, { merge: true });
+    });
+    await batch.commit();
+
+    Object.values(sheetsData).forEach(sheet => {
+      if (!sheet) return;
+      sheet.lockSessionId = "";
+      sheet.lockedBy = "";
+      sheet.lockedAt = "";
+    });
+  }
+
+  window.completeGroupReviewProject = async function() {
+    try {
+      if (!isAdmin(getCurrentUser())) return alert("관리자만 사용할 수 있습니다.");
+
+      const project = getSelectedProject();
+      if (!project) return alert("완료할 프로젝트를 먼저 선택하세요.");
+      if (isProjectCompleted(project)) return alert("이미 완료된 프로젝트입니다.");
+
+      const ok = confirm(`"${project.name}" 프로젝트를 완료할까요?\n완료 후에는 모든 사용자의 입력·확인·저장이 잠깁니다.`);
+      if (!ok) return;
+
+      const completedAt = nowIso();
+      const completedByEmail = getCurrentUser()?.email || "";
+      await setDoc(projectRef(project.id), removeUndefinedDeep({
+        completed: true,
+        completedAt,
+        completedByEmail
+      }), { merge: true });
+      await clearGroupReviewProjectLocks(project.id);
+
+      project.completed = true;
+      project.completedAt = completedAt;
+      project.completedByEmail = completedByEmail;
+      renderGroupReviewUI();
+      alert("프로젝트가 완료되었습니다. 현재 프로젝트는 읽기 전용입니다.");
+    } catch (error) {
+      console.error("그룹리뷰 프로젝트 완료 실패:", error);
+      alert("그룹리뷰 프로젝트 완료 실패: " + (error.message || error));
+    }
+  };
+
+  window.reopenGroupReviewProject = async function() {
+    try {
+      if (!isAdmin(getCurrentUser())) return alert("관리자만 사용할 수 있습니다.");
+
+      const project = getSelectedProject();
+      if (!project) return alert("재수정할 프로젝트를 먼저 선택하세요.");
+      if (!isProjectCompleted(project)) return alert("이미 수정 가능한 프로젝트입니다.");
+
+      const ok = confirm(`"${project.name}" 프로젝트를 재수정 가능 상태로 전환할까요?`);
+      if (!ok) return;
+
+      const reopenedAt = nowIso();
+      const reopenedByEmail = getCurrentUser()?.email || "";
+      await setDoc(projectRef(project.id), removeUndefinedDeep({
+        completed: false,
+        reopenedAt,
+        reopenedByEmail
+      }), { merge: true });
+
+      project.completed = false;
+      project.reopenedAt = reopenedAt;
+      project.reopenedByEmail = reopenedByEmail;
+      renderGroupReviewUI();
+      alert("프로젝트가 재수정 가능 상태로 전환되었습니다.");
+    } catch (error) {
+      console.error("그룹리뷰 프로젝트 재수정 실패:", error);
+      alert("그룹리뷰 프로젝트 재수정 실패: " + (error.message || error));
     }
   };
 
@@ -1107,7 +1214,7 @@ export function initGroupReview(ctx) {
     projects.forEach(project => {
       const btn = document.createElement("button");
       btn.className = "work-badge" + (project.id === selectedProjectId ? " active" : "");
-      btn.textContent = project.name;
+      btn.textContent = project.name + (project.completed ? " · 완료" : "");
       btn.onclick = () => window.selectGroupReviewProject(project.id);
       wrap.appendChild(btn);
     });
@@ -1136,7 +1243,14 @@ export function initGroupReview(ctx) {
     }).join("");
 
     const activeCompleted = activeMember && isSheetCompleted(activeMember);
-    const controlHtml = activeMember
+    const projectCompleted = isProjectCompleted();
+    const controlHtml = projectCompleted
+      ? `
+        <div class="review-use-controls completed">
+          <span><strong>프로젝트 완료</strong> 상태입니다. 관리자가 재수정으로 전환하기 전에는 입력·확인·저장할 수 없습니다.</span>
+        </div>
+      `
+      : activeMember
       ? activeCompleted
         ? `
         <div class="review-use-controls completed">
@@ -1190,6 +1304,7 @@ export function initGroupReview(ctx) {
     const currentIndex = getSelectedSheetIndex();
     const progress = getSheetProgress(sheetKey);
     const completed = isSheetCompleted(sheetKey);
+    const projectCompleted = isProjectCompleted();
     const dirty = dirtySheetKeys.has(sheetKey);
     const prevDisabled = currentIndex <= 0;
     const nextDisabled = currentIndex >= fixedMembers.length - 1;
@@ -1207,8 +1322,8 @@ export function initGroupReview(ctx) {
         <div class="review-admin-actions">
           <button class="action-btn" onclick="moveGroupReviewAdminSheet(-1)" ${prevDisabled ? "disabled" : ""}>이전 사용자</button>
           <button class="action-btn" onclick="moveGroupReviewAdminSheet(1)" ${nextDisabled ? "disabled" : ""}>다음 사용자</button>
-          <button class="action-btn" onclick="saveGroupReviewSheet()">확인 저장</button>
-          <button class="action-btn" onclick="saveGroupReviewSheetAndMove(1)" ${nextDisabled ? "disabled" : ""}>저장 후 다음</button>
+          <button class="action-btn" onclick="saveGroupReviewSheet()" ${projectCompleted ? "disabled" : ""}>확인 저장</button>
+          <button class="action-btn" onclick="saveGroupReviewSheetAndMove(1)" ${nextDisabled || projectCompleted ? "disabled" : ""}>저장 후 다음</button>
         </div>
       </div>
     `;
@@ -1220,6 +1335,7 @@ export function initGroupReview(ctx) {
     const editable = canEditSheet(sheetKey) && !adminReviewing;
     const checkable = canCheckSheet(sheetKey);
     const completed = isSheetCompleted(sheetKey);
+    const projectCompleted = isProjectCompleted();
     const lock = getLockState(sheetKey);
 
     const buildReviewContentSub = (row, rowIndex, field, placeholder) => `
@@ -1266,13 +1382,15 @@ export function initGroupReview(ctx) {
         ? "현재 내가 선택한 시트입니다."
         : "다른 사용자가 선택한 시트입니다."
       : "현재 사용 중 표시가 없습니다.";
-    const statusText = completed
+    const statusText = projectCompleted
+      ? "프로젝트 완료 상태입니다. 모든 입력·확인·저장이 잠겨 있습니다."
+      : completed
       ? "입력 완료 상태입니다. 입력칸은 잠겼고 확인 체크만 가능합니다."
       : adminReviewing
         ? "관리자 검토 모드입니다. 입력 내용은 읽기 전용이고 확인 체크만 저장됩니다."
         : lockText;
     const saveLabel = adminReviewing ? "관리자 확인 저장" : completed ? "확인 저장" : "임시저장";
-    const canReopen = completed && !adminReviewing && checkable;
+    const canReopen = !projectCompleted && completed && !adminReviewing && checkable;
     const formatToolbar = editable ? `
       <div class="review-text-toolbar review-text-toolbar-inline">
         <span class="review-content-toolbar-hint">변경내용 글자 선택 후 적용</span>
@@ -1299,7 +1417,7 @@ export function initGroupReview(ctx) {
         <button class="action-btn" onclick="saveGroupReviewSheet()" ${checkable ? "" : "disabled"}>${saveLabel}</button>
         ${canReopen ? `<button class="action-btn" onclick="reopenGroupReviewUse()">재수정</button>` : ""}
         ${formatToolbar}
-        ${completed ? "" : `<button class="action-btn danger" onclick="completeGroupReviewUse()" ${editable ? "" : "disabled"}>완료</button>`}
+        ${completed || projectCompleted ? "" : `<button class="action-btn danger" onclick="completeGroupReviewUse()" ${editable ? "" : "disabled"}>완료</button>`}
       </div>
 
       <div class="work-table-wrap">
@@ -1359,14 +1477,25 @@ export function initGroupReview(ctx) {
             ? "프로젝트 목록을 불러오는 중입니다. 입력은 먼저 볼 수 있습니다."
             : !projects.length
               ? "아직 프로젝트가 없습니다. 리뷰 프로젝트를 먼저 생성하세요."
-              : "관리자는 사용자별 입력 내용을 넘겨보며 확인 체크를 저장할 수 있습니다.";
+              : isProjectCompleted(project)
+                ? "프로젝트 완료 상태입니다. 모든 입력·확인·저장이 잠겨 있으며 재수정 버튼으로 다시 활성화할 수 있습니다."
+                : "관리자는 사용자별 입력 내용을 넘겨보며 확인 체크를 저장할 수 있습니다.";
 
       const sheetContent = renderMemberSheet(selectedSheetKey);
+
+      const projectAdminButton = project.id
+        ? isProjectCompleted(project)
+          ? `<button class="action-btn" onclick="reopenGroupReviewProject()">재수정</button>`
+          : `<button class="action-btn danger" onclick="completeGroupReviewProject()">프로젝트 완료</button>`
+        : "";
 
       body.innerHTML = `
         <div class="work-project-header">
           <div>
-            <div class="work-project-title">${escapeHtml(project.name)}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+              <div class="work-project-title" style="margin:4px 0;">${escapeHtml(project.name)}</div>
+              ${projectAdminButton}
+            </div>
             <div class="note">${escapeHtml(projectNote)}</div>
           </div>
         </div>
@@ -1432,7 +1561,9 @@ export function initGroupReview(ctx) {
           ? "프로젝트 목록을 불러오는 중입니다. 입력은 먼저 할 수 있습니다."
           : !projects.length
             ? "아직 프로젝트가 없습니다. 저장하면 기본 프로젝트가 자동 생성됩니다."
-            : "프로젝트별/사람별 문서로 따로 저장되어 다른 사람 시트를 덮어쓰지 않습니다.";
+            : isProjectCompleted(project)
+              ? "프로젝트 완료 상태입니다. 관리자가 재수정으로 전환하기 전에는 수정할 수 없습니다."
+              : "프로젝트별/사람별 문서로 따로 저장되어 다른 사람 시트를 덮어쓰지 않습니다.";
 
     const sheetContent = renderMemberSheet(selectedSheetKey);
 
