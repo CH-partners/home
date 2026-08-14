@@ -67,10 +67,10 @@ const defaultMenus = [
   { title: "매각대상여부Q&A", panelIndex: 7, location: "top", kind: "panel" },
   { title: "열람자료Q&A", panelIndex: 8, location: "top", kind: "panel" },
   { title: "기계기구Q&A", panelIndex: 9, location: "top", kind: "panel" },
-  { title: "소액조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" },
   { title: "", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" },
   { title: "스케줄", panelIndex: 12, location: "bottom", kind: "panel", theme: "purple" },
-  { title: "그룹리뷰", panelIndex: 13, location: "bottom", kind: "panel", theme: "blue" }
+  { title: "그룹리뷰", panelIndex: 13, location: "bottom", kind: "panel", theme: "blue" },
+  { title: "소액조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" }
 ];
 
 const defaultPageContents = {

@@ -1407,7 +1407,7 @@ body.workspace-fullscreen .major-card {
 .nav-item-blue {
   background:#dbeafe;
   color:#1d4ed8;
-}
+  text-align:center;
 
 .nav-item-blue:hover {
   background:#bfdbfe;
