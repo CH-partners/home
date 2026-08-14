@@ -1408,6 +1408,11 @@ body.workspace-fullscreen .major-card {
   background:#dbeafe;
   color:#1d4ed8;
   text-align:center;
+  font-weight:700;
+  height:40px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
 
 .nav-item-blue:hover {
   background:#bfdbfe;
