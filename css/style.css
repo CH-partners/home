@@ -183,11 +183,14 @@ body.workspace-fullscreen .sidebar {
   text-overflow:ellipsis;
 }
 .nav-sub-group .nav-item {
-  width:100%;
+  width:calc(100% - 8px);
   display:block;
-  height:32px;
+  height:28px;
   font-size:12px;
-  padding:6px 10px;
+  padding:4px 4px 4px 16px;
+  margin-left:4px;
+  margin-right:0;
+  border-radius:8px;
 }
 
 .nav-bottom {
