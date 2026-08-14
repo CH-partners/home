@@ -275,21 +275,23 @@ function getDashboardGroupTitle(groupKey) {
   return found ? `${found.icon} ${found.title}` : groupKey;
 }
 
+function isToolDashboardMenu(menu) {
+  const title = (menu.title || "").trim();
+
+  return (
+    Number(menu.panelIndex) === 11 ||
+    Number(menu.panelIndex) === 12 ||
+    Number(menu.panelIndex) === 13 ||
+    title === "소액조회" ||
+    title.includes("전월세") ||
+    title.includes("최우선") ||
+    menu.group === "tool"
+  );
+}
+
 function getMenusByDashboardGroup(groupKey) {
   if (groupKey === "tool") {
-    return menuData.filter(menu => {
-      const title = (menu.title || "").trim();
-
-      return (
-        Number(menu.panelIndex) === 11 ||
-        Number(menu.panelIndex) === 12 ||
-        Number(menu.panelIndex) === 13 ||
-        title === "소액조회" ||
-        title.includes("전월세") ||
-        title.includes("최우선임금") ||
-        menu.group === "tool"
-      );
-    });
+    return menuData.filter(isToolDashboardMenu);
   }
 
   if (groupKey === "work") {
@@ -380,6 +382,12 @@ function getMenuIcon(title) {
   if (title.includes("참고")) return "🚨";
 
   return "📁";
+}
+
+function stripLeadingMenuIcon(title) {
+  return String(title || "")
+    .replace(/^(?:\s*[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]\uFE0F?)+\s*/u, "")
+    .trim();
 }
 
 function createDashboardCard(menu) {
@@ -740,6 +748,7 @@ function createMenuButton(menu, isChild = false) {
   const btn = document.createElement("button");
   btn.className = "nav-item";
   const fixedKind = getFixedMenuKind(menu);
+  const isTopToolMenu = !isChild && isToolDashboardMenu(menu);
 
   if (isChild) btn.classList.add("nav-sub-item");
 
@@ -755,20 +764,29 @@ function createMenuButton(menu, isChild = false) {
       }
   }
 
+  if (isTopToolMenu) {
+    btn.style.justifyContent = "center";
+    btn.style.textAlign = "center";
+    btn.style.fontWeight = "700";
+  }
+
   if (Number(menu.panelIndex) === 0) {
     btn.classList.add("nav-item-notice");
     btn.textContent = "📢 " + (menu.title || "공지사항");
   } else if (fixedKind === "work") {
     btn.classList.add("nav-item-highlight");
-    btn.textContent = "📊 분배표";
+    btn.textContent = "분배표";
   } else if (fixedKind === "schedule") {
     btn.classList.add("nav-item-schedule");
-    btn.textContent = "📅 스케줄";
+    btn.textContent = "스케줄";
   } else if (fixedKind === "review") {
     btn.classList.add("nav-item-blue", "nav-item-review");
-    btn.textContent = "📝 그룹리뷰";
+    btn.textContent = "그룹리뷰";
   } else {
-    btn.textContent = menu.title || "메뉴";
+    const title = menu.title || "메뉴";
+    btn.textContent = isTopToolMenu
+      ? (stripLeadingMenuIcon(title) || "메뉴")
+      : title;
   }
 
   btn.addEventListener("click", () => {
