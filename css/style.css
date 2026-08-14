@@ -108,11 +108,14 @@ body.workspace-fullscreen .sidebar {
 .nav-item:hover {
   background:#BFDBFE;
   color:#1d4ed8;
+  font-weight:700;
+  font-size:14px;
 }
 .nav-item.active {
   background:#dbeafe;
   color:#1d4ed8;
   font-weight:700;
+  font-size:14px;
 }
 
 .nav-group-toggle {
@@ -182,6 +185,9 @@ body.workspace-fullscreen .sidebar {
 .nav-sub-group .nav-item {
   width:100%;
   display:block;
+  height:32px;
+  font-size:12px;
+  padding:6px 10px;
 }
 
 .nav-bottom {
