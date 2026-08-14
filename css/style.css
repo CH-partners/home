@@ -297,36 +297,77 @@ body.workspace-fullscreen .sidebar {
 
 .admin-actions {
   display:flex;
-  gap:6px;
+  gap:8px;
+  flex-wrap:wrap;
 }
 
 .admin-actions .admin-btn {
-  flex:1;
+  flex:0 1 auto;
 }
 
 .admin-btn {
-  width:100%;
-  padding:8px 4px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:6px 12px;
   text-align:center;
   white-space:nowrap;
+  border:none;
+  border-radius:20px;
+  font-size:11px;
+  font-weight:700;
+  cursor:pointer;
+  transition:all .15s ease;
 }
 
 .admin-btn:hover {
-  background:#f8fbff;
-  color:#1d4ed8;
-  border-color:#bfdbfe;
+  transform:translateY(-2px);
+  box-shadow:0 4px 8px rgba(0,0,0,0.15);
 }
 
 .admin-btn.primary {
-  background:#dbeafe;
-  color:#1e3a8a;
-  border-color:#bfdbfe;
+  background:#3B82F6;
+  color:#ffffff;
+  border:none;
 }
 
 .admin-btn.primary:hover {
-  background:#bfdbfe;
-  color:#1e3a8a;
+  background:#2563EB;
+  transform:translateY(-2px);
+  box-shadow:0 4px 12px rgba(59,130,246,0.3);
 }
+
+.admin-btn.hidden:not(.primary) {
+  display:none;
+}
+
+#logoutBtn {
+  background:#EF4444;
+  color:#ffffff;
+}
+
+#logoutBtn:hover {
+  background:#DC2626;
+}
+
+#menuEditBtn {
+  background:#8B5CF6;
+  color:#ffffff;
+}
+
+#menuEditBtn:hover {
+  background:#7C3AED;
+}
+
+#logBtn {
+  background:#10B981;
+  color:#ffffff;
+}
+
+#logBtn:hover {
+  background:#059669;
+}
+
 .main {
   padding:34px 36px 48px;
 }
