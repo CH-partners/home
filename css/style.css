@@ -106,7 +106,7 @@ body.workspace-fullscreen .sidebar {
   transition:all .15s ease;
 }
 .nav-item:hover {
-  background:#eff6ff;
+  background:#BFDBFE;
   color:#1d4ed8;
 }
 .nav-item.active {
@@ -133,7 +133,7 @@ body.workspace-fullscreen .sidebar {
   transition:all .15s ease;
 }
 .nav-group-toggle:hover {
-  background:#e0e7ff; 
+  background:#C7D2FE; 
   color:#3730a3; 
 }
 .nav-group-toggle:focus-visible,
@@ -248,7 +248,7 @@ body.workspace-fullscreen .sidebar {
 }
 
 .nav-item-notice:hover {
-  background:#dbeafe;
+  background:#93C5FD;
   color:#1e40af;
 }
 
