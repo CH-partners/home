@@ -825,12 +825,22 @@ function renderMenus() {
     renderedMenus.add(noticeMenu);
   }
 
-  const divider = document.createElement("div");
-  divider.className = "nav-divider";
-  topNav.appendChild(divider);
+  const divider1 = document.createElement("div");
+  divider1.className = "nav-divider";
+  topNav.appendChild(divider1);
 
+  // 업무도구 메뉴들을 메인메뉴로 렌더링
+  const toolMenus = getMenusByDashboardGroup("tool")
+    .filter(menu => !renderedMenus.has(menu));
+  
+  toolMenus.forEach(menu => {
+    topNav.appendChild(createMenuButton(menu));
+    renderedMenus.add(menu);
+  });
+
+  // 나머지 그룹들 렌더링 (tool 제외)
   dashboardGroups
-    .filter(group => group.key !== "notice")
+    .filter(group => group.key !== "notice" && group.key !== "tool")
     .forEach(group => {
       const menus = getMenusByDashboardGroup(group.key)
         .filter(menu => !renderedMenus.has(menu));
