@@ -60,7 +60,7 @@ body.workspace-fullscreen .sidebar {
 }
 .logo-sub {
   font-size:13px;
-  color:#6b7280;
+  color:#E8EEF5;
   margin-bottom:22px;
   text-align:center;
   line-height:1.6;
@@ -259,7 +259,7 @@ body.workspace-fullscreen .sidebar {
   padding:14px 12px;
   border:1px solid #e5e7eb;
   border-radius:16px;
-  background:#f8fbff;
+  background:#E3F2FD;
   border-bottom:1px solid #e5e7eb;
   position:sticky;
   top:0;
