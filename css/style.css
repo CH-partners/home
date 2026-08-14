@@ -1,7 +1,7 @@
 * { box-sizing: border-box; }
 html, body { margin:0; padding:0; }
 body {
-  font-family: "Pretendard", "Noto Sans KR", sans-serif;
+  font-family: "Gmarket Sans", "Pretendard", "Noto Sans KR", sans-serif;
   background:#f7f9fc;
   color:#1f2937;
 }
@@ -17,7 +17,7 @@ body.workspace-fullscreen .sidebar {
   display:none;
 }
 .sidebar {
-  background:#fcfcfd;
+  background:#4169E1;
   border-right:1px solid #e5e7eb;
   padding:26px 18px 22px;
   position:sticky;
@@ -46,7 +46,7 @@ body.workspace-fullscreen .sidebar {
   font-family:"Noto Serif KR", serif;
   font-size:30px;
   font-weight:900;
-  color:#1e3a8a;
+  color:#9FB1BC;
   letter-spacing:1.5px;
   text-shadow:0 1px 1px rgba(0,0,0,0.08);
   margin-bottom:6px;
@@ -55,7 +55,7 @@ body.workspace-fullscreen .sidebar {
   font-family:"Noto Serif KR", serif;
   font-size:16px;
   font-weight:700;
-  color:#1e3a8a;
+  color:#9FB1BC;
   margin-right:2px;
 }
 .logo-sub {
