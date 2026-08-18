@@ -319,6 +319,50 @@ export function initGroupReview(ctx) {
     document.querySelectorAll(".review-textarea, .review-rich-editor").forEach(fitReviewTextarea);
   }
 
+  function captureGroupReviewScrollState() {
+    const tableWrap = document.querySelector("#groupReviewBody .work-table-wrap");
+    const sidebar = document.querySelector(".sidebar");
+    const sidebarContent = document.querySelector(".sidebar-content");
+
+    return {
+      windowX: window.scrollX,
+      windowY: window.scrollY,
+      tableTop: tableWrap?.scrollTop || 0,
+      tableLeft: tableWrap?.scrollLeft || 0,
+      sidebarTop: sidebar?.scrollTop || 0,
+      sidebarContentTop: sidebarContent?.scrollTop || 0
+    };
+  }
+
+  function restoreGroupReviewScrollState(state) {
+    if (!state) return;
+
+    const tableWrap = document.querySelector("#groupReviewBody .work-table-wrap");
+    if (tableWrap) {
+      tableWrap.scrollTop = state.tableTop;
+      tableWrap.scrollLeft = state.tableLeft;
+    }
+
+    const sidebar = document.querySelector(".sidebar");
+    if (sidebar) sidebar.scrollTop = state.sidebarTop;
+
+    const sidebarContent = document.querySelector(".sidebar-content");
+    if (sidebarContent) sidebarContent.scrollTop = state.sidebarContentTop;
+
+    window.scrollTo(state.windowX, state.windowY);
+  }
+
+  function scheduleGroupReviewPostRender(scrollState = null) {
+    requestAnimationFrame(() => {
+      fitReviewTextareas();
+      restoreGroupReviewScrollState(scrollState);
+
+      if (scrollState) {
+        requestAnimationFrame(() => restoreGroupReviewScrollState(scrollState));
+      }
+    });
+  }
+
   window.fitGroupReviewTextarea = fitReviewTextarea;
   window.fitGroupReviewTextEditor = fitReviewTextarea;
 
@@ -580,12 +624,12 @@ export function initGroupReview(ctx) {
         sheetsData = preserveDirtyLocalSheets(nextSheets);
 
         if ((activeMember || selectedMember) && !selectedSheetKey) selectedSheetKey = activeMember || selectedMember;
-        renderGroupReviewUI();
+        renderGroupReviewUI({ preserveScroll: true });
       },
       error => {
         console.error("그룹리뷰 시트 구독 실패:", error);
         sheetsData = {};
-        renderGroupReviewUI();
+        renderGroupReviewUI({ preserveScroll: true });
       }
     );
   }
@@ -633,7 +677,7 @@ export function initGroupReview(ctx) {
       subscribeSheets(selectedProjectId);
     }
 
-    renderGroupReviewUI();
+    renderGroupReviewUI({ preserveScroll: true });
   }
 
   function subscribeProjects() {
@@ -1446,9 +1490,10 @@ export function initGroupReview(ctx) {
     `;
   }
 
-  function renderGroupReviewUI() {
+  function renderGroupReviewUI(options = {}) {
     const body = document.getElementById("groupReviewBody");
     if (!body) return;
+    const scrollState = options.preserveScroll ? captureGroupReviewScrollState() : null;
 
     if (!canUse()) {
       stopSubscriptions();
@@ -1459,6 +1504,7 @@ export function initGroupReview(ctx) {
           그룹리뷰는 리뷰 전용 계정 또는 관리자 계정으로 로그인해야 사용할 수 있습니다.
         </div>
       `;
+      scheduleGroupReviewPostRender(scrollState);
       return;
     }
 
@@ -1504,7 +1550,7 @@ export function initGroupReview(ctx) {
         ${renderSheetTabs()}
         ${sheetContent}
       `;
-      requestAnimationFrame(fitReviewTextareas);
+      scheduleGroupReviewPostRender(scrollState);
       return;
     }
 
@@ -1523,6 +1569,7 @@ export function initGroupReview(ctx) {
           ${renderMemberSelector()}
         </div>
       `;
+      scheduleGroupReviewPostRender(scrollState);
       return;
     }
 
@@ -1537,6 +1584,7 @@ export function initGroupReview(ctx) {
           ${renderMemberSelector()}
         </div>
       `;
+      scheduleGroupReviewPostRender(scrollState);
       return;
     }
 
@@ -1579,7 +1627,7 @@ export function initGroupReview(ctx) {
       ${renderSheetTabs()}
       ${sheetContent}
     `;
-    requestAnimationFrame(fitReviewTextareas);
+    scheduleGroupReviewPostRender(scrollState);
   }
 
   function requireMemberSelection() {
