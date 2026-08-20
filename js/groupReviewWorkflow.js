@@ -6,7 +6,8 @@ import {
   getDoc,
   getDocs,
   getFirestore,
-  runTransaction
+  runTransaction,
+  writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const ADMIN_EMAILS = new Set([
@@ -26,7 +27,7 @@ const STATUS_SET = new Set(Object.values(STATUS));
 const STATUS_LABEL = {
   [STATUS.DRAFT]: "작성중",
   [STATUS.SUBMITTED]: "검토대기",
-  [STATUS.APPROVED]: "확인완료",
+  [STATUS.APPROVED]: "완료",
   [STATUS.REVISION_REQUESTED]: "재수정요청"
 };
 
@@ -37,10 +38,12 @@ let db = null;
 let auth = null;
 let installed = false;
 let currentProjectId = "";
-let refreshTimer = null;
-let lastContextKey = "";
-let rawSheetCache = new Map();
 let projectNameCache = new Map();
+let projectCacheLoaded = false;
+let refreshTimer = null;
+let rawSheetCache = new Map();
+let suppressObserver = false;
+let originalAddRow = null;
 const pendingChecks = new Map();
 const deletedRowIds = new Map();
 
@@ -119,6 +122,9 @@ function normalizeSheetData(data = {}) {
   return {
     ...data,
     completed: Boolean(data.completed),
+    reviewCompleted: Boolean(data.reviewCompleted),
+    reviewCompletedAt: String(data.reviewCompletedAt ?? ""),
+    reviewCompletedByEmail: String(data.reviewCompletedByEmail ?? ""),
     rows: Array.isArray(data.rows) ? data.rows.map(normalizeRawRow) : []
   };
 }
@@ -128,30 +134,29 @@ function projectNameFromBadge() {
   return (active?.textContent || "").replace(/\s*·\s*완료\s*$/, "").trim();
 }
 
-async function resolveProjectId(force = false) {
-  if (currentProjectId && !force) return currentProjectId;
-
-  const name = projectNameFromBadge();
-  if (!name) return "";
-  if (projectNameCache.has(name) && !force) {
-    currentProjectId = projectNameCache.get(name) || "";
-    return currentProjectId;
-  }
-
+async function ensureProjectCache() {
+  if (projectCacheLoaded) return;
   const snap = await getDocs(collection(db, "groupReviewProjects"));
-  projectNameCache = new Map();
+  const next = new Map();
   snap.forEach(projectDoc => {
     const data = projectDoc.data() || {};
-    projectNameCache.set(String(data.name || projectDoc.id), projectDoc.id);
+    next.set(String(data.name || projectDoc.id), projectDoc.id);
   });
+  projectNameCache = next;
+  projectCacheLoaded = true;
+}
 
+async function resolveProjectId() {
+  if (currentProjectId) return currentProjectId;
+  await ensureProjectCache();
+  const name = projectNameFromBadge();
   currentProjectId = projectNameCache.get(name) || "";
   return currentProjectId;
 }
 
 function stripSheetSuffix(text) {
   return String(text || "")
-    .replace(/\s*·\s*(완료|입력)\s*$/, "")
+    .replace(/\s*·\s*(완료|입력|리뷰완료)\s*$/, "")
     .trim();
 }
 
@@ -177,14 +182,19 @@ async function fetchRawSheet(projectId, sheetKey, force = false) {
   if (!projectId || !sheetKey) return normalizeSheetData();
   const key = contextKey(projectId, sheetKey);
   const cached = rawSheetCache.get(key);
-  if (!force && cached && Date.now() - cached.loadedAt < 400) {
-    return cached.data;
-  }
+  if (!force && cached) return cached.data;
 
   const snap = await getDoc(doc(db, "groupReviewProjects", projectId, "sheets", sheetKey));
   const data = normalizeSheetData(snap.data() || {});
   rawSheetCache.set(key, { data, loadedAt: Date.now() });
   return data;
+}
+
+function setCachedSheet(projectId, sheetKey, data) {
+  rawSheetCache.set(contextKey(projectId, sheetKey), {
+    data: normalizeSheetData(data),
+    loadedAt: Date.now()
+  });
 }
 
 function invalidateSheet(projectId, sheetKey) {
@@ -203,6 +213,49 @@ function pendingCheckKey(projectId, sheetKey, rowId) {
 
 function getReviewTableRows() {
   return Array.from(document.querySelectorAll("#groupReviewBody .review-member-table tbody tr"));
+}
+
+function captureScrollState() {
+  const tableWrap = document.querySelector("#groupReviewBody .work-table-wrap");
+  const sidebar = document.querySelector(".sidebar");
+  const sidebarContent = document.querySelector(".sidebar-content");
+  return {
+    windowX: window.scrollX,
+    windowY: window.scrollY,
+    tableTop: tableWrap?.scrollTop || 0,
+    tableLeft: tableWrap?.scrollLeft || 0,
+    sidebarTop: sidebar?.scrollTop || 0,
+    sidebarContentTop: sidebarContent?.scrollTop || 0
+  };
+}
+
+function restoreScrollState(state) {
+  if (!state) return;
+  const apply = () => {
+    const tableWrap = document.querySelector("#groupReviewBody .work-table-wrap");
+    if (tableWrap) {
+      tableWrap.scrollTop = state.tableTop;
+      tableWrap.scrollLeft = state.tableLeft;
+    }
+    const sidebar = document.querySelector(".sidebar");
+    if (sidebar) sidebar.scrollTop = state.sidebarTop;
+    const sidebarContent = document.querySelector(".sidebar-content");
+    if (sidebarContent) sidebarContent.scrollTop = state.sidebarContentTop;
+    window.scrollTo(state.windowX, state.windowY);
+  };
+  requestAnimationFrame(() => {
+    apply();
+    requestAnimationFrame(apply);
+  });
+}
+
+async function withScrollPreserved(action) {
+  const state = captureScrollState();
+  try {
+    return await action();
+  } finally {
+    restoreScrollState(state);
+  }
 }
 
 function mapDomRowsToRaw(projectId, sheetKey, rawSheet) {
@@ -292,7 +345,7 @@ function applyRowUi(projectId, sheetKey, rawSheet) {
     if (checkbox) {
       const pendingKey = rawRow ? pendingCheckKey(projectId, sheetKey, rawRow.id) : "";
       const pending = pendingKey ? pendingChecks.get(pendingKey) : undefined;
-      const canAdminCheck = admin && rawRow && !projectCompleted && [STATUS.SUBMITTED, STATUS.APPROVED].includes(status);
+      const canAdminCheck = admin && rawRow && !projectCompleted && !rawSheet.reviewCompleted && [STATUS.SUBMITTED, STATUS.APPROVED].includes(status);
       checkbox.disabled = !canAdminCheck;
       checkbox.checked = pending !== undefined ? Boolean(pending) : status === STATUS.APPROVED;
       tr.classList.toggle("review-row-checked", checkbox.checked);
@@ -327,7 +380,7 @@ function applyRowUi(projectId, sheetKey, rawSheet) {
       if (badge.textContent !== badgeText) badge.textContent = badgeText;
       styleStateBadge(badge, status);
 
-      const canRequestRevision = admin && rawRow && !projectCompleted && [STATUS.SUBMITTED, STATUS.APPROVED].includes(status);
+      const canRequestRevision = admin && rawRow && !projectCompleted && !rawSheet.reviewCompleted && [STATUS.SUBMITTED, STATUS.APPROVED].includes(status);
       let reviseButton = stateWrap.querySelector(".review-workflow-revise");
       if (canRequestRevision && !reviseButton) {
         reviseButton = document.createElement("button");
@@ -353,38 +406,82 @@ function applyRowUi(projectId, sheetKey, rawSheet) {
 
 function applyToolbarUi(rawSheet) {
   const admin = isAdminUser();
+  const body = document.getElementById("groupReviewBody");
+  if (!body) return;
+
   const topSave = document.querySelector('.sheet-panel[data-index="13"] .work-toolbar button[onclick="saveGroupReviewSheet()"]');
   if (topSave) {
     const label = admin ? "확인 저장" : "임시저장(검토요청)";
     if (topSave.textContent !== label) topSave.textContent = label;
+    topSave.disabled = admin ? Boolean(rawSheet.reviewCompleted) : Boolean(rawSheet.completed);
   }
 
-  const body = document.getElementById("groupReviewBody");
-  if (!body) return;
+  body.querySelectorAll('button[onclick="completeGroupReviewUse()"]').forEach(button => {
+    if (button.textContent !== "입력 완료") button.textContent = "입력 완료";
+    button.disabled = Boolean(rawSheet.completed);
+  });
 
   body.querySelectorAll(".review-admin-dirty").forEach(el => {
     el.style.display = "none";
   });
 
-  if (!admin) {
-    body.querySelectorAll('button[onclick="reopenGroupReviewUse()"]').forEach(button => {
-      button.style.display = "none";
-    });
+  const sheetSaveButtons = body.querySelectorAll('.work-header-actions button[onclick="saveGroupReviewSheet()"]');
+  sheetSaveButtons.forEach(button => {
+    button.textContent = admin ? "확인 저장" : "임시저장(검토요청)";
+    button.disabled = admin ? Boolean(rawSheet.reviewCompleted) : Boolean(rawSheet.completed);
+  });
 
-    const sheetSave = body.querySelector('.review-member-table')
-      ?.closest(".work-table-wrap")
-      ?.previousElementSibling
-      ?.querySelector('button[onclick="saveGroupReviewSheet()"]');
-    if (sheetSave) {
-      const label = rawSheet.completed ? "관리자 검토 대기" : "임시저장(검토요청)";
-      if (sheetSave.textContent !== label) sheetSave.textContent = label;
-      sheetSave.disabled = Boolean(rawSheet.completed);
-    }
+  if (!admin) {
+    body.querySelectorAll('button[onclick="reopenGroupReviewUse()"]')
+      .forEach(button => {
+        button.style.display = "none";
+      });
 
     if (rawSheet.completed) {
       body.querySelectorAll(".review-use-controls button").forEach(button => {
         button.style.display = "none";
       });
+    }
+
+    body.querySelectorAll(".review-use-controls span").forEach(span => {
+      if (span.textContent.includes("완료를 눌러")) {
+        span.innerHTML = span.innerHTML.replace("완료를 눌러", "입력 완료를 눌러");
+      }
+      if (rawSheet.completed && span.textContent.includes("입력 완료 상태")) {
+        span.innerHTML = span.innerHTML.replace("확인 체크만 가능합니다.", "관리자 검토 대기 상태입니다.");
+      }
+    });
+  }
+
+  const adminActions = body.querySelector(".review-admin-actions");
+  if (admin && adminActions) {
+    adminActions.querySelectorAll(".review-complete-action").forEach(el => el.remove());
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "action-btn review-complete-action";
+    if (rawSheet.reviewCompleted) {
+      button.textContent = "리뷰 재개";
+      button.onclick = () => window.reopenGroupReviewReview();
+    } else {
+      button.textContent = "리뷰 완료";
+      button.onclick = () => window.completeGroupReviewReview();
+    }
+    adminActions.appendChild(button);
+
+    const saveButtons = adminActions.querySelectorAll('button[onclick="saveGroupReviewSheet()"], button[onclick="saveGroupReviewSheetAndMove(1)"]');
+    saveButtons.forEach(btn => {
+      if (rawSheet.reviewCompleted) btn.disabled = true;
+    });
+
+    const summary = body.querySelector(".review-admin-summary");
+    if (summary) {
+      let status = summary.querySelector(".review-complete-summary");
+      if (!status) {
+        status = document.createElement("span");
+        status.className = "review-complete-summary";
+        summary.appendChild(status);
+      }
+      status.textContent = rawSheet.reviewCompleted ? "리뷰완료" : "리뷰중";
     }
   }
 }
@@ -392,15 +489,17 @@ function applyToolbarUi(rawSheet) {
 async function refreshWorkflowUi(force = false) {
   if (!installed || !db) return;
   try {
-    const projectId = await resolveProjectId(force);
+    const projectId = await resolveProjectId();
     const sheetKey = resolveSheetKey();
     if (!projectId || !sheetKey) return;
-    const key = contextKey(projectId, sheetKey);
-    lastContextKey = key;
     const rawSheet = await fetchRawSheet(projectId, sheetKey, force);
-    if (lastContextKey !== key) return;
-    applyRowUi(projectId, sheetKey, rawSheet);
-    applyToolbarUi(rawSheet);
+    suppressObserver = true;
+    try {
+      applyRowUi(projectId, sheetKey, rawSheet);
+      applyToolbarUi(rawSheet);
+    } finally {
+      suppressObserver = false;
+    }
   } catch (error) {
     console.warn("그룹리뷰 검토 잠금 UI 갱신 실패:", error);
   }
@@ -438,7 +537,7 @@ function readDomRow(tr, rawRow = null) {
 }
 
 async function persistWorkerSubmission() {
-  const projectId = await resolveProjectId(true);
+  const projectId = await resolveProjectId();
   const sheetKey = resolveSheetKey();
   if (!projectId || !sheetKey) throw new Error("사용 중인 그룹리뷰 시트를 찾을 수 없습니다.");
   if (isAdminUser()) throw new Error("관리자 검토 화면에서는 작업자 임시저장을 사용할 수 없습니다.");
@@ -448,14 +547,13 @@ async function persistWorkerSubmission() {
     throw new Error("이름을 선택하고 사용 시작 후 임시저장하세요.");
   }
 
-  const localRaw = await fetchRawSheet(projectId, sheetKey, true);
+  const localRaw = await fetchRawSheet(projectId, sheetKey, false);
   const deleted = deletedSetFor(projectId, sheetKey);
   const rows = getReviewTableRows();
   const serverById = new Map(localRaw.rows.map(row => [row.id, row]));
   const usedServerIds = new Set();
-  const nextRows = [];
+  const localCandidates = [];
   const submitTime = nowIso();
-  const submitter = activeMember;
   let submittedCount = 0;
 
   rows.forEach(tr => {
@@ -466,23 +564,23 @@ async function persistWorkerSubmission() {
 
     const status = serverRow ? getRowStatus(serverRow) : STATUS.DRAFT;
     if (serverRow && status !== STATUS.DRAFT) {
-      nextRows.push(serverRow);
+      localCandidates.push(serverRow);
       return;
     }
 
     const draft = readDomRow(tr, serverRow);
     if (!rowReadyForSubmission(draft)) {
-      if (serverRow) nextRows.push({ ...draft, reviewStatus: STATUS.DRAFT, checked: false });
+      if (serverRow) localCandidates.push({ ...draft, reviewStatus: STATUS.DRAFT, checked: false });
       return;
     }
 
     submittedCount += 1;
-    nextRows.push({
+    localCandidates.push({
       ...draft,
       reviewStatus: STATUS.SUBMITTED,
       checked: false,
       submittedAt: submitTime,
-      submittedBy: submitter,
+      submittedBy: activeMember,
       reviewedAt: "",
       reviewedByEmail: "",
       revisionRequestedAt: "",
@@ -492,24 +590,21 @@ async function persistWorkerSubmission() {
 
   localRaw.rows.forEach(serverRow => {
     if (usedServerIds.has(serverRow.id) || deleted.has(serverRow.id)) return;
-    nextRows.push(serverRow);
+    localCandidates.push(serverRow);
   });
 
   if (!submittedCount && !deleted.size) {
     throw new Error("검토 요청할 작성 내용이 없습니다.");
   }
 
+  let committedSheet = null;
   await runTransaction(db, async transaction => {
-    const projectRef = doc(db, "groupReviewProjects", projectId);
     const sheetRef = doc(db, "groupReviewProjects", projectId, "sheets", sheetKey);
-    const projectSnap = await transaction.get(projectRef);
-    if (projectSnap.data()?.completed) throw new Error("프로젝트 완료 상태입니다.");
-
     const serverSnap = await transaction.get(sheetRef);
     const serverSheet = normalizeSheetData(serverSnap.data() || {});
     const latestById = new Map(serverSheet.rows.map(row => [row.id, row]));
 
-    const protectedRows = nextRows.map(row => {
+    const protectedRows = localCandidates.map(row => {
       const latest = latestById.get(row.id);
       if (latest && getRowStatus(latest) !== STATUS.DRAFT) return latest;
       return row;
@@ -520,29 +615,41 @@ async function persistWorkerSubmission() {
       if (!protectedIds.has(row.id) && !deleted.has(row.id)) protectedRows.push(row);
     });
 
-    transaction.set(sheetRef, {
+    committedSheet = normalizeSheetData({
+      ...serverSheet,
       type: "member",
       memberName: sheetKey,
       rows: protectedRows,
       completed: false,
+      reviewCompleted: false,
+      reviewCompletedAt: "",
+      reviewCompletedByEmail: "",
       updatedAt: submitTime,
-      updatedBy: submitter,
+      updatedBy: activeMember,
       updatedByEmail: auth.currentUser?.email || "",
-      lockSessionId: localRaw.lockSessionId || "",
-      lockedBy: localRaw.lockedBy || submitter,
+      lockSessionId: serverSheet.lockSessionId || "",
+      lockedBy: serverSheet.lockedBy || activeMember,
       lockedAt: submitTime
-    }, { merge: true });
+    });
+
+    transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
   deleted.clear();
-  invalidateSheet(projectId, sheetKey);
-  await refreshWorkflowUi(true);
+  setCachedSheet(projectId, sheetKey, committedSheet);
+  suppressObserver = true;
+  try {
+    applyRowUi(projectId, sheetKey, committedSheet);
+    applyToolbarUi(committedSheet);
+  } finally {
+    suppressObserver = false;
+  }
   alert(`${submittedCount}건을 임시저장했습니다. 관리자 검토 대상으로 제출되어 해당 행은 잠깁니다.`);
 }
 
 async function persistAdminChecks() {
   if (!isAdminUser()) throw new Error("관리자만 확인 상태를 저장할 수 있습니다.");
-  const projectId = await resolveProjectId(true);
+  const projectId = await resolveProjectId();
   const sheetKey = resolveSheetKey();
   if (!projectId || !sheetKey) throw new Error("검토 중인 시트를 찾을 수 없습니다.");
 
@@ -551,18 +658,15 @@ async function persistAdminChecks() {
   const decisionMap = new Map(relevant.map(([key, value]) => [key.split("::").pop(), Boolean(value)]));
   const decisionTime = nowIso();
   const reviewer = auth.currentUser?.email || "";
-  let nextRows = [];
+  let committedSheet = null;
 
   await runTransaction(db, async transaction => {
-    const projectRef = doc(db, "groupReviewProjects", projectId);
     const sheetRef = doc(db, "groupReviewProjects", projectId, "sheets", sheetKey);
-    const projectSnap = await transaction.get(projectRef);
-    if (projectSnap.data()?.completed) throw new Error("프로젝트 완료 상태입니다.");
-
     const sheetSnap = await transaction.get(sheetRef);
     const serverSheet = normalizeSheetData(sheetSnap.data() || {});
+    if (serverSheet.reviewCompleted) throw new Error("리뷰 완료된 시트입니다. 리뷰 재개 후 수정하세요.");
 
-    nextRows = serverSheet.rows.map(row => {
+    const nextRows = serverSheet.rows.map(row => {
       const status = getRowStatus(row);
       if (![STATUS.SUBMITTED, STATUS.APPROVED].includes(status) || !decisionMap.has(row.id)) return row;
       const checked = decisionMap.get(row.id);
@@ -575,16 +679,24 @@ async function persistAdminChecks() {
       };
     });
 
-    transaction.set(sheetRef, {
+    committedSheet = normalizeSheetData({
+      ...serverSheet,
       rows: nextRows,
       updatedAt: decisionTime,
       updatedByEmail: reviewer
-    }, { merge: true });
+    });
+    transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
   relevant.forEach(([key]) => pendingChecks.delete(key));
-  invalidateSheet(projectId, sheetKey);
-  await refreshWorkflowUi(true);
+  setCachedSheet(projectId, sheetKey, committedSheet);
+  suppressObserver = true;
+  try {
+    applyRowUi(projectId, sheetKey, committedSheet);
+    applyToolbarUi(committedSheet);
+  } finally {
+    suppressObserver = false;
+  }
   alert(`${sheetKey} 관리자 확인 상태가 저장되었습니다.`);
 }
 
@@ -598,15 +710,15 @@ function unresolvedRevisionRows(rows) {
 }
 
 async function completeWorkerSheet() {
-  if (isAdminUser()) throw new Error("관리자 검토 화면에서는 작업자 완료를 사용할 수 없습니다.");
-  const projectId = await resolveProjectId(true);
+  if (isAdminUser()) throw new Error("관리자 검토 화면에서는 작업자 입력 완료를 사용할 수 없습니다.");
+  const projectId = await resolveProjectId();
   const sheetKey = resolveSheetKey();
   const activeMember = sessionStorage.getItem(ACTIVE_MEMBER_KEY) || "";
   if (!projectId || !sheetKey || !activeMember || activeMember !== sheetKey) {
     throw new Error("사용 중인 이름이 없습니다.");
   }
 
-  const rawSheet = await fetchRawSheet(projectId, sheetKey, true);
+  const rawSheet = await fetchRawSheet(projectId, sheetKey, false);
   const rawById = new Map(rawSheet.rows.map(row => [row.id, row]));
   const hasUnsavedDraft = getReviewTableRows().some(tr => {
     const rowId = tr.dataset.reviewRowId || "";
@@ -616,7 +728,7 @@ async function completeWorkerSheet() {
   });
 
   if (hasUnsavedDraft) {
-    throw new Error("작성 중인 내용이 있습니다. 먼저 임시저장(검토요청)한 뒤 완료하세요.");
+    throw new Error("작성 중인 내용이 있습니다. 먼저 임시저장(검토요청)한 뒤 입력 완료하세요.");
   }
 
   if (unresolvedRevisionRows(rawSheet.rows).length) {
@@ -624,19 +736,17 @@ async function completeWorkerSheet() {
   }
 
   const completedAt = nowIso();
+  let committedSheet = null;
   await runTransaction(db, async transaction => {
-    const projectRef = doc(db, "groupReviewProjects", projectId);
     const sheetRef = doc(db, "groupReviewProjects", projectId, "sheets", sheetKey);
-    const projectSnap = await transaction.get(projectRef);
-    if (projectSnap.data()?.completed) throw new Error("프로젝트 완료 상태입니다.");
-
     const sheetSnap = await transaction.get(sheetRef);
     const latest = normalizeSheetData(sheetSnap.data() || {});
     if (unresolvedRevisionRows(latest.rows).length) {
       throw new Error("관리자가 재수정 요청한 항목이 남아 있습니다.");
     }
 
-    transaction.set(sheetRef, {
+    committedSheet = normalizeSheetData({
+      ...latest,
       completed: true,
       lockSessionId: "",
       lockedBy: "",
@@ -644,30 +754,34 @@ async function completeWorkerSheet() {
       updatedAt: completedAt,
       updatedBy: activeMember,
       updatedByEmail: auth.currentUser?.email || ""
-    }, { merge: true });
+    });
+    transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  invalidateSheet(projectId, sheetKey);
-  await refreshWorkflowUi(true);
-  alert("입력 완료되었습니다. 제출된 행은 그대로 잠기며 관리자가 검토합니다.");
+  setCachedSheet(projectId, sheetKey, committedSheet);
+  suppressObserver = true;
+  try {
+    applyRowUi(projectId, sheetKey, committedSheet);
+    applyToolbarUi(committedSheet);
+  } finally {
+    suppressObserver = false;
+  }
+  alert("입력 완료되었습니다. 제출된 행은 잠금 상태로 유지되고 관리자가 검토합니다.");
 }
 
 async function requestRevision(rowId) {
   if (!isAdminUser()) throw new Error("관리자만 재수정 요청을 할 수 있습니다.");
-  const projectId = await resolveProjectId(true);
+  const projectId = await resolveProjectId();
   const sheetKey = resolveSheetKey();
   if (!projectId || !sheetKey || !rowId) throw new Error("재수정 요청 대상을 찾을 수 없습니다.");
 
   const requestTime = nowIso();
   const reviewer = auth.currentUser?.email || "";
   let created = false;
+  let committedSheet = null;
 
   await runTransaction(db, async transaction => {
-    const projectRef = doc(db, "groupReviewProjects", projectId);
     const sheetRef = doc(db, "groupReviewProjects", projectId, "sheets", sheetKey);
-    const projectSnap = await transaction.get(projectRef);
-    if (projectSnap.data()?.completed) throw new Error("프로젝트 완료 상태입니다. 먼저 프로젝트 재수정으로 전환하세요.");
-
     const sheetSnap = await transaction.get(sheetRef);
     const serverSheet = normalizeSheetData(sheetSnap.data() || {});
     const index = serverSheet.rows.findIndex(row => row.id === rowId);
@@ -676,7 +790,7 @@ async function requestRevision(rowId) {
     const target = serverSheet.rows[index];
     const status = getRowStatus(target);
     if (![STATUS.SUBMITTED, STATUS.APPROVED].includes(status)) {
-      throw new Error("검토대기 또는 확인완료 행만 재수정 요청할 수 있습니다.");
+      throw new Error("검토대기 또는 완료 행만 재수정 요청할 수 있습니다.");
     }
 
     const nextRows = [...serverSheet.rows];
@@ -705,30 +819,158 @@ async function requestRevision(rowId) {
         changeAfterHtml: "",
         reviewStatus: STATUS.DRAFT,
         revisionNo: getRevisionNo(target) + 1,
-        parentRevisionId: target.id,
-        submittedAt: "",
-        submittedBy: "",
-        reviewedAt: "",
-        reviewedByEmail: "",
-        revisionRequestedAt: "",
-        revisionRequestedByEmail: ""
+        parentRevisionId: target.id
       }));
       created = true;
     }
 
-    transaction.set(sheetRef, {
+    committedSheet = normalizeSheetData({
+      ...serverSheet,
       rows: nextRows,
       completed: false,
+      reviewCompleted: false,
+      reviewCompletedAt: "",
+      reviewCompletedByEmail: "",
       updatedAt: requestTime,
       updatedByEmail: reviewer
-    }, { merge: true });
+    });
+    transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  invalidateSheet(projectId, sheetKey);
-  await refreshWorkflowUi(true);
+  setCachedSheet(projectId, sheetKey, committedSheet);
+  suppressObserver = true;
+  try {
+    applyRowUi(projectId, sheetKey, committedSheet);
+    applyToolbarUi(committedSheet);
+  } finally {
+    suppressObserver = false;
+  }
   alert(created
     ? "재수정 요청했습니다. 기존 행은 잠긴 상태로 보존되고 작업자용 새 작성행이 생성되었습니다."
     : "이미 재수정용 작성행이 있어 재수정 요청 상태만 갱신했습니다.");
+}
+
+async function completeAdminReview() {
+  if (!isAdminUser()) throw new Error("관리자만 리뷰 완료를 할 수 있습니다.");
+  const projectId = await resolveProjectId();
+  const sheetKey = resolveSheetKey();
+  if (!projectId || !sheetKey) throw new Error("리뷰 완료할 시트를 찾을 수 없습니다.");
+
+  const completedAt = nowIso();
+  const reviewer = auth.currentUser?.email || "";
+  let committedSheet = null;
+
+  await runTransaction(db, async transaction => {
+    const sheetRef = doc(db, "groupReviewProjects", projectId, "sheets", sheetKey);
+    const sheetSnap = await transaction.get(sheetRef);
+    const serverSheet = normalizeSheetData(sheetSnap.data() || {});
+    if (!serverSheet.completed) throw new Error("작업자가 아직 입력 완료하지 않았습니다.");
+
+    const pending = serverSheet.rows.filter(row => getRowStatus(row) === STATUS.SUBMITTED);
+    if (pending.length) throw new Error(`미확인 검토대기 행이 ${pending.length}건 남아 있습니다.`);
+
+    const revisionPending = serverSheet.rows.filter(row => getRowStatus(row) === STATUS.REVISION_REQUESTED);
+    if (revisionPending.length) throw new Error(`재수정 요청 처리 중인 행이 ${revisionPending.length}건 남아 있습니다.`);
+
+    committedSheet = normalizeSheetData({
+      ...serverSheet,
+      reviewCompleted: true,
+      reviewCompletedAt: completedAt,
+      reviewCompletedByEmail: reviewer,
+      updatedAt: completedAt,
+      updatedByEmail: reviewer
+    });
+    transaction.set(sheetRef, committedSheet, { merge: true });
+  });
+
+  setCachedSheet(projectId, sheetKey, committedSheet);
+  suppressObserver = true;
+  try {
+    applyRowUi(projectId, sheetKey, committedSheet);
+    applyToolbarUi(committedSheet);
+  } finally {
+    suppressObserver = false;
+  }
+  alert(`${sheetKey} 리뷰 완료 처리되었습니다.`);
+}
+
+async function reopenAdminReview() {
+  if (!isAdminUser()) throw new Error("관리자만 리뷰를 재개할 수 있습니다.");
+  const projectId = await resolveProjectId();
+  const sheetKey = resolveSheetKey();
+  if (!projectId || !sheetKey) throw new Error("리뷰 재개할 시트를 찾을 수 없습니다.");
+
+  const reopenedAt = nowIso();
+  let committedSheet = null;
+  await runTransaction(db, async transaction => {
+    const sheetRef = doc(db, "groupReviewProjects", projectId, "sheets", sheetKey);
+    const sheetSnap = await transaction.get(sheetRef);
+    const serverSheet = normalizeSheetData(sheetSnap.data() || {});
+    committedSheet = normalizeSheetData({
+      ...serverSheet,
+      reviewCompleted: false,
+      reviewCompletedAt: "",
+      reviewCompletedByEmail: "",
+      updatedAt: reopenedAt,
+      updatedByEmail: auth.currentUser?.email || ""
+    });
+    transaction.set(sheetRef, committedSheet, { merge: true });
+  });
+
+  setCachedSheet(projectId, sheetKey, committedSheet);
+  suppressObserver = true;
+  try {
+    applyRowUi(projectId, sheetKey, committedSheet);
+    applyToolbarUi(committedSheet);
+  } finally {
+    suppressObserver = false;
+  }
+  alert(`${sheetKey} 리뷰를 다시 진행할 수 있습니다.`);
+}
+
+function isRelevantReviewSheet(sheet) {
+  return sheet.completed || sheet.reviewCompleted || sheet.rows.some(row => rowHasWorkerValue(row));
+}
+
+async function completeProjectWithReviewCheck() {
+  if (!isAdminUser()) return alert("관리자만 사용할 수 있습니다.");
+  const projectId = await resolveProjectId();
+  if (!projectId) return alert("완료할 프로젝트를 먼저 선택하세요.");
+
+  const sheetSnap = await getDocs(collection(db, "groupReviewProjects", projectId, "sheets"));
+  const relevant = sheetSnap.docs.map(sheetDoc => ({
+    ref: sheetDoc.ref,
+    key: sheetDoc.id,
+    data: normalizeSheetData(sheetDoc.data() || {})
+  })).filter(item => isRelevantReviewSheet(item.data));
+
+  if (!relevant.length) return alert("리뷰 완료할 작업자 데이터가 없습니다.");
+  const notDone = relevant.filter(item => !item.data.reviewCompleted);
+  if (notDone.length) {
+    return alert(`리뷰 완료되지 않은 작업자가 있습니다: ${notDone.map(item => item.key).join(", ")}`);
+  }
+
+  const projectName = projectNameFromBadge() || "선택 프로젝트";
+  const ok = confirm(`"${projectName}" 프로젝트를 완료할까요?\n완료 후에는 모든 사용자의 입력·확인·저장이 잠깁니다.`);
+  if (!ok) return;
+
+  const completedAt = nowIso();
+  const completedByEmail = auth.currentUser?.email || "";
+  const batch = writeBatch(db);
+  batch.set(doc(db, "groupReviewProjects", projectId), {
+    completed: true,
+    completedAt,
+    completedByEmail
+  }, { merge: true });
+  relevant.forEach(item => {
+    batch.set(item.ref, {
+      lockSessionId: "",
+      lockedBy: "",
+      lockedAt: ""
+    }, { merge: true });
+  });
+  await batch.commit();
+  alert("프로젝트가 완료되었습니다. 현재 프로젝트는 읽기 전용입니다.");
 }
 
 function installFunctionOverrides() {
@@ -737,6 +979,18 @@ function installFunctionOverrides() {
     window.selectGroupReviewProject = function(projectId) {
       currentProjectId = String(projectId || "");
       const result = originalSelectProject.apply(this, arguments);
+      invalidateSheet(currentProjectId, resolveSheetKey());
+      scheduleWorkflowRefresh(true);
+      return result;
+    };
+  }
+
+  const originalCreateProject = window.createGroupReviewProjectPrompt;
+  if (typeof originalCreateProject === "function") {
+    window.createGroupReviewProjectPrompt = async function() {
+      const result = await originalCreateProject.apply(this, arguments);
+      projectCacheLoaded = false;
+      currentProjectId = "";
       scheduleWorkflowRefresh(true);
       return result;
     };
@@ -765,7 +1019,7 @@ function installFunctionOverrides() {
     window.startGroupReviewUse = async function() {
       try {
         if (!isAdminUser()) {
-          const projectId = await resolveProjectId(true);
+          const projectId = await resolveProjectId();
           const member = sessionStorage.getItem(SELECTED_MEMBER_KEY) || "";
           if (projectId && member) {
             const sheet = await fetchRawSheet(projectId, member, true);
@@ -787,21 +1041,28 @@ function installFunctionOverrides() {
   const originalUpdateCell = window.updateGroupReviewCell;
   if (typeof originalUpdateCell === "function") {
     window.updateGroupReviewCell = function(rowIndex, field, value) {
+      const scrollState = captureScrollState();
       const tr = getReviewTableRows()[Number(rowIndex)];
       const rawRow = tr?.__reviewRawRow || null;
       const status = rawRow ? getRowStatus(rawRow) : STATUS.DRAFT;
 
       if (field === "checked") {
         if (!isAdminUser() || !rawRow || ![STATUS.SUBMITTED, STATUS.APPROVED].includes(status)) return;
+        const sheetKey = resolveSheetKey();
+        if (!currentProjectId || !sheetKey) return;
         pendingChecks.set(
-          pendingCheckKey(currentProjectId, resolveSheetKey(), rawRow.id),
+          pendingCheckKey(currentProjectId, sheetKey, rawRow.id),
           Boolean(value)
         );
-        return originalUpdateCell.call(this, rowIndex, field, value);
+        originalUpdateCell.call(this, rowIndex, field, value);
+        restoreScrollState(scrollState);
+        return;
       }
 
       if (isAdminUser() || (rawRow && status !== STATUS.DRAFT)) return;
-      return originalUpdateCell.call(this, rowIndex, field, value);
+      const result = originalUpdateCell.call(this, rowIndex, field, value);
+      restoreScrollState(scrollState);
+      return result;
     };
   }
 
@@ -846,7 +1107,7 @@ function installFunctionOverrides() {
     };
   }
 
-  const originalAddRow = window.addGroupReviewRow;
+  originalAddRow = window.addGroupReviewRow;
   if (typeof originalAddRow === "function") {
     window.addGroupReviewRow = function() {
       if (isAdminUser()) return alert("관리자는 작업자 작성행을 추가할 수 없습니다.");
@@ -857,34 +1118,40 @@ function installFunctionOverrides() {
   }
 
   window.saveGroupReviewSheet = async function() {
-    try {
-      if (isAdminUser()) await persistAdminChecks();
-      else await persistWorkerSubmission();
-    } catch (error) {
-      console.error("그룹리뷰 저장 실패:", error);
-      alert("그룹리뷰 저장 실패: " + (error.message || error));
-    }
+    await withScrollPreserved(async () => {
+      try {
+        if (isAdminUser()) await persistAdminChecks();
+        else await persistWorkerSubmission();
+      } catch (error) {
+        console.error("그룹리뷰 저장 실패:", error);
+        alert("그룹리뷰 저장 실패: " + (error.message || error));
+      }
+    });
   };
 
   window.saveGroupReviewSheetAndMove = async function(direction = 1) {
-    try {
-      if (!isAdminUser()) return;
-      await persistAdminChecks();
-      window.moveGroupReviewAdminSheet?.(direction);
-      scheduleWorkflowRefresh(true);
-    } catch (error) {
-      console.error("그룹리뷰 확인 저장 후 이동 실패:", error);
-      alert("그룹리뷰 확인 저장 후 이동 실패: " + (error.message || error));
-    }
+    await withScrollPreserved(async () => {
+      try {
+        if (!isAdminUser()) return;
+        await persistAdminChecks();
+        window.moveGroupReviewAdminSheet?.(direction);
+        scheduleWorkflowRefresh(true);
+      } catch (error) {
+        console.error("그룹리뷰 확인 저장 후 이동 실패:", error);
+        alert("그룹리뷰 확인 저장 후 이동 실패: " + (error.message || error));
+      }
+    });
   };
 
   window.completeGroupReviewUse = async function() {
-    try {
-      await completeWorkerSheet();
-    } catch (error) {
-      console.error("그룹리뷰 완료 실패:", error);
-      alert("그룹리뷰 완료 실패: " + (error.message || error));
-    }
+    await withScrollPreserved(async () => {
+      try {
+        await completeWorkerSheet();
+      } catch (error) {
+        console.error("그룹리뷰 입력 완료 실패:", error);
+        alert("그룹리뷰 입력 완료 실패: " + (error.message || error));
+      }
+    });
   };
 
   window.reopenGroupReviewUse = function() {
@@ -892,25 +1159,72 @@ function installFunctionOverrides() {
   };
 
   window.requestGroupReviewRevision = async function(rowId) {
-    try {
-      await requestRevision(rowId);
-    } catch (error) {
-      console.error("그룹리뷰 재수정 요청 실패:", error);
-      alert("그룹리뷰 재수정 요청 실패: " + (error.message || error));
-    }
+    await withScrollPreserved(async () => {
+      try {
+        await requestRevision(rowId);
+      } catch (error) {
+        console.error("그룹리뷰 재수정 요청 실패:", error);
+        alert("그룹리뷰 재수정 요청 실패: " + (error.message || error));
+      }
+    });
+  };
+
+  window.completeGroupReviewReview = async function() {
+    await withScrollPreserved(async () => {
+      try {
+        await completeAdminReview();
+      } catch (error) {
+        console.error("그룹리뷰 리뷰 완료 실패:", error);
+        alert("그룹리뷰 리뷰 완료 실패: " + (error.message || error));
+      }
+    });
+  };
+
+  window.reopenGroupReviewReview = async function() {
+    await withScrollPreserved(async () => {
+      try {
+        await reopenAdminReview();
+      } catch (error) {
+        console.error("그룹리뷰 리뷰 재개 실패:", error);
+        alert("그룹리뷰 리뷰 재개 실패: " + (error.message || error));
+      }
+    });
+  };
+
+  window.completeGroupReviewProject = async function() {
+    await withScrollPreserved(async () => {
+      try {
+        await completeProjectWithReviewCheck();
+      } catch (error) {
+        console.error("그룹리뷰 프로젝트 완료 실패:", error);
+        alert("그룹리뷰 프로젝트 완료 실패: " + (error.message || error));
+      }
+    });
   };
 }
 
 function installObservers() {
   const body = document.getElementById("groupReviewBody");
   const badges = document.getElementById("groupReviewProjectBadges");
-  const observer = new MutationObserver(() => scheduleWorkflowRefresh());
+  const observer = new MutationObserver(mutations => {
+    if (suppressObserver) return;
+    const structural = mutations.some(mutation =>
+      mutation.type === "childList" &&
+      (mutation.target === body || mutation.target === badges) &&
+      (mutation.addedNodes.length || mutation.removedNodes.length)
+    );
+    if (!structural) return;
+    const sheetKey = resolveSheetKey();
+    if (currentProjectId && sheetKey) invalidateSheet(currentProjectId, sheetKey);
+    scheduleWorkflowRefresh(true);
+  });
   if (body) observer.observe(body, { childList: true, subtree: true });
   if (badges) observer.observe(badges, { childList: true, subtree: true });
 
   if (auth) {
     onAuthStateChanged(auth, () => {
       currentProjectId = "";
+      projectCacheLoaded = false;
       projectNameCache.clear();
       rawSheetCache.clear();
       pendingChecks.clear();
