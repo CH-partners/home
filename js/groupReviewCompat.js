@@ -200,9 +200,6 @@ function patchWorkerControls(body) {
       button.textContent = "입력 완료";
     });
 
-  const topSave = document.querySelector('.sheet-panel[data-index="13"] .work-toolbar button[onclick="saveGroupReviewSheet()"]');
-  if (topSave && !topSave.disabled) topSave.textContent = "수정요청";
-
   addWorkerHint(body, viewingOther);
 }
 

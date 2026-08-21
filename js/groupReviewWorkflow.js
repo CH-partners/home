@@ -439,13 +439,6 @@ function applyToolbarUi(sheetKey, rawSheet) {
   const viewingOther = !admin && !isOwnSheet(sheetKey);
   const workerLocked = viewingOther || Boolean(rawSheet.completed);
 
-  const topSave = document.querySelector('.sheet-panel[data-index="13"] .work-toolbar button[onclick="saveGroupReviewSheet()"]');
-  if (topSave) {
-    const label = admin ? "확인 저장" : "임시저장(검토요청)";
-    if (topSave.textContent !== label) topSave.textContent = label;
-    topSave.disabled = admin ? Boolean(rawSheet.reviewCompleted) : workerLocked;
-  }
-
   body.querySelectorAll('button[onclick="completeGroupReviewUse()"]').forEach(button => {
     if (button.textContent !== "입력 완료") button.textContent = "입력 완료";
     button.disabled = admin ? Boolean(rawSheet.completed) : workerLocked;
@@ -456,9 +449,11 @@ function applyToolbarUi(sheetKey, rawSheet) {
     el.style.display = "none";
   });
 
+  // 작업자 라벨은 "수정요청"으로 통일한다. 레이어마다 다른 문구를 쓰면 전환할 때 옛 문구가 잠깐 스친다.
+  const saveLabel = admin ? "확인 저장" : "수정요청";
   const sheetSaveButtons = body.querySelectorAll('.work-header-actions button[onclick="saveGroupReviewSheet()"]');
   sheetSaveButtons.forEach(button => {
-    button.textContent = admin ? "확인 저장" : "임시저장(검토요청)";
+    if (button.textContent !== saveLabel) button.textContent = saveLabel;
     button.disabled = admin ? Boolean(rawSheet.reviewCompleted) : workerLocked;
     if (!admin && viewingOther) button.style.display = "none";
   });
@@ -677,6 +672,7 @@ async function persistWorkerSubmission() {
 
   deleted.clear();
   setCachedSheet(projectId, sheetKey, committedSheet);
+  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -730,6 +726,7 @@ async function persistAdminChecks() {
 
   relevant.forEach(([key]) => pendingChecks.delete(key));
   setCachedSheet(projectId, sheetKey, committedSheet);
+  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -738,6 +735,32 @@ async function persistAdminChecks() {
     suppressObserver = false;
   }
   alert(`${sheetKey} 관리자 확인 상태가 저장되었습니다.`);
+}
+
+// 관리자가 이미 확인 완료한 행은 잠근 채로 두고, 미확인 제출행만 작성중으로 되돌려
+// 작업자가 다시 고칠 수 있게 한다.
+function reopenRowsForWorker(rows) {
+  if (!Array.isArray(rows)) return { rows: [], reopened: 0 };
+
+  let reopened = 0;
+  const next = rows.map(row => {
+    const status = getRowStatus(row);
+    if (status === STATUS.APPROVED || status === STATUS.REVISION_REQUESTED) return row;
+    if (!rowHasWorkerValue(row)) return row;
+
+    reopened += 1;
+    return {
+      ...row,
+      checked: false,
+      reviewStatus: STATUS.DRAFT,
+      submittedAt: "",
+      submittedBy: "",
+      reviewedAt: "",
+      reviewedByEmail: ""
+    };
+  });
+
+  return { rows: next, reopened };
 }
 
 function unresolvedRevisionRows(rows) {
@@ -800,6 +823,7 @@ async function completeWorkerSheet() {
   });
 
   setCachedSheet(projectId, sheetKey, committedSheet);
+  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -879,6 +903,7 @@ async function requestRevision(rowId) {
   });
 
   setCachedSheet(projectId, sheetKey, committedSheet);
+  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -925,6 +950,7 @@ async function completeAdminReview() {
   });
 
   setCachedSheet(projectId, sheetKey, committedSheet);
+  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -943,15 +969,26 @@ async function reopenAdminReview() {
 
   const reopenedAt = nowIso();
   let committedSheet = null;
+  let reopenedCount = 0;
   await runTransaction(db, async transaction => {
     const sheetRef = doc(db, "groupReviewProjects", projectId, "sheets", sheetKey);
     const sheetSnap = await transaction.get(sheetRef);
     const serverSheet = normalizeSheetData(sheetSnap.data() || {});
+    const { rows, reopened } = reopenRowsForWorker(serverSheet.rows);
+    reopenedCount = reopened;
+
+    // 리뷰 재개는 작업자가 다시 입력할 수 있어야 의미가 있으므로 시트 잠금까지 함께 푼다.
     committedSheet = normalizeSheetData({
       ...serverSheet,
+      rows,
+      completed: false,
       reviewCompleted: false,
       reviewCompletedAt: "",
       reviewCompletedByEmail: "",
+      reuseRequested: false,
+      reuseRequestedAt: "",
+      reuseRequestedBy: "",
+      reuseRequestedByEmail: "",
       updatedAt: reopenedAt,
       updatedByEmail: auth.currentUser?.email || ""
     });
@@ -959,6 +996,7 @@ async function reopenAdminReview() {
   });
 
   setCachedSheet(projectId, sheetKey, committedSheet);
+  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -966,7 +1004,7 @@ async function reopenAdminReview() {
   } finally {
     suppressObserver = false;
   }
-  alert(`${sheetKey} 리뷰를 다시 진행할 수 있습니다.`);
+  alert(`${sheetKey} 리뷰를 다시 진행할 수 있습니다. 확인 완료된 행은 잠긴 채로 두고 미확인 ${reopenedCount}건을 작업자가 다시 입력할 수 있습니다.`);
 }
 
 function isRelevantReviewSheet(sheet) {

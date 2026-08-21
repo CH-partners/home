@@ -293,9 +293,11 @@ export function initGroupReview(ctx) {
   function preserveDirtyLocalSheets(nextSheets) {
     dirtySheetKeys.forEach(sheetKey => {
       if (!sheetsData[sheetKey]) return;
+      // 저장 전 입력 내용(rows)만 남기고 완료·리뷰·잠금·재사용 같은 상태 플래그는 항상 서버 값을 따른다.
+      // 로컬 값을 서버 위에 덮으면 관리자가 잠금을 풀어도 작업자 화면이 계속 잠긴 채로 남는다.
       nextSheets[sheetKey] = {
-        ...(nextSheets[sheetKey] || normalizeSheetDoc(sheetKey)),
         ...sheetsData[sheetKey],
+        ...(nextSheets[sheetKey] || normalizeSheetDoc(sheetKey)),
         rows: sheetsData[sheetKey].rows
       };
     });
@@ -1445,7 +1447,10 @@ export function initGroupReview(ctx) {
       : adminReviewing
         ? "관리자 검토 모드입니다. 입력 내용은 읽기 전용이고 확인 체크만 저장됩니다."
         : lockText;
-    const saveLabel = adminReviewing ? "관리자 확인 저장" : completed ? "확인 저장" : "임시저장";
+    // 상위 레이어가 라벨을 다시 칠하기 전에 옛 문구가 잠깐 보이지 않도록 처음부터 최종 문구로 그린다.
+    const saveLabel = !isAdmin(getCurrentUser())
+      ? "수정요청"
+      : adminReviewing ? "관리자 확인 저장" : completed ? "확인 저장" : "임시저장";
     const canReopen = !projectCompleted && completed && !adminReviewing && checkable;
     const formatToolbar = editable ? `
       <div class="review-text-toolbar review-text-toolbar-inline">
@@ -1660,6 +1665,11 @@ export function initGroupReview(ctx) {
   return {
     renderGroupReviewUI,
     requireMemberSelection,
-    fitTextareas: fitReviewTextareas
+    fitTextareas: fitReviewTextareas,
+    // 저장/상태 전환은 모두 상위 레이어가 가로채므로, 여기서 로컬 dirty 표시를 지울 수단을 열어둔다.
+    clearDirtySheet(sheetKey) {
+      if (sheetKey) dirtySheetKeys.delete(sheetKey);
+      else dirtySheetKeys.clear();
+    }
   };
 }

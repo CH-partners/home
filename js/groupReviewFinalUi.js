@@ -154,10 +154,7 @@ function setText(el, value) {
 }
 
 function allWorkerSaveButtons(body) {
-  const buttons = Array.from(body.querySelectorAll('button[onclick="saveGroupReviewSheet()"]'));
-  const top = document.querySelector('.sheet-panel[data-index="13"] .work-toolbar button[onclick="saveGroupReviewSheet()"]');
-  if (top && !buttons.includes(top)) buttons.push(top);
-  return buttons;
+  return Array.from(body.querySelectorAll('button[onclick="saveGroupReviewSheet()"]'));
 }
 
 function findReuseHost(body) {
@@ -183,9 +180,7 @@ function patchWorkerUi(state) {
   allWorkerSaveButtons(body).forEach(button => {
     setText(button, "수정요청");
     setDisabled(button, locked);
-    if (button.closest("#groupReviewBody")) {
-      setStyle(button, "display", viewingOther ? "none" : "");
-    }
+    setStyle(button, "display", viewingOther ? "none" : "");
   });
 
   body.querySelectorAll('button[onclick="completeGroupReviewUse()"]')
@@ -477,6 +472,7 @@ async function approveReuse() {
   });
 
   invalidatePendingReuseCache();
+  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
   }
@@ -513,6 +509,7 @@ async function rejectReuse() {
   });
 
   invalidatePendingReuseCache();
+  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
   }
