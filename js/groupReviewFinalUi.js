@@ -26,6 +26,9 @@ let refreshTimer = null;
 let patching = false;
 let projectCache = new Map();
 let projectCacheLoaded = false;
+let pendingReuseCache = { projectId: "", keys: new Set(), loadedAt: 0 };
+
+const PENDING_REUSE_TTL_MS = 10000;
 
 function isAdminUser() {
   return ADMIN_EMAILS.has((auth?.currentUser?.email || "").toLowerCase());
@@ -46,16 +49,14 @@ function currentProjectName() {
   return cleanProjectName(badge?.textContent || "");
 }
 
-function currentSheetKey() {
-  if (!isAdminUser()) {
-    return sessionStorage.getItem(ACTIVE_MEMBER_KEY)
-      || sessionStorage.getItem(SELECTED_MEMBER_KEY)
-      || "";
-  }
+function activeMemberKey() {
+  return sessionStorage.getItem(ACTIVE_MEMBER_KEY) || "";
+}
 
+function currentSheetKey() {
   const activeTab = document.querySelector("#groupReviewBody .review-sheet-btn.active");
   return cleanSheetName(activeTab?.textContent || "")
-    || sessionStorage.getItem(ACTIVE_MEMBER_KEY)
+    || activeMemberKey()
     || sessionStorage.getItem(SELECTED_MEMBER_KEY)
     || "";
 }
@@ -78,6 +79,29 @@ async function resolveProjectId() {
   return projectCache.get(currentProjectName()) || "";
 }
 
+async function readPendingReuseSheets(projectId, force = false) {
+  if (!projectId) return new Set();
+  if (!force
+    && pendingReuseCache.projectId === projectId
+    && Date.now() - pendingReuseCache.loadedAt < PENDING_REUSE_TTL_MS) {
+    return pendingReuseCache.keys;
+  }
+
+  const snap = await getDocs(collection(db, "groupReviewProjects", projectId, "sheets"));
+  const keys = new Set();
+  snap.forEach(sheetDoc => {
+    const data = sheetDoc.data() || {};
+    if (data.reuseRequested && data.completed) keys.add(sheetDoc.id);
+  });
+
+  pendingReuseCache = { projectId, keys, loadedAt: Date.now() };
+  return keys;
+}
+
+function invalidatePendingReuseCache() {
+  pendingReuseCache = { projectId: "", keys: new Set(), loadedAt: 0 };
+}
+
 async function readCurrentState() {
   if (!db) return null;
   const projectId = await resolveProjectId();
@@ -91,14 +115,42 @@ async function readCurrentState() {
 
   const project = projectSnap.data() || {};
   const sheet = sheetSnap.data() || {};
+
+  // 재사용 요청은 열람 중인 시트가 아니라 본인 시트를 대상으로 하므로 따로 읽는다.
+  const ownKey = activeMemberKey();
+  const ownSheet = sheetKey === ownKey;
+  let own = sheet;
+  if (!ownSheet && ownKey) {
+    const ownSnap = await getDoc(doc(db, "groupReviewProjects", projectId, "sheets", ownKey));
+    own = ownSnap.data() || {};
+  }
+
   return {
     projectId,
     sheetKey,
+    ownSheet,
+    ownKey,
     projectCompleted: Boolean(project.completed),
     completed: Boolean(sheet.completed),
     reviewCompleted: Boolean(sheet.reviewCompleted),
-    reuseRequested: Boolean(sheet.reuseRequested)
+    reuseRequested: Boolean(sheet.reuseRequested),
+    ownCompleted: Boolean(ownKey && own.completed),
+    ownReuseRequested: Boolean(ownKey && own.reuseRequested)
   };
+}
+
+// 아래 setter들은 값이 바뀔 때만 DOM을 건드린다.
+// MutationObserver가 style/disabled 변경을 감시하므로 무조건 대입하면 갱신 루프가 생긴다.
+function setStyle(el, prop, value) {
+  if (el.style[prop] !== value) el.style[prop] = value;
+}
+
+function setDisabled(el, value) {
+  if (el.disabled !== value) el.disabled = value;
+}
+
+function setText(el, value) {
+  if (el.textContent !== value) el.textContent = value;
 }
 
 function allWorkerSaveButtons(body) {
@@ -119,26 +171,39 @@ function patchWorkerUi(state) {
   const body = document.getElementById("groupReviewBody");
   if (!body) return;
 
+  const viewingOther = !state.ownSheet;
+  const locked = viewingOther || Boolean(state.completed || state.projectCompleted);
+
   body.querySelectorAll('button[onclick="reopenGroupReviewUse()"]')
     .forEach(button => {
-      button.style.display = "none";
-      button.disabled = true;
+      setStyle(button, "display", "none");
+      setDisabled(button, true);
     });
 
   allWorkerSaveButtons(body).forEach(button => {
-    button.textContent = "수정요청";
-    button.disabled = Boolean(state.completed || state.projectCompleted);
+    setText(button, "수정요청");
+    setDisabled(button, locked);
+    if (button.closest("#groupReviewBody")) {
+      setStyle(button, "display", viewingOther ? "none" : "");
+    }
   });
 
   body.querySelectorAll('button[onclick="completeGroupReviewUse()"]')
     .forEach(button => {
-      button.textContent = "입력 완료";
-      button.disabled = Boolean(state.completed || state.projectCompleted);
-      button.style.display = state.completed || state.projectCompleted ? "none" : "";
+      setText(button, "입력 완료");
+      setDisabled(button, locked);
+      setStyle(button, "display", locked ? "none" : "");
     });
 
+  body.querySelectorAll('button[onclick="addGroupReviewRow()"]')
+    .forEach(button => {
+      setDisabled(button, locked);
+      setStyle(button, "display", viewingOther ? "none" : "");
+    });
+
+  // 재사용 요청 버튼은 열람 중인 시트가 아니라 본인 시트 상태를 따른다.
   let reuseButton = body.querySelector(".review-worker-reuse-request");
-  if (!state.completed || state.projectCompleted) {
+  if (!state.ownCompleted || state.projectCompleted) {
     reuseButton?.remove();
     return;
   }
@@ -154,48 +219,106 @@ function patchWorkerUi(state) {
     host.appendChild(reuseButton);
   }
 
-  reuseButton.style.display = "";
-  reuseButton.disabled = Boolean(state.reuseRequested);
-  reuseButton.textContent = state.reuseRequested ? "재사용 요청중" : "재사용 요청";
-  reuseButton.onclick = state.reuseRequested ? null : () => window.requestGroupReviewReuse?.();
+  setStyle(reuseButton, "display", "");
+  setDisabled(reuseButton, state.ownReuseRequested);
+  setText(reuseButton, state.ownReuseRequested ? "재사용 요청중" : "재사용 요청");
+  reuseButton.title = state.ownReuseRequested
+    ? "관리자가 승인하면 입력칸이 다시 열립니다."
+    : `${state.ownKey} 시트를 다시 입력할 수 있도록 관리자에게 요청합니다.`;
+  reuseButton.onclick = state.ownReuseRequested ? null : () => window.requestGroupReviewReuse?.();
 
   body.querySelectorAll(".review-use-controls span").forEach(span => {
-    if (state.completed && span.textContent.includes("입력 완료 상태")) {
-      span.innerHTML = span.innerHTML.replace("확인 체크만 가능합니다.", "관리자 검토 대기 상태입니다.");
-    }
+    if (!span.textContent.includes("입력 완료 상태")) return;
+    const nextTail = state.ownReuseRequested
+      ? "재사용 요청을 보냈고 관리자 승인을 기다리는 중입니다."
+      : "다시 입력하려면 재사용 요청을 누르세요.";
+    span.innerHTML = span.innerHTML.replace("확인 체크만 가능합니다.", nextTail);
   });
 }
 
-function patchAdminUi(state) {
+// 탭 라벨 텍스트는 시트키 판별에 쓰이므로 건드리지 않고 테두리와 title로만 표시한다.
+function markPendingReuseTabs(body, pendingKeys) {
+  body.querySelectorAll(".review-sheet-btn").forEach(tab => {
+    const pending = pendingKeys.has(cleanSheetName(tab.textContent || ""));
+    if (tab.classList.contains("review-reuse-pending") === pending) return;
+
+    tab.classList.toggle("review-reuse-pending", pending);
+    setStyle(tab, "boxShadow", pending ? "inset 0 0 0 2px #f97316" : "");
+    if (pending) tab.title = "재사용 요청 대기 중";
+    else tab.removeAttribute("title");
+  });
+}
+
+function renderPendingReuseSummary(body, pendingKeys) {
+  const tabs = body.querySelector(".review-sheet-tabs");
+  let summary = body.querySelector(".review-reuse-pending-summary");
+
+  if (!tabs || !pendingKeys.size) {
+    summary?.remove();
+    return;
+  }
+
+  if (!summary) {
+    summary = document.createElement("div");
+    summary.className = "note review-reuse-pending-summary";
+    summary.style.fontWeight = "700";
+    summary.style.margin = "4px 0";
+    tabs.parentNode?.insertBefore(summary, tabs);
+  }
+
+  setText(summary, `재사용 요청 대기: ${[...pendingKeys].join(", ")} (해당 탭에서 승인하세요)`);
+}
+
+function patchAdminUi(state, pendingKeys) {
   const body = document.getElementById("groupReviewBody");
   if (!body) return;
 
   const upper = body.querySelector(".review-admin-actions");
-  if (upper) upper.style.display = "none";
+  if (upper) setStyle(upper, "display", "none");
 
   body.querySelectorAll('button[onclick="addGroupReviewRow()"], button[onclick="completeGroupReviewUse()"], button[onclick="reopenGroupReviewUse()"]')
-    .forEach(button => button.style.display = "none");
+    .forEach(button => setStyle(button, "display", "none"));
+
+  markPendingReuseTabs(body, pendingKeys);
+  renderPendingReuseSummary(body, pendingKeys);
 
   const actions = body.querySelector(".work-header-actions");
   if (!actions) return;
 
-  actions.querySelectorAll(".review-admin-reuse-action").forEach(button => button.remove());
-  if (!state.completed || !state.reuseRequested || state.projectCompleted) return;
+  // 매번 지웠다 다시 붙이면 MutationObserver가 계속 재갱신을 돌리므로 한 번만 만들고 값만 고친다.
+  const showReuseActions = Boolean(state.completed && state.reuseRequested && !state.projectCompleted);
+  const existing = actions.querySelectorAll(".review-admin-reuse-action, .review-admin-reuse-note");
 
-  const approve = document.createElement("button");
-  approve.type = "button";
-  approve.className = "action-btn review-admin-reuse-action";
-  approve.textContent = "재사용 승인";
-  approve.onclick = () => window.approveGroupReviewReuse?.();
+  if (!showReuseActions) {
+    existing.forEach(node => node.remove());
+    return;
+  }
 
-  const reject = document.createElement("button");
-  reject.type = "button";
-  reject.className = "action-btn danger review-admin-reuse-action";
-  reject.textContent = "요청 거절";
-  reject.onclick = () => window.rejectGroupReviewReuse?.();
+  if (!existing.length) {
+    const note = document.createElement("span");
+    note.className = "note review-admin-reuse-note";
+    note.style.fontWeight = "700";
 
-  actions.appendChild(approve);
-  actions.appendChild(reject);
+    const approve = document.createElement("button");
+    approve.type = "button";
+    approve.className = "action-btn review-admin-reuse-action";
+    approve.textContent = "재사용 승인";
+    approve.title = "승인하면 작업자의 입력칸이 다시 열립니다.";
+    approve.onclick = () => window.approveGroupReviewReuse?.();
+
+    const reject = document.createElement("button");
+    reject.type = "button";
+    reject.className = "action-btn danger review-admin-reuse-action";
+    reject.textContent = "요청 거절";
+    reject.onclick = () => window.rejectGroupReviewReuse?.();
+
+    actions.appendChild(note);
+    actions.appendChild(approve);
+    actions.appendChild(reject);
+  }
+
+  const note = actions.querySelector(".review-admin-reuse-note");
+  if (note) setText(note, `${state.sheetKey} 재사용 요청 대기 중`);
 }
 
 async function applyFinalUi() {
@@ -204,8 +327,12 @@ async function applyFinalUi() {
   try {
     const state = await readCurrentState();
     if (!state) return;
-    if (isAdminUser()) patchAdminUi(state);
-    else patchWorkerUi(state);
+    if (isAdminUser()) {
+      const pendingKeys = await readPendingReuseSheets(state.projectId);
+      patchAdminUi(state, pendingKeys);
+    } else {
+      patchWorkerUi(state);
+    }
   } finally {
     patching = false;
   }
@@ -231,11 +358,12 @@ async function requestWorkerReuse() {
   if (isAdminUser()) throw new Error("작업자만 재사용 요청을 할 수 있습니다.");
 
   const projectId = await resolveProjectId();
-  const sheetKey = currentSheetKey();
-  if (!projectId || !sheetKey) throw new Error("재사용 요청할 작업자 시트를 찾을 수 없습니다.");
+  // 다른 작업자 시트를 열람 중이어도 요청 대상은 항상 본인 시트다.
+  const sheetKey = activeMemberKey();
+  if (!projectId || !sheetKey) throw new Error("재사용 요청할 본인 시트를 찾을 수 없습니다.");
 
   const requestedAt = new Date().toISOString();
-  const requestedBy = sessionStorage.getItem(ACTIVE_MEMBER_KEY) || sheetKey;
+  const requestedBy = sheetKey;
 
   await runTransaction(db, async transaction => {
     const projectRef = doc(db, "groupReviewProjects", projectId);
@@ -266,6 +394,42 @@ async function requestWorkerReuse() {
   alert("재사용 요청을 보냈습니다. 관리자 승인 전까지 입력은 계속 잠긴 상태입니다.");
 }
 
+// 재사용 승인은 관리자가 이미 확인 완료한 행은 잠근 채로 두고,
+// 아직 확인되지 않은 제출행만 작성중으로 되돌려 작업자가 다시 고칠 수 있게 한다.
+function reopenRowsForWorker(rows) {
+  if (!Array.isArray(rows)) return { rows: [], reopened: 0 };
+
+  let reopened = 0;
+  const next = rows.map(row => {
+    const status = String(row?.reviewStatus || "").trim();
+    const approved = status === "approved" || (!status && row?.checked);
+    if (approved || status === "revision_requested") return row;
+
+    const hasValue = [
+      row?.collateralNo,
+      row?.sheet,
+      row?.fieldNo,
+      row?.changeBeforeText,
+      row?.changeAfterText,
+      row?.changeText
+    ].some(value => String(value || "").trim() !== "");
+    if (!hasValue) return row;
+
+    reopened += 1;
+    return {
+      ...row,
+      checked: false,
+      reviewStatus: "draft",
+      submittedAt: "",
+      submittedBy: "",
+      reviewedAt: "",
+      reviewedByEmail: ""
+    };
+  });
+
+  return { rows: next, reopened };
+}
+
 async function approveReuse() {
   if (!isAdminUser()) throw new Error("관리자만 재사용 요청을 승인할 수 있습니다.");
 
@@ -275,6 +439,7 @@ async function approveReuse() {
 
   const approvedAt = new Date().toISOString();
   const reviewer = auth?.currentUser?.email || "";
+  let reopenedCount = 0;
 
   await runTransaction(db, async transaction => {
     const projectRef = doc(db, "groupReviewProjects", projectId);
@@ -288,7 +453,11 @@ async function approveReuse() {
     if (!sheet.completed) throw new Error("현재 시트는 이미 작업 가능한 상태입니다.");
     if (!sheet.reuseRequested) throw new Error("대기 중인 재사용 요청이 없습니다.");
 
+    const { rows, reopened } = reopenRowsForWorker(sheet.rows);
+    reopenedCount = reopened;
+
     transaction.set(sheetRef, {
+      rows,
       completed: false,
       reviewCompleted: false,
       reviewCompletedAt: "",
@@ -307,11 +476,12 @@ async function approveReuse() {
     }, { merge: true });
   });
 
+  invalidatePendingReuseCache();
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
   }
   stabilizeUi();
-  alert(`${sheetKey} 재사용 요청을 승인했습니다. 작업자가 다시 입력할 수 있습니다.`);
+  alert(`${sheetKey} 재사용 요청을 승인했습니다. 확인 완료된 행은 잠긴 채로 두고 미확인 ${reopenedCount}건을 다시 입력할 수 있게 열었습니다.`);
 }
 
 async function rejectReuse() {
@@ -342,6 +512,7 @@ async function rejectReuse() {
     }, { merge: true });
   });
 
+  invalidatePendingReuseCache();
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
   }
@@ -455,6 +626,7 @@ function install() {
   onAuthStateChanged(auth, () => {
     projectCacheLoaded = false;
     projectCache.clear();
+    invalidatePendingReuseCache();
     stabilizeUi();
   });
 

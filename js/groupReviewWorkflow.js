@@ -160,18 +160,22 @@ function stripSheetSuffix(text) {
     .trim();
 }
 
-function resolveSheetKey() {
-  if (!isAdminUser()) {
-    return sessionStorage.getItem(ACTIVE_MEMBER_KEY) || "";
-  }
+function activeMemberKey() {
+  return sessionStorage.getItem(ACTIVE_MEMBER_KEY) || "";
+}
 
+function resolveSheetKey() {
   const activeTab = document.querySelector("#groupReviewBody .review-sheet-btn.active");
   const fromTab = stripSheetSuffix(activeTab?.textContent || "");
   if (fromTab) return fromTab;
 
-  return sessionStorage.getItem(ACTIVE_MEMBER_KEY)
+  return activeMemberKey()
     || sessionStorage.getItem(SELECTED_MEMBER_KEY)
     || "";
+}
+
+function isOwnSheet(sheetKey) {
+  return Boolean(sheetKey) && sheetKey === activeMemberKey();
 }
 
 function contextKey(projectId, sheetKey) {
@@ -317,6 +321,7 @@ function styleStateBadge(badge, status) {
 function applyRowUi(projectId, sheetKey, rawSheet) {
   const admin = isAdminUser();
   const projectCompleted = document.querySelector("#groupReviewProjectBadges .work-badge.active")?.textContent?.includes("· 완료");
+  const own = !admin && isOwnSheet(sheetKey);
   const { rows } = mapDomRowsToRaw(projectId, sheetKey, rawSheet);
 
   rows.forEach((tr, rowIndex) => {
@@ -329,7 +334,7 @@ function applyRowUi(projectId, sheetKey, rawSheet) {
     }
     tr.style.display = "";
 
-    const workerEditable = !admin && !rawSheet.completed && !projectCompleted && (!rawRow || status === STATUS.DRAFT);
+    const workerEditable = own && !rawSheet.completed && !projectCompleted && (!rawRow || status === STATUS.DRAFT);
     tr.dataset.reviewWorkflowStatus = status;
 
     tr.querySelectorAll('input[type="text"]').forEach(input => {
@@ -404,21 +409,47 @@ function applyRowUi(projectId, sheetKey, rawSheet) {
   });
 }
 
-function applyToolbarUi(rawSheet) {
+function applyViewOnlyNotice(body, viewingOther, sheetKey) {
+  let notice = body.querySelector(".review-view-only-notice");
+  if (!viewingOther) {
+    notice?.remove();
+    return;
+  }
+
+  const header = body.querySelector(".work-project-header");
+  if (!header) return;
+
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.className = "note review-view-only-notice";
+    notice.style.fontWeight = "700";
+    notice.style.marginTop = "4px";
+    header.appendChild(notice);
+  }
+
+  const text = `${sheetKey} 시트를 열람 중입니다. 다른 작업자의 시트는 읽기 전용입니다.`;
+  if (notice.textContent !== text) notice.textContent = text;
+}
+
+function applyToolbarUi(sheetKey, rawSheet) {
   const admin = isAdminUser();
   const body = document.getElementById("groupReviewBody");
   if (!body) return;
+
+  const viewingOther = !admin && !isOwnSheet(sheetKey);
+  const workerLocked = viewingOther || Boolean(rawSheet.completed);
 
   const topSave = document.querySelector('.sheet-panel[data-index="13"] .work-toolbar button[onclick="saveGroupReviewSheet()"]');
   if (topSave) {
     const label = admin ? "확인 저장" : "임시저장(검토요청)";
     if (topSave.textContent !== label) topSave.textContent = label;
-    topSave.disabled = admin ? Boolean(rawSheet.reviewCompleted) : Boolean(rawSheet.completed);
+    topSave.disabled = admin ? Boolean(rawSheet.reviewCompleted) : workerLocked;
   }
 
   body.querySelectorAll('button[onclick="completeGroupReviewUse()"]').forEach(button => {
     if (button.textContent !== "입력 완료") button.textContent = "입력 완료";
-    button.disabled = Boolean(rawSheet.completed);
+    button.disabled = admin ? Boolean(rawSheet.completed) : workerLocked;
+    if (!admin && viewingOther) button.style.display = "none";
   });
 
   body.querySelectorAll(".review-admin-dirty").forEach(el => {
@@ -428,7 +459,8 @@ function applyToolbarUi(rawSheet) {
   const sheetSaveButtons = body.querySelectorAll('.work-header-actions button[onclick="saveGroupReviewSheet()"]');
   sheetSaveButtons.forEach(button => {
     button.textContent = admin ? "확인 저장" : "임시저장(검토요청)";
-    button.disabled = admin ? Boolean(rawSheet.reviewCompleted) : Boolean(rawSheet.completed);
+    button.disabled = admin ? Boolean(rawSheet.reviewCompleted) : workerLocked;
+    if (!admin && viewingOther) button.style.display = "none";
   });
 
   if (!admin) {
@@ -437,8 +469,15 @@ function applyToolbarUi(rawSheet) {
         button.style.display = "none";
       });
 
-    if (rawSheet.completed) {
+    body.querySelectorAll('button[onclick="addGroupReviewRow()"]').forEach(button => {
+      button.disabled = workerLocked;
+      button.style.display = viewingOther ? "none" : "";
+    });
+
+    if (rawSheet.completed || viewingOther) {
       body.querySelectorAll(".review-use-controls button").forEach(button => {
+        // 재사용 요청 버튼은 입력 완료 상태에서만 노출되는 버튼이라 숨기지 않는다.
+        if (button.classList.contains("review-worker-reuse-request")) return;
         button.style.display = "none";
       });
     }
@@ -447,10 +486,10 @@ function applyToolbarUi(rawSheet) {
       if (span.textContent.includes("완료를 눌러")) {
         span.innerHTML = span.innerHTML.replace("완료를 눌러", "입력 완료를 눌러");
       }
-      if (rawSheet.completed && span.textContent.includes("입력 완료 상태")) {
-        span.innerHTML = span.innerHTML.replace("확인 체크만 가능합니다.", "관리자 검토 대기 상태입니다.");
-      }
+      // 입력 완료 상태 안내 문구는 재사용 요청 상태까지 아는 groupReviewFinalUi.js가 담당한다.
     });
+
+    applyViewOnlyNotice(body, viewingOther, sheetKey);
   }
 
   const adminActions = body.querySelector(".review-admin-actions");
@@ -496,7 +535,7 @@ async function refreshWorkflowUi(force = false) {
     suppressObserver = true;
     try {
       applyRowUi(projectId, sheetKey, rawSheet);
-      applyToolbarUi(rawSheet);
+      applyToolbarUi(sheetKey, rawSheet);
     } finally {
       suppressObserver = false;
     }
@@ -542,9 +581,10 @@ async function persistWorkerSubmission() {
   if (!projectId || !sheetKey) throw new Error("사용 중인 그룹리뷰 시트를 찾을 수 없습니다.");
   if (isAdminUser()) throw new Error("관리자 검토 화면에서는 작업자 임시저장을 사용할 수 없습니다.");
 
-  const activeMember = sessionStorage.getItem(ACTIVE_MEMBER_KEY) || "";
-  if (!activeMember || activeMember !== sheetKey) {
-    throw new Error("이름을 선택하고 사용 시작 후 임시저장하세요.");
+  const activeMember = activeMemberKey();
+  if (!activeMember) throw new Error("이름을 선택하고 사용 시작 후 저장하세요.");
+  if (activeMember !== sheetKey) {
+    throw new Error(`${sheetKey} 시트는 열람 전용입니다. 본인(${activeMember}) 시트 탭에서 저장하세요.`);
   }
 
   const localRaw = await fetchRawSheet(projectId, sheetKey, false);
@@ -640,7 +680,7 @@ async function persistWorkerSubmission() {
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
-    applyToolbarUi(committedSheet);
+    applyToolbarUi(sheetKey, committedSheet);
   } finally {
     suppressObserver = false;
   }
@@ -693,7 +733,7 @@ async function persistAdminChecks() {
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
-    applyToolbarUi(committedSheet);
+    applyToolbarUi(sheetKey, committedSheet);
   } finally {
     suppressObserver = false;
   }
@@ -713,9 +753,10 @@ async function completeWorkerSheet() {
   if (isAdminUser()) throw new Error("관리자 검토 화면에서는 작업자 입력 완료를 사용할 수 없습니다.");
   const projectId = await resolveProjectId();
   const sheetKey = resolveSheetKey();
-  const activeMember = sessionStorage.getItem(ACTIVE_MEMBER_KEY) || "";
-  if (!projectId || !sheetKey || !activeMember || activeMember !== sheetKey) {
-    throw new Error("사용 중인 이름이 없습니다.");
+  const activeMember = activeMemberKey();
+  if (!projectId || !sheetKey || !activeMember) throw new Error("사용 중인 이름이 없습니다.");
+  if (activeMember !== sheetKey) {
+    throw new Error(`${sheetKey} 시트는 열람 전용입니다. 본인(${activeMember}) 시트 탭에서 입력 완료하세요.`);
   }
 
   const rawSheet = await fetchRawSheet(projectId, sheetKey, false);
@@ -762,7 +803,7 @@ async function completeWorkerSheet() {
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
-    applyToolbarUi(committedSheet);
+    applyToolbarUi(sheetKey, committedSheet);
   } finally {
     suppressObserver = false;
   }
@@ -841,7 +882,7 @@ async function requestRevision(rowId) {
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
-    applyToolbarUi(committedSheet);
+    applyToolbarUi(sheetKey, committedSheet);
   } finally {
     suppressObserver = false;
   }
@@ -887,7 +928,7 @@ async function completeAdminReview() {
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
-    applyToolbarUi(committedSheet);
+    applyToolbarUi(sheetKey, committedSheet);
   } finally {
     suppressObserver = false;
   }
@@ -921,7 +962,7 @@ async function reopenAdminReview() {
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
-    applyToolbarUi(committedSheet);
+    applyToolbarUi(sheetKey, committedSheet);
   } finally {
     suppressObserver = false;
   }
@@ -1023,9 +1064,11 @@ function installFunctionOverrides() {
           const member = sessionStorage.getItem(SELECTED_MEMBER_KEY) || "";
           if (projectId && member) {
             const sheet = await fetchRawSheet(projectId, member, true);
+            // 입력 완료 시트도 열 수 있어야 재사용 요청과 다른 작업자 열람이 가능하다.
             if (sheet.completed) {
-              alert("관리자 검토 중입니다. 관리자가 재수정 요청하기 전에는 다시 입력할 수 없습니다.");
-              return;
+              alert(sheet.reuseRequested
+                ? "입력 완료 상태입니다. 재사용 요청을 보냈고 관리자 승인을 기다리는 중입니다."
+                : "입력 완료 상태입니다. 입력칸은 잠겨 있고, 다시 입력하려면 재사용 요청을 누르세요.");
             }
           }
         }

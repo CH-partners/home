@@ -735,6 +735,18 @@ export function initGroupReview(ctx) {
       }
 
       if (activeMember && isSheetCompleted(activeMember) && member !== activeMember) {
+        // 이름 전환은 현재 이름 사용을 끝내므로, 열람만 원하는 경우와 구분해서 확인한다.
+        const switchName = confirm(
+          `${member} 이름으로 전환할까요?\n\n` +
+          `취소하면 ${activeMember} 사용을 유지한 채 아래 시트 탭에서 ${member} 내용을 열람할 수 있습니다.`
+        );
+
+        if (!switchName) {
+          selectedSheetKey = member;
+          renderGroupReviewUI();
+          return;
+        }
+
         activeMember = "";
         selectedSheetKey = "";
         sessionStorage.removeItem(activeMemberStorageKey);

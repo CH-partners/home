@@ -116,8 +116,12 @@ function normalizeBadgeText(text) {
     .replace(/^재수정요청\s*·?\s*v(\d+)$/u, "수정요청 v$1");
 }
 
-function addWorkerHint(body) {
+function addWorkerHint(body, viewingOther) {
   if (isAdminUser()) return;
+  if (viewingOther) {
+    body.querySelector(".review-worker-submit-hint")?.remove();
+    return;
+  }
   const notes = Array.from(body.querySelectorAll(".work-project-header .note"));
   const note = notes.find(item =>
     item.textContent.includes("현재 내가 선택한 시트입니다.") ||
@@ -182,6 +186,9 @@ function addAdminLowerControls(body) {
 function patchWorkerControls(body) {
   if (isAdminUser()) return;
 
+  // 다른 작업자 시트를 열람 중일 때는 입력/저장 버튼을 되살리지 않는다.
+  const viewingOther = currentSheetKey() !== (sessionStorage.getItem("groupReviewActiveMember") || "");
+
   body.querySelectorAll('button[onclick="saveGroupReviewSheet()"]')
     .forEach(button => {
       if (!button.disabled) button.textContent = "수정요청";
@@ -189,14 +196,14 @@ function patchWorkerControls(body) {
 
   body.querySelectorAll('button[onclick="completeGroupReviewUse()"]')
     .forEach(button => {
-      button.style.display = "";
+      if (!viewingOther) button.style.display = "";
       button.textContent = "입력 완료";
     });
 
   const topSave = document.querySelector('.sheet-panel[data-index="13"] .work-toolbar button[onclick="saveGroupReviewSheet()"]');
   if (topSave && !topSave.disabled) topSave.textContent = "수정요청";
 
-  addWorkerHint(body);
+  addWorkerHint(body, viewingOther);
 }
 
 function patchVisibleUi() {
