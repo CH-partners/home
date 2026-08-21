@@ -112,27 +112,42 @@ async function readCurrentState(force = false) {
   return stateCache;
 }
 
+function patchWorkerSaveLabels() {
+  const body = document.getElementById("groupReviewBody");
+  if (!body) return;
+  body.querySelectorAll('button[onclick="saveGroupReviewSheet()"]')
+    .forEach(button => {
+      if (button.textContent !== "수정요청") button.textContent = "수정요청";
+    });
+}
+
 function ensureWorkerReuseRequestButton() {
   const body = document.getElementById("groupReviewBody");
   if (!body) return null;
 
-  const completedControls = body.querySelector(".review-use-controls.completed");
-  if (!completedControls) return null;
-
-  let button = completedControls.querySelector(".review-worker-reuse-request");
+  let button = body.querySelector(".review-worker-reuse-request");
   if (button) return button;
 
-  button = completedControls.querySelector('button[onclick="reopenGroupReviewUse()"]');
+  let host = body.querySelector(".review-use-controls.completed");
+  if (!host) host = body.querySelector(".work-header-actions");
+  if (!host) {
+    const saveButton = body.querySelector('button[onclick="saveGroupReviewSheet()"]');
+    host = saveButton?.parentElement || null;
+  }
+  if (!host) return null;
+
+  button = host.querySelector('button[onclick="reopenGroupReviewUse()"]');
   if (!button) {
     button = document.createElement("button");
     button.type = "button";
     button.className = "action-btn review-worker-reuse-request";
-    completedControls.appendChild(button);
+    host.appendChild(button);
   }
   return button;
 }
 
 function patchWorkerUi(state) {
+  patchWorkerSaveLabels();
   if (!state.completed || state.projectCompleted) return;
 
   const button = ensureWorkerReuseRequestButton();
