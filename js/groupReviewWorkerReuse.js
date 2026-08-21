@@ -112,17 +112,31 @@ async function readCurrentState(force = false) {
   return stateCache;
 }
 
-function findWorkerCompletedControl() {
+function ensureWorkerReuseRequestButton() {
   const body = document.getElementById("groupReviewBody");
   if (!body) return null;
-  return body.querySelector('.review-use-controls.completed button[onclick="reopenGroupReviewUse()"], .review-use-controls.completed .review-worker-reuse-request');
+
+  const completedControls = body.querySelector(".review-use-controls.completed");
+  if (!completedControls) return null;
+
+  let button = completedControls.querySelector(".review-worker-reuse-request");
+  if (button) return button;
+
+  button = completedControls.querySelector('button[onclick="reopenGroupReviewUse()"]');
+  if (!button) {
+    button = document.createElement("button");
+    button.type = "button";
+    button.className = "action-btn review-worker-reuse-request";
+    completedControls.appendChild(button);
+  }
+  return button;
 }
 
 function patchWorkerUi(state) {
-  const button = findWorkerCompletedControl();
-  if (!button) return;
-
   if (!state.completed || state.projectCompleted) return;
+
+  const button = ensureWorkerReuseRequestButton();
+  if (!button) return;
 
   button.classList.add("review-worker-reuse-request");
   button.removeAttribute("onclick");
