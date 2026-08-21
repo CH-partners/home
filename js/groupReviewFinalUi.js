@@ -23,12 +23,12 @@ let auth = null;
 let installed = false;
 let observerInstalled = false;
 let refreshTimer = null;
+let patching = false;
 let projectCache = new Map();
 let projectCacheLoaded = false;
 
 function isAdminUser() {
-  const email = (auth?.currentUser?.email || "").toLowerCase();
-  return ADMIN_EMAILS.has(email);
+  return ADMIN_EMAILS.has((auth?.currentUser?.email || "").toLowerCase());
 }
 
 function cleanProjectName(value) {
@@ -47,6 +47,12 @@ function currentProjectName() {
 }
 
 function currentSheetKey() {
+  if (!isAdminUser()) {
+    return sessionStorage.getItem(ACTIVE_MEMBER_KEY)
+      || sessionStorage.getItem(SELECTED_MEMBER_KEY)
+      || "";
+  }
+
   const activeTab = document.querySelector("#groupReviewBody .review-sheet-btn.active");
   return cleanSheetName(activeTab?.textContent || "")
     || sessionStorage.getItem(ACTIVE_MEMBER_KEY)
@@ -54,8 +60,9 @@ function currentSheetKey() {
     || "";
 }
 
-async function ensureProjectCache() {
-  if (projectCacheLoaded || !db) return;
+async function ensureProjectCache(force = false) {
+  if (!db) return;
+  if (!force && projectCacheLoaded) return;
   const snap = await getDocs(collection(db, "groupReviewProjects"));
   const next = new Map();
   snap.forEach(projectDoc => {
@@ -67,16 +74,12 @@ async function ensureProjectCache() {
 }
 
 async function resolveProjectId() {
-  const badge = document.querySelector("#groupReviewProjectBadges .work-badge.active");
-  const onclick = badge?.getAttribute("onclick") || "";
-  const match = onclick.match(/selectGroupReviewProject\((['\"])(.*?)\1\)/);
-  if (match?.[2]) return match[2];
-
   await ensureProjectCache();
   return projectCache.get(currentProjectName()) || "";
 }
 
 async function readCurrentState() {
+  if (!db) return null;
   const projectId = await resolveProjectId();
   const sheetKey = currentSheetKey();
   if (!projectId || !sheetKey) return null;
@@ -98,34 +101,40 @@ async function readCurrentState() {
   };
 }
 
-function removeLegacyWorkerControls(body) {
-  body.querySelectorAll('button[onclick="reopenGroupReviewUse()"]')
-    .forEach(button => button.style.display = "none");
+function allWorkerSaveButtons(body) {
+  const buttons = Array.from(body.querySelectorAll('button[onclick="saveGroupReviewSheet()"]'));
+  const top = document.querySelector('.sheet-panel[data-index="13"] .work-toolbar button[onclick="saveGroupReviewSheet()"]');
+  if (top && !buttons.includes(top)) buttons.push(top);
+  return buttons;
+}
+
+function findReuseHost(body) {
+  return body.querySelector(".review-use-controls.completed")
+    || body.querySelector(".work-header-actions")
+    || body.querySelector('button[onclick="saveGroupReviewSheet()"]')?.parentElement
+    || null;
 }
 
 function patchWorkerUi(state) {
   const body = document.getElementById("groupReviewBody");
   if (!body) return;
 
-  removeLegacyWorkerControls(body);
-
-  body.querySelectorAll('button[onclick="saveGroupReviewSheet()"]')
+  body.querySelectorAll('button[onclick="reopenGroupReviewUse()"]')
     .forEach(button => {
-      button.textContent = "수정요청";
-      button.disabled = Boolean(state.completed || state.projectCompleted);
+      button.style.display = "none";
+      button.disabled = true;
     });
 
-  const topSave = document.querySelector('.sheet-panel[data-index="13"] .work-toolbar button[onclick="saveGroupReviewSheet()"]');
-  if (topSave) {
-    topSave.textContent = "수정요청";
-    topSave.disabled = Boolean(state.completed || state.projectCompleted);
-  }
+  allWorkerSaveButtons(body).forEach(button => {
+    button.textContent = "수정요청";
+    button.disabled = Boolean(state.completed || state.projectCompleted);
+  });
 
   body.querySelectorAll('button[onclick="completeGroupReviewUse()"]')
     .forEach(button => {
       button.textContent = "입력 완료";
-      button.style.display = state.completed || state.projectCompleted ? "none" : "";
       button.disabled = Boolean(state.completed || state.projectCompleted);
+      button.style.display = state.completed || state.projectCompleted ? "none" : "";
     });
 
   let reuseButton = body.querySelector(".review-worker-reuse-request");
@@ -134,14 +143,11 @@ function patchWorkerUi(state) {
     return;
   }
 
-  let host = body.querySelector(".work-header-actions");
-  if (!host) {
-    const saveButton = body.querySelector('button[onclick="saveGroupReviewSheet()"]');
-    host = saveButton?.parentElement || null;
-  }
+  const host = findReuseHost(body);
   if (!host) return;
 
-  if (!reuseButton) {
+  if (!reuseButton || reuseButton.parentElement !== host) {
+    reuseButton?.remove();
     reuseButton = document.createElement("button");
     reuseButton.type = "button";
     reuseButton.className = "action-btn review-worker-reuse-request";
@@ -152,21 +158,23 @@ function patchWorkerUi(state) {
   reuseButton.disabled = Boolean(state.reuseRequested);
   reuseButton.textContent = state.reuseRequested ? "재사용 요청중" : "재사용 요청";
   reuseButton.onclick = state.reuseRequested ? null : () => window.requestGroupReviewReuse?.();
-}
 
-function removeLegacyAdminUi(body) {
-  const upper = body.querySelector(".review-admin-actions");
-  if (upper) upper.style.display = "none";
-
-  body.querySelectorAll('button[onclick="addGroupReviewRow()"], button[onclick="completeGroupReviewUse()"], button[onclick="reopenGroupReviewUse()"]')
-    .forEach(button => button.style.display = "none");
+  body.querySelectorAll(".review-use-controls span").forEach(span => {
+    if (state.completed && span.textContent.includes("입력 완료 상태")) {
+      span.innerHTML = span.innerHTML.replace("확인 체크만 가능합니다.", "관리자 검토 대기 상태입니다.");
+    }
+  });
 }
 
 function patchAdminUi(state) {
   const body = document.getElementById("groupReviewBody");
   if (!body) return;
 
-  removeLegacyAdminUi(body);
+  const upper = body.querySelector(".review-admin-actions");
+  if (upper) upper.style.display = "none";
+
+  body.querySelectorAll('button[onclick="addGroupReviewRow()"], button[onclick="completeGroupReviewUse()"], button[onclick="reopenGroupReviewUse()"]')
+    .forEach(button => button.style.display = "none");
 
   const actions = body.querySelector(".work-header-actions");
   if (!actions) return;
@@ -191,21 +199,32 @@ function patchAdminUi(state) {
 }
 
 async function applyFinalUi() {
-  if (!installed || !db) return;
-  const state = await readCurrentState();
-  if (!state) return;
-  if (isAdminUser()) patchAdminUi(state);
-  else patchWorkerUi(state);
+  if (!installed || !db || patching) return;
+  patching = true;
+  try {
+    const state = await readCurrentState();
+    if (!state) return;
+    if (isAdminUser()) patchAdminUi(state);
+    else patchWorkerUi(state);
+  } finally {
+    patching = false;
+  }
 }
 
-function scheduleRefresh() {
+function scheduleRefresh(delay = 80) {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
     refreshTimer = null;
     void applyFinalUi().catch(error =>
       console.warn("그룹리뷰 최종 UI 갱신 실패:", error)
     );
-  }, 160);
+  }, delay);
+}
+
+function stabilizeUi() {
+  scheduleRefresh(0);
+  setTimeout(() => scheduleRefresh(0), 120);
+  setTimeout(() => scheduleRefresh(0), 350);
 }
 
 async function requestWorkerReuse() {
@@ -243,7 +262,7 @@ async function requestWorkerReuse() {
     }, { merge: true });
   });
 
-  await applyFinalUi();
+  stabilizeUi();
   alert("재사용 요청을 보냈습니다. 관리자 승인 전까지 입력은 계속 잠긴 상태입니다.");
 }
 
@@ -291,7 +310,7 @@ async function approveReuse() {
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
   }
-  scheduleRefresh();
+  stabilizeUi();
   alert(`${sheetKey} 재사용 요청을 승인했습니다. 작업자가 다시 입력할 수 있습니다.`);
 }
 
@@ -326,11 +345,26 @@ async function rejectReuse() {
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
   }
-  scheduleRefresh();
+  stabilizeUi();
   alert(`${sheetKey} 재사용 요청을 거절했습니다.`);
 }
 
-function installActions() {
+function wrapUiTransition(name) {
+  const original = window[name];
+  if (typeof original !== "function" || original.__stableGroupReviewWrapped) return;
+
+  const wrapped = async function() {
+    try {
+      return await original.apply(this, arguments);
+    } finally {
+      stabilizeUi();
+    }
+  };
+  wrapped.__stableGroupReviewWrapped = true;
+  window[name] = wrapped;
+}
+
+function installActionsAndWrappers() {
   window.requestGroupReviewReuse = async function() {
     try {
       await requestWorkerReuse();
@@ -357,6 +391,18 @@ function installActions() {
       alert("재사용 거절 실패: " + (error.message || error));
     }
   };
+
+  [
+    "saveGroupReviewSheet",
+    "completeGroupReviewUse",
+    "selectGroupReviewProject",
+    "selectGroupReviewSheet",
+    "selectGroupReviewMember",
+    "startGroupReviewUse",
+    "completeGroupReviewReview",
+    "reopenGroupReviewReview",
+    "refreshGroupReviewWorkerView"
+  ].forEach(wrapUiTransition);
 }
 
 function installObserver() {
@@ -368,8 +414,21 @@ function installObserver() {
     return;
   }
 
-  const observer = new MutationObserver(() => scheduleRefresh());
-  if (body) observer.observe(body, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "disabled"] });
+  const observer = new MutationObserver(mutations => {
+    if (patching) return;
+    const relevant = mutations.some(mutation =>
+      mutation.type === "childList" ||
+      (mutation.type === "attributes" && ["style", "disabled"].includes(mutation.attributeName))
+    );
+    if (relevant) scheduleRefresh();
+  });
+
+  if (body) observer.observe(body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["style", "disabled"]
+  });
   if (badges) observer.observe(badges, { childList: true, subtree: true });
   observerInstalled = true;
 }
@@ -377,7 +436,12 @@ function installObserver() {
 function install() {
   if (installed) return;
   const apps = getApps();
-  if (!apps.length || typeof window.completeGroupReviewUse !== "function") {
+  const compatReady = typeof window.refreshGroupReviewWorkerView === "function";
+  const workflowReady = typeof window.completeGroupReviewUse === "function"
+    && typeof window.completeGroupReviewReview === "function"
+    && typeof window.saveGroupReviewSheet === "function";
+
+  if (!apps.length || !compatReady || !workflowReady) {
     setTimeout(install, 100);
     return;
   }
@@ -385,16 +449,16 @@ function install() {
   db = getFirestore(apps[0]);
   auth = getAuth(apps[0]);
   installed = true;
-  installActions();
+  installActionsAndWrappers();
   installObserver();
 
   onAuthStateChanged(auth, () => {
     projectCacheLoaded = false;
     projectCache.clear();
-    scheduleRefresh();
+    stabilizeUi();
   });
 
-  scheduleRefresh();
+  stabilizeUi();
 }
 
 install();
