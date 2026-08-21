@@ -14,9 +14,6 @@ const ADMIN_EMAILS = new Set([
   "sora@jeju.com"
 ].map(value => value.toLowerCase()));
 
-const RESTORE_PROJECT_KEY = "groupReviewCompatRestoreProject";
-const RESTORE_SHEET_KEY = "groupReviewCompatRestoreSheet";
-
 let db = null;
 let auth = null;
 let installed = false;
@@ -27,6 +24,8 @@ let projectNameCache = new Map();
 let projectCacheLoaded = false;
 let workflowUpdateCell = null;
 let workflowSaveSheet = null;
+let workflowSelectProject = null;
+let workflowSelectSheet = null;
 const pendingChecks = new Map();
 
 function isAdminUser() {
@@ -158,6 +157,7 @@ function addAdminLowerControls(body) {
     refreshButton.type = "button";
     refreshButton.className = "action-btn review-worker-refresh-action";
     refreshButton.textContent = "새로고침";
+    refreshButton.title = "현재 프로젝트와 작업자 위치를 유지한 채 최신 내용을 불러옵니다.";
     refreshButton.onclick = () => window.refreshGroupReviewWorkerView?.();
     if (confirmButton?.nextSibling) actions.insertBefore(refreshButton, confirmButton.nextSibling);
     else actions.appendChild(refreshButton);
@@ -289,41 +289,69 @@ async function persistAdminChecks() {
   alert(`${sheetKey} 확인 상태가 저장되었습니다.`);
 }
 
-function preserveAndReload() {
-  sessionStorage.setItem(RESTORE_PROJECT_KEY, currentProjectName());
-  sessionStorage.setItem(RESTORE_SHEET_KEY, currentSheetKey());
-  window.location.reload();
+function captureRefreshScroll() {
+  const tableWrap = document.querySelector("#groupReviewBody .work-table-wrap");
+  return {
+    windowX: window.scrollX,
+    windowY: window.scrollY,
+    tableTop: tableWrap?.scrollTop || 0,
+    tableLeft: tableWrap?.scrollLeft || 0
+  };
 }
 
-function restoreReloadContext() {
-  const projectName = sessionStorage.getItem(RESTORE_PROJECT_KEY) || "";
-  const sheetKey = sessionStorage.getItem(RESTORE_SHEET_KEY) || "";
-  if (!projectName && !sheetKey) return;
+function restoreRefreshScroll(state) {
+  if (!state) return;
+  const apply = () => {
+    const tableWrap = document.querySelector("#groupReviewBody .work-table-wrap");
+    if (tableWrap) {
+      tableWrap.scrollTop = state.tableTop;
+      tableWrap.scrollLeft = state.tableLeft;
+    }
+    window.scrollTo(state.windowX, state.windowY);
+  };
+  requestAnimationFrame(() => {
+    apply();
+    requestAnimationFrame(apply);
+  });
+}
+
+async function refreshCurrentView() {
+  const projectId = await resolveProjectId();
+  const sheetKey = currentSheetKey();
+  if (!projectId || !sheetKey) throw new Error("새로고침할 현재 작업자 시트를 찾을 수 없습니다.");
+  if (typeof workflowSelectProject !== "function" || typeof workflowSelectSheet !== "function") {
+    throw new Error("그룹리뷰 새로고침 기능을 준비하지 못했습니다.");
+  }
+
+  const scrollState = captureRefreshScroll();
+  workflowSelectProject(projectId);
 
   let attempts = 0;
-  const restore = () => {
-    attempts += 1;
-    if (projectName) {
-      const projectButton = Array.from(document.querySelectorAll("#groupReviewProjectBadges .work-badge"))
-        .find(button => cleanProjectName(button.textContent) === projectName);
-      if (projectButton && !projectButton.classList.contains("active")) projectButton.click();
-    }
-
-    if (sheetKey) {
-      const sheetButton = Array.from(document.querySelectorAll("#groupReviewBody .review-sheet-btn"))
+  await new Promise((resolve, reject) => {
+    const restoreSheet = () => {
+      attempts += 1;
+      const targetButton = Array.from(document.querySelectorAll("#groupReviewBody .review-sheet-btn"))
         .find(button => cleanSheetName(button.textContent) === sheetKey);
-      if (sheetButton) {
-        if (!sheetButton.classList.contains("active")) sheetButton.click();
-        sessionStorage.removeItem(RESTORE_PROJECT_KEY);
-        sessionStorage.removeItem(RESTORE_SHEET_KEY);
+
+      if (targetButton) {
+        workflowSelectSheet(sheetKey);
         scheduleUiPatch();
+        setTimeout(() => {
+          applyPendingChecks();
+          restoreRefreshScroll(scrollState);
+        }, 80);
+        resolve();
         return;
       }
-    }
 
-    if (attempts < 40) setTimeout(restore, 100);
-  };
-  setTimeout(restore, 100);
+      if (attempts >= 40) {
+        reject(new Error("현재 작업자 시트를 다시 표시하지 못했습니다."));
+        return;
+      }
+      setTimeout(restoreSheet, 50);
+    };
+    setTimeout(restoreSheet, 50);
+  });
 }
 
 function transformWorkerAlert(message) {
@@ -371,7 +399,7 @@ function installFinalOverrides() {
     }
   };
 
-  const workflowSelectProject = window.selectGroupReviewProject;
+  workflowSelectProject = window.selectGroupReviewProject;
   if (typeof workflowSelectProject === "function") {
     window.selectGroupReviewProject = function(projectId) {
       currentProjectId = String(projectId || "");
@@ -382,7 +410,7 @@ function installFinalOverrides() {
     };
   }
 
-  const workflowSelectSheet = window.selectGroupReviewSheet;
+  workflowSelectSheet = window.selectGroupReviewSheet;
   if (typeof workflowSelectSheet === "function") {
     window.selectGroupReviewSheet = function() {
       const result = workflowSelectSheet.apply(this, arguments);
@@ -391,10 +419,17 @@ function installFinalOverrides() {
     };
   }
 
-  window.refreshGroupReviewWorkerView = preserveAndReload;
+  window.refreshGroupReviewWorkerView = async function() {
+    try {
+      await refreshCurrentView();
+    } catch (error) {
+      console.error("그룹리뷰 현재 화면 새로고침 실패:", error);
+      alert("새로고침 실패: " + (error.message || error));
+    }
+  };
+
   installed = true;
   installUiObserver();
-  restoreReloadContext();
   scheduleUiPatch();
   return true;
 }
