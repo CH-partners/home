@@ -1,10 +1,8 @@
 import { getApps } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+// 이 모듈은 더 이상 Firestore를 읽지 않는다. 상태는 groupReviewRuntime에서 받고 쓰기만 직접 한다.
 import {
-  collection,
   doc,
-  getDoc,
-  getDocs,
   getFirestore,
   runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
@@ -22,31 +20,16 @@ let db = null;
 let auth = null;
 let installed = false;
 let observerInstalled = false;
-let refreshTimer = null;
 let patching = false;
-let projectCache = new Map();
-let projectCacheLoaded = false;
-let pendingReuseCache = { projectId: "", keys: new Set(), loadedAt: 0 };
-
-const PENDING_REUSE_TTL_MS = 10000;
 
 function isAdminUser() {
   return ADMIN_EMAILS.has((auth?.currentUser?.email || "").toLowerCase());
-}
-
-function cleanProjectName(value) {
-  return String(value || "").replace(/\s*·\s*완료\s*$/u, "").trim();
 }
 
 function cleanSheetName(value) {
   return String(value || "")
     .replace(/\s*·\s*(완료|입력|리뷰완료)\s*$/u, "")
     .trim();
-}
-
-function currentProjectName() {
-  const badge = document.querySelector("#groupReviewProjectBadges .work-badge.active");
-  return cleanProjectName(badge?.textContent || "");
 }
 
 function activeMemberKey() {
@@ -61,69 +44,37 @@ function currentSheetKey() {
     || "";
 }
 
-async function ensureProjectCache(force = false) {
-  if (!db) return;
-  if (!force && projectCacheLoaded) return;
-  const snap = await getDocs(collection(db, "groupReviewProjects"));
-  const next = new Map();
-  snap.forEach(projectDoc => {
-    const data = projectDoc.data() || {};
-    next.set(String(data.name || projectDoc.id), projectDoc.id);
-  });
-  projectCache = next;
-  projectCacheLoaded = true;
+function runtime() {
+  return window.groupReviewRuntime || null;
 }
 
-async function resolveProjectId() {
-  await ensureProjectCache();
-  return projectCache.get(currentProjectName()) || "";
+function resolveProjectId() {
+  return runtime()?.getSelectedProjectId() || "";
 }
 
-async function readPendingReuseSheets(projectId, force = false) {
-  if (!projectId) return new Set();
-  if (!force
-    && pendingReuseCache.projectId === projectId
-    && Date.now() - pendingReuseCache.loadedAt < PENDING_REUSE_TTL_MS) {
-    return pendingReuseCache.keys;
-  }
-
-  const snap = await getDocs(collection(db, "groupReviewProjects", projectId, "sheets"));
+// 재사용 요청 대기 목록도 onSnapshot이 이미 들고 있는 시트 전체에서 계산한다.
+function readPendingReuseSheets() {
+  const sheets = runtime()?.getSheets() || {};
   const keys = new Set();
-  snap.forEach(sheetDoc => {
-    const data = sheetDoc.data() || {};
-    if (data.reuseRequested && data.completed) keys.add(sheetDoc.id);
+  Object.keys(sheets).forEach(key => {
+    const sheet = sheets[key] || {};
+    if (sheet.reuseRequested && sheet.completed) keys.add(key);
   });
-
-  pendingReuseCache = { projectId, keys, loadedAt: Date.now() };
   return keys;
 }
 
-function invalidatePendingReuseCache() {
-  pendingReuseCache = { projectId: "", keys: new Set(), loadedAt: 0 };
-}
-
-async function readCurrentState() {
-  if (!db) return null;
-  const projectId = await resolveProjectId();
+function readCurrentState() {
+  const projectId = resolveProjectId();
   const sheetKey = currentSheetKey();
   if (!projectId || !sheetKey) return null;
 
-  const [projectSnap, sheetSnap] = await Promise.all([
-    getDoc(doc(db, "groupReviewProjects", projectId)),
-    getDoc(doc(db, "groupReviewProjects", projectId, "sheets", sheetKey))
-  ]);
+  const project = runtime()?.getSelectedProject() || {};
+  const sheet = runtime()?.getSheet(sheetKey) || {};
 
-  const project = projectSnap.data() || {};
-  const sheet = sheetSnap.data() || {};
-
-  // 재사용 요청은 열람 중인 시트가 아니라 본인 시트를 대상으로 하므로 따로 읽는다.
+  // 재사용 요청은 열람 중인 시트가 아니라 본인 시트를 대상으로 하므로 따로 본다.
   const ownKey = activeMemberKey();
   const ownSheet = sheetKey === ownKey;
-  let own = sheet;
-  if (!ownSheet && ownKey) {
-    const ownSnap = await getDoc(doc(db, "groupReviewProjects", projectId, "sheets", ownKey));
-    own = ownSnap.data() || {};
-  }
+  const own = ownSheet ? sheet : (ownKey ? (runtime()?.getSheet(ownKey) || {}) : {});
 
   return {
     projectId,
@@ -317,37 +268,26 @@ function patchAdminUi(state, pendingKeys) {
   if (note) setText(note, `${state.sheetKey} 재사용 요청 대기 중`);
 }
 
-async function applyFinalUi() {
-  if (!installed || !db || patching) return;
+// Firestore 조회가 사라져 동기 함수가 되었다.
+function applyFinalUi() {
+  if (!installed || patching) return;
   patching = true;
   try {
-    const state = await readCurrentState();
+    const state = readCurrentState();
     if (!state) return;
-    if (isAdminUser()) {
-      const pendingKeys = await readPendingReuseSheets(state.projectId);
-      patchAdminUi(state, pendingKeys);
-    } else {
-      patchWorkerUi(state);
-    }
+    if (isAdminUser()) patchAdminUi(state, readPendingReuseSheets());
+    else patchWorkerUi(state);
+  } catch (error) {
+    console.warn("그룹리뷰 최종 UI 갱신 실패:", error);
   } finally {
     patching = false;
   }
 }
 
-function scheduleRefresh(delay = 80) {
-  if (refreshTimer) clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => {
-    refreshTimer = null;
-    void applyFinalUi().catch(error =>
-      console.warn("그룹리뷰 최종 UI 갱신 실패:", error)
-    );
-  }, delay);
-}
-
+// 예전에는 렌더가 끝나는 시점을 몰라 0/120/350ms 세 번 찍어보며 상태가 잡히기를 기다렸다.
+// 이제 Original이 렌더 직후 통지하므로 그 시점에 한 번만 반영하면 된다.
 function stabilizeUi() {
-  scheduleRefresh(0);
-  setTimeout(() => scheduleRefresh(0), 120);
-  setTimeout(() => scheduleRefresh(0), 350);
+  applyFinalUi();
 }
 
 async function requestWorkerReuse() {
@@ -472,7 +412,6 @@ async function approveReuse() {
     }, { merge: true });
   });
 
-  invalidatePendingReuseCache();
   window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
@@ -509,7 +448,6 @@ async function rejectReuse() {
     }, { merge: true });
   });
 
-  invalidatePendingReuseCache();
   window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
@@ -574,31 +512,11 @@ function installActionsAndWrappers() {
   ].forEach(wrapUiTransition);
 }
 
-function installObserver() {
+// MutationObserver를 쓰면 자기가 바꾼 style/disabled를 되받아 다시 갱신하는 루프가 생긴다.
+// Original의 렌더 통지만 구독한다. Workflow가 먼저 패치를 끝내도록 뒤에 등록된다.
+function installRuntimeSubscription() {
   if (observerInstalled) return;
-  const body = document.getElementById("groupReviewBody");
-  const badges = document.getElementById("groupReviewProjectBadges");
-  if (!body && !badges) {
-    setTimeout(installObserver, 100);
-    return;
-  }
-
-  const observer = new MutationObserver(mutations => {
-    if (patching) return;
-    const relevant = mutations.some(mutation =>
-      mutation.type === "childList" ||
-      (mutation.type === "attributes" && ["style", "disabled"].includes(mutation.attributeName))
-    );
-    if (relevant) scheduleRefresh();
-  });
-
-  if (body) observer.observe(body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ["style", "disabled"]
-  });
-  if (badges) observer.observe(badges, { childList: true, subtree: true });
+  window.groupReviewRuntime?.subscribe(() => applyFinalUi());
   observerInstalled = true;
 }
 
@@ -610,7 +528,7 @@ function install() {
     && typeof window.completeGroupReviewReview === "function"
     && typeof window.saveGroupReviewSheet === "function";
 
-  if (!apps.length || !compatReady || !workflowReady) {
+  if (!apps.length || !window.groupReviewRuntime || !compatReady || !workflowReady) {
     setTimeout(install, 100);
     return;
   }
@@ -619,14 +537,9 @@ function install() {
   auth = getAuth(apps[0]);
   installed = true;
   installActionsAndWrappers();
-  installObserver();
+  installRuntimeSubscription();
 
-  onAuthStateChanged(auth, () => {
-    projectCacheLoaded = false;
-    projectCache.clear();
-    invalidatePendingReuseCache();
-    stabilizeUi();
-  });
+  onAuthStateChanged(auth, () => stabilizeUi());
 
   stabilizeUi();
 }

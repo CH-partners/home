@@ -1,10 +1,8 @@
 import { getApps } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+// 이 모듈은 더 이상 Firestore를 읽지 않는다. 상태는 groupReviewRuntime에서 받고 쓰기만 직접 한다.
 import {
-  collection,
   doc,
-  getDoc,
-  getDocs,
   getFirestore,
   runTransaction,
   writeBatch
@@ -38,10 +36,7 @@ let db = null;
 let auth = null;
 let installed = false;
 let currentProjectId = "";
-let projectNameCache = new Map();
-let projectCacheLoaded = false;
 let refreshTimer = null;
-let rawSheetCache = new Map();
 let suppressObserver = false;
 let originalAddRow = null;
 const pendingChecks = new Map();
@@ -129,28 +124,13 @@ function normalizeSheetData(data = {}) {
   };
 }
 
-function projectNameFromBadge() {
-  const active = document.querySelector("#groupReviewProjectBadges .work-badge.active");
-  return (active?.textContent || "").replace(/\s*·\s*완료\s*$/, "").trim();
+function runtime() {
+  return window.groupReviewRuntime || null;
 }
 
-async function ensureProjectCache() {
-  if (projectCacheLoaded) return;
-  const snap = await getDocs(collection(db, "groupReviewProjects"));
-  const next = new Map();
-  snap.forEach(projectDoc => {
-    const data = projectDoc.data() || {};
-    next.set(String(data.name || projectDoc.id), projectDoc.id);
-  });
-  projectNameCache = next;
-  projectCacheLoaded = true;
-}
-
-async function resolveProjectId() {
-  if (currentProjectId) return currentProjectId;
-  await ensureProjectCache();
-  const name = projectNameFromBadge();
-  currentProjectId = projectNameCache.get(name) || "";
+// Original의 onSnapshot이 이미 프로젝트 목록을 들고 있으므로 여기서 다시 조회하지 않는다.
+function resolveProjectId() {
+  currentProjectId = runtime()?.getSelectedProjectId() || "";
   return currentProjectId;
 }
 
@@ -188,27 +168,11 @@ function contextKey(projectId, sheetKey) {
   return `${projectId}::${sheetKey}`;
 }
 
-async function fetchRawSheet(projectId, sheetKey, force = false) {
+// Firestore를 읽지 않고 Original이 onSnapshot으로 받아둔 시트를 그대로 쓴다.
+// Firestore는 로컬 쓰기를 즉시 스냅샷으로 반영하므로 저장 직후에도 최신 상태다.
+function fetchRawSheet(projectId, sheetKey) {
   if (!projectId || !sheetKey) return normalizeSheetData();
-  const key = contextKey(projectId, sheetKey);
-  const cached = rawSheetCache.get(key);
-  if (!force && cached) return cached.data;
-
-  const snap = await getDoc(doc(db, "groupReviewProjects", projectId, "sheets", sheetKey));
-  const data = normalizeSheetData(snap.data() || {});
-  rawSheetCache.set(key, { data, loadedAt: Date.now() });
-  return data;
-}
-
-function setCachedSheet(projectId, sheetKey, data) {
-  rawSheetCache.set(contextKey(projectId, sheetKey), {
-    data: normalizeSheetData(data),
-    loadedAt: Date.now()
-  });
-}
-
-function invalidateSheet(projectId, sheetKey) {
-  rawSheetCache.delete(contextKey(projectId, sheetKey));
+  return normalizeSheetData(runtime()?.getSheet(sheetKey) || {});
 }
 
 function deletedSetFor(projectId, sheetKey) {
@@ -527,13 +491,14 @@ function applyToolbarUi(sheetKey, rawSheet) {
   }
 }
 
-async function refreshWorkflowUi(force = false) {
+// Firestore 조회가 사라져 동기 함수가 되었다. 렌더 직후 같은 태스크에서 패치를 끝낸다.
+function refreshWorkflowUi() {
   if (!installed || !db) return;
   try {
-    const projectId = await resolveProjectId();
+    const projectId = resolveProjectId();
     const sheetKey = resolveSheetKey();
     if (!projectId || !sheetKey) return;
-    const rawSheet = await fetchRawSheet(projectId, sheetKey, force);
+    const rawSheet = fetchRawSheet(projectId, sheetKey);
     suppressObserver = true;
     try {
       applyRowUi(projectId, sheetKey, rawSheet);
@@ -546,11 +511,11 @@ async function refreshWorkflowUi(force = false) {
   }
 }
 
-function scheduleWorkflowRefresh(force = false) {
+function scheduleWorkflowRefresh() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
     refreshTimer = null;
-    void refreshWorkflowUi(force);
+    refreshWorkflowUi();
   }, 80);
 }
 
@@ -578,7 +543,7 @@ function readDomRow(tr, rawRow = null) {
 }
 
 async function persistWorkerSubmission() {
-  const projectId = await resolveProjectId();
+  const projectId = resolveProjectId();
   const sheetKey = resolveSheetKey();
   if (!projectId || !sheetKey) throw new Error("사용 중인 그룹리뷰 시트를 찾을 수 없습니다.");
   if (isAdminUser()) throw new Error("관리자 검토 화면에서는 작업자 임시저장을 사용할 수 없습니다.");
@@ -589,7 +554,7 @@ async function persistWorkerSubmission() {
     throw new Error(`${sheetKey} 시트는 열람 전용입니다. 본인(${activeMember}) 시트 탭에서 저장하세요.`);
   }
 
-  const localRaw = await fetchRawSheet(projectId, sheetKey, false);
+  const localRaw = fetchRawSheet(projectId, sheetKey);
   const deleted = deletedSetFor(projectId, sheetKey);
   const rows = getReviewTableRows();
   const serverById = new Map(localRaw.rows.map(row => [row.id, row]));
@@ -678,7 +643,6 @@ async function persistWorkerSubmission() {
   });
 
   deleted.clear();
-  setCachedSheet(projectId, sheetKey, committedSheet);
   window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
@@ -692,7 +656,7 @@ async function persistWorkerSubmission() {
 
 async function persistAdminChecks() {
   if (!isAdminUser()) throw new Error("관리자만 확인 상태를 저장할 수 있습니다.");
-  const projectId = await resolveProjectId();
+  const projectId = resolveProjectId();
   const sheetKey = resolveSheetKey();
   if (!projectId || !sheetKey) throw new Error("검토 중인 시트를 찾을 수 없습니다.");
 
@@ -732,7 +696,6 @@ async function persistAdminChecks() {
   });
 
   relevant.forEach(([key]) => pendingChecks.delete(key));
-  setCachedSheet(projectId, sheetKey, committedSheet);
   window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
@@ -781,7 +744,7 @@ function unresolvedRevisionRows(rows) {
 
 async function completeWorkerSheet() {
   if (isAdminUser()) throw new Error("관리자 검토 화면에서는 작업자 입력 완료를 사용할 수 없습니다.");
-  const projectId = await resolveProjectId();
+  const projectId = resolveProjectId();
   const sheetKey = resolveSheetKey();
   const activeMember = activeMemberKey();
   if (!projectId || !sheetKey || !activeMember) throw new Error("사용 중인 이름이 없습니다.");
@@ -789,7 +752,7 @@ async function completeWorkerSheet() {
     throw new Error(`${sheetKey} 시트는 열람 전용입니다. 본인(${activeMember}) 시트 탭에서 입력 완료하세요.`);
   }
 
-  const rawSheet = await fetchRawSheet(projectId, sheetKey, false);
+  const rawSheet = fetchRawSheet(projectId, sheetKey);
   const rawById = new Map(rawSheet.rows.map(row => [row.id, row]));
   const hasUnsavedDraft = getReviewTableRows().some(tr => {
     const rowId = tr.dataset.reviewRowId || "";
@@ -829,7 +792,6 @@ async function completeWorkerSheet() {
     transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  setCachedSheet(projectId, sheetKey, committedSheet);
   window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
@@ -843,7 +805,7 @@ async function completeWorkerSheet() {
 
 async function requestRevision(rowId) {
   if (!isAdminUser()) throw new Error("관리자만 재수정 요청을 할 수 있습니다.");
-  const projectId = await resolveProjectId();
+  const projectId = resolveProjectId();
   const sheetKey = resolveSheetKey();
   if (!projectId || !sheetKey || !rowId) throw new Error("재수정 요청 대상을 찾을 수 없습니다.");
 
@@ -909,7 +871,6 @@ async function requestRevision(rowId) {
     transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  setCachedSheet(projectId, sheetKey, committedSheet);
   window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
@@ -925,7 +886,7 @@ async function requestRevision(rowId) {
 
 async function completeAdminReview() {
   if (!isAdminUser()) throw new Error("관리자만 리뷰 완료를 할 수 있습니다.");
-  const projectId = await resolveProjectId();
+  const projectId = resolveProjectId();
   const sheetKey = resolveSheetKey();
   if (!projectId || !sheetKey) throw new Error("리뷰 완료할 시트를 찾을 수 없습니다.");
 
@@ -956,7 +917,6 @@ async function completeAdminReview() {
     transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  setCachedSheet(projectId, sheetKey, committedSheet);
   window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
@@ -970,7 +930,7 @@ async function completeAdminReview() {
 
 async function reopenAdminReview() {
   if (!isAdminUser()) throw new Error("관리자만 리뷰를 재개할 수 있습니다.");
-  const projectId = await resolveProjectId();
+  const projectId = resolveProjectId();
   const sheetKey = resolveSheetKey();
   if (!projectId || !sheetKey) throw new Error("리뷰 재개할 시트를 찾을 수 없습니다.");
 
@@ -1002,7 +962,6 @@ async function reopenAdminReview() {
     transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  setCachedSheet(projectId, sheetKey, committedSheet);
   window.groupReviewApi?.clearDirtySheet?.(sheetKey);
   suppressObserver = true;
   try {
@@ -1020,14 +979,15 @@ function isRelevantReviewSheet(sheet) {
 
 async function completeProjectWithReviewCheck() {
   if (!isAdminUser()) return alert("관리자만 사용할 수 있습니다.");
-  const projectId = await resolveProjectId();
+  const projectId = resolveProjectId();
   if (!projectId) return alert("완료할 프로젝트를 먼저 선택하세요.");
 
-  const sheetSnap = await getDocs(collection(db, "groupReviewProjects", projectId, "sheets"));
-  const relevant = sheetSnap.docs.map(sheetDoc => ({
-    ref: sheetDoc.ref,
-    key: sheetDoc.id,
-    data: normalizeSheetData(sheetDoc.data() || {})
+  // 시트 전체는 onSnapshot으로 이미 받아둔 상태에 있으므로 getDocs로 다시 읽지 않는다.
+  const sheets = runtime()?.getSheets() || {};
+  const relevant = Object.keys(sheets).map(key => ({
+    ref: doc(db, "groupReviewProjects", projectId, "sheets", key),
+    key,
+    data: normalizeSheetData(sheets[key] || {})
   })).filter(item => isRelevantReviewSheet(item.data));
 
   if (!relevant.length) return alert("리뷰 완료할 작업자 데이터가 없습니다.");
@@ -1036,7 +996,7 @@ async function completeProjectWithReviewCheck() {
     return alert(`리뷰 완료되지 않은 작업자가 있습니다: ${notDone.map(item => item.key).join(", ")}`);
   }
 
-  const projectName = projectNameFromBadge() || "선택 프로젝트";
+  const projectName = runtime()?.getSelectedProject()?.name || "선택 프로젝트";
   const ok = confirm(`"${projectName}" 프로젝트를 완료할까요?\n완료 후에는 모든 사용자의 입력·확인·저장이 잠깁니다.`);
   if (!ok) return;
 
@@ -1060,55 +1020,18 @@ async function completeProjectWithReviewCheck() {
 }
 
 function installFunctionOverrides() {
-  const originalSelectProject = window.selectGroupReviewProject;
-  if (typeof originalSelectProject === "function") {
-    window.selectGroupReviewProject = function(projectId) {
-      currentProjectId = String(projectId || "");
-      const result = originalSelectProject.apply(this, arguments);
-      invalidateSheet(currentProjectId, resolveSheetKey());
-      scheduleWorkflowRefresh(true);
-      return result;
-    };
-  }
-
-  const originalCreateProject = window.createGroupReviewProjectPrompt;
-  if (typeof originalCreateProject === "function") {
-    window.createGroupReviewProjectPrompt = async function() {
-      const result = await originalCreateProject.apply(this, arguments);
-      projectCacheLoaded = false;
-      currentProjectId = "";
-      scheduleWorkflowRefresh(true);
-      return result;
-    };
-  }
-
-  const originalSelectSheet = window.selectGroupReviewSheet;
-  if (typeof originalSelectSheet === "function") {
-    window.selectGroupReviewSheet = function() {
-      const result = originalSelectSheet.apply(this, arguments);
-      scheduleWorkflowRefresh(true);
-      return result;
-    };
-  }
-
-  const originalSelectMember = window.selectGroupReviewMember;
-  if (typeof originalSelectMember === "function") {
-    window.selectGroupReviewMember = async function() {
-      const result = await originalSelectMember.apply(this, arguments);
-      scheduleWorkflowRefresh(true);
-      return result;
-    };
-  }
-
+  // selectGroupReviewProject / createGroupReviewProjectPrompt / selectGroupReviewSheet /
+  // selectGroupReviewMember 는 모두 렌더로 끝나고, 렌더는 runtime.subscribe로 통지되므로
+  // 갱신만 예약하던 래퍼를 두지 않는다.
   const originalStartUse = window.startGroupReviewUse;
   if (typeof originalStartUse === "function") {
     window.startGroupReviewUse = async function() {
       try {
         if (!isAdminUser()) {
-          const projectId = await resolveProjectId();
+          const projectId = resolveProjectId();
           const member = sessionStorage.getItem(SELECTED_MEMBER_KEY) || "";
           if (projectId && member) {
-            const sheet = await fetchRawSheet(projectId, member, true);
+            const sheet = fetchRawSheet(projectId, member);
             // 입력 완료 시트도 열 수 있어야 재사용 요청과 다른 작업자 열람이 가능하다.
             if (sheet.completed) {
               alert(sheet.reuseRequested
@@ -1117,9 +1040,7 @@ function installFunctionOverrides() {
             }
           }
         }
-        const result = await originalStartUse.apply(this, arguments);
-        scheduleWorkflowRefresh(true);
-        return result;
+        return await originalStartUse.apply(this, arguments);
       } catch (error) {
         alert("그룹리뷰 사용 시작 실패: " + (error.message || error));
       }
@@ -1136,10 +1057,11 @@ function installFunctionOverrides() {
 
       if (field === "checked") {
         if (!isAdminUser() || !rawRow || ![STATUS.SUBMITTED, STATUS.APPROVED].includes(status)) return;
+        const projectId = resolveProjectId();
         const sheetKey = resolveSheetKey();
-        if (!currentProjectId || !sheetKey) return;
+        if (!projectId || !sheetKey) return;
         pendingChecks.set(
-          pendingCheckKey(currentProjectId, sheetKey, rawRow.id),
+          pendingCheckKey(projectId, sheetKey, rawRow.id),
           Boolean(value)
         );
         originalUpdateCell.call(this, rowIndex, field, value);
@@ -1186,8 +1108,9 @@ function installFunctionOverrides() {
         alert("임시저장된 행은 삭제할 수 없습니다.");
         return;
       }
-      if (rawRow?.id && currentProjectId) {
-        deletedSetFor(currentProjectId, resolveSheetKey()).add(rawRow.id);
+      const projectId = resolveProjectId();
+      if (rawRow?.id && projectId) {
+        deletedSetFor(projectId, resolveSheetKey()).add(rawRow.id);
       }
       const result = originalRemoveRow.apply(this, arguments);
       scheduleWorkflowRefresh();
@@ -1223,7 +1146,7 @@ function installFunctionOverrides() {
         if (!isAdminUser()) return;
         await persistAdminChecks();
         window.moveGroupReviewAdminSheet?.(direction);
-        scheduleWorkflowRefresh(true);
+        scheduleWorkflowRefresh();
       } catch (error) {
         console.error("그룹리뷰 확인 저장 후 이동 실패:", error);
         alert("그룹리뷰 확인 저장 후 이동 실패: " + (error.message || error));
@@ -1291,32 +1214,19 @@ function installFunctionOverrides() {
   };
 }
 
-function installObservers() {
-  const body = document.getElementById("groupReviewBody");
-  const badges = document.getElementById("groupReviewProjectBadges");
-  const observer = new MutationObserver(mutations => {
+// DOM 변경을 감시하는 대신 Original의 렌더 완료 신호를 직접 받는다.
+// MutationObserver는 자기가 만든 변경까지 되받아 갱신 루프를 만들었다.
+function installRuntimeSubscription() {
+  runtime()?.subscribe(() => {
     if (suppressObserver) return;
-    const structural = mutations.some(mutation =>
-      mutation.type === "childList" &&
-      (mutation.target === body || mutation.target === badges) &&
-      (mutation.addedNodes.length || mutation.removedNodes.length)
-    );
-    if (!structural) return;
-    const sheetKey = resolveSheetKey();
-    if (currentProjectId && sheetKey) invalidateSheet(currentProjectId, sheetKey);
-    scheduleWorkflowRefresh(true);
+    refreshWorkflowUi();
   });
-  if (body) observer.observe(body, { childList: true, subtree: true });
-  if (badges) observer.observe(badges, { childList: true, subtree: true });
 
   if (auth) {
     onAuthStateChanged(auth, () => {
       currentProjectId = "";
-      projectCacheLoaded = false;
-      projectNameCache.clear();
-      rawSheetCache.clear();
       pendingChecks.clear();
-      scheduleWorkflowRefresh(true);
+      scheduleWorkflowRefresh();
     });
   }
 }
@@ -1324,7 +1234,8 @@ function installObservers() {
 function tryInstall() {
   if (installed) return;
   const apps = getApps();
-  if (!apps.length || !window.groupReviewApi || typeof window.saveGroupReviewSheet !== "function") {
+  if (!apps.length || !window.groupReviewApi || !window.groupReviewRuntime
+    || typeof window.saveGroupReviewSheet !== "function") {
     setTimeout(tryInstall, 100);
     return;
   }
@@ -1333,8 +1244,8 @@ function tryInstall() {
   auth = getAuth(apps[0]);
   installed = true;
   installFunctionOverrides();
-  installObservers();
-  scheduleWorkflowRefresh(true);
+  installRuntimeSubscription();
+  scheduleWorkflowRefresh();
 }
 
 tryInstall();

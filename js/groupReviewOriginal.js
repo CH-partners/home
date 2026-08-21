@@ -1,4 +1,5 @@
-import { collection, doc, setDoc, onSnapshot, runTransaction, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { collection, doc, setDoc, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import { getDocs, onSnapshot } from "./firestoreReadMeter.js";
 
 export function initGroupReview(ctx) {
   const {
@@ -37,6 +38,25 @@ export function initGroupReview(ctx) {
   let projectsError = "";
   let creatingDefaultProject = false;
   const dirtySheetKeys = new Set();
+
+  const runtimeSubscribers = new Set();
+  let notifyingRuntime = false;
+
+  function notifyRuntime() {
+    if (notifyingRuntime) return;
+    notifyingRuntime = true;
+    try {
+      runtimeSubscribers.forEach(callback => {
+        try {
+          callback();
+        } catch (error) {
+          console.warn("그룹리뷰 런타임 구독자 처리 실패:", error);
+        }
+      });
+    } finally {
+      notifyingRuntime = false;
+    }
+  }
 
   let sessionId = localStorage.getItem(sessionStorageKey);
   if (!sessionId) {
@@ -241,7 +261,10 @@ export function initGroupReview(ctx) {
         row?.changeAfterHtml || (hasSplitFields ? wrapHtmlWithSize(textToReviewTextHtml(row?.changeAfterText ?? ""), row?.changeAfterSize) : legacyAfterHtml)
       );
 
+      // 원본 필드를 먼저 펼쳐 reviewStatus·revisionNo·parentRevisionId 같은 워크플로 필드를 보존한다.
+      // 이 값들이 없으면 상위 레이어가 같은 문서를 getDoc으로 다시 읽어야 한다.
       return {
+        ...row,
         id: row?.id || "row_" + Date.now() + "_" + Math.random().toString(36).slice(2),
         collateralNo: String(row?.collateralNo ?? ""),
         sheet: String(row?.sheet ?? ""),
@@ -256,7 +279,9 @@ export function initGroupReview(ctx) {
   }
 
   function normalizeSheetDoc(sheetKey, data = {}) {
+    // 행과 마찬가지로 reviewCompleted·reuseRequested 등 시트 단위 상태 필드도 그대로 통과시킨다.
     return {
+      ...data,
       type: data.type || "member",
       memberName: data.memberName || sheetKey,
       rows: normalizeMemberRows(data.rows),
@@ -266,7 +291,9 @@ export function initGroupReview(ctx) {
       lockSessionId: data.lockSessionId || "",
       lockedBy: data.lockedBy || "",
       lockedAt: data.lockedAt || "",
-      completed: Boolean(data.completed)
+      completed: Boolean(data.completed),
+      reviewCompleted: Boolean(data.reviewCompleted),
+      reuseRequested: Boolean(data.reuseRequested)
     };
   }
 
@@ -355,6 +382,10 @@ export function initGroupReview(ctx) {
   }
 
   function scheduleGroupReviewPostRender(scrollState = null) {
+    // 모든 렌더 경로가 여기를 지나므로, DOM이 갱신된 직후 동기적으로 구독자에게 알린다.
+    // 상위 레이어가 같은 태스크 안에서 패치를 끝내야 옛 버튼이 잠깐 보이는 일이 없다.
+    notifyRuntime();
+
     requestAnimationFrame(() => {
       fitReviewTextareas();
       restoreGroupReviewScrollState(scrollState);
@@ -1659,6 +1690,53 @@ export function initGroupReview(ctx) {
     sessionStorage.removeItem(memberStorageKey);
     renderGroupReviewUI();
   }
+
+  // 상위 레이어(Workflow / Compat / FinalUi)가 Firestore를 다시 읽지 않고
+  // onSnapshot으로 이미 받아둔 상태를 그대로 쓰도록 열어주는 읽기 전용 창구.
+  // 반환되는 객체는 내부 상태의 실제 참조이므로 호출 측에서 수정하면 안 된다.
+  window.groupReviewRuntime = {
+    isReady() {
+      return projectsLoaded;
+    },
+    getFixedMembers() {
+      return [...fixedMembers];
+    },
+    getProjects() {
+      return projects;
+    },
+    getSelectedProjectId() {
+      return selectedProjectId || "";
+    },
+    getSelectedProject() {
+      return getSelectedProject();
+    },
+    isProjectCompleted() {
+      return isProjectCompleted();
+    },
+    getSelectedSheetKey() {
+      return selectedSheetKey || "";
+    },
+    getActiveMember() {
+      return activeMember || "";
+    },
+    getSelectedMember() {
+      return selectedMember || "";
+    },
+    getSheets() {
+      return sheetsData;
+    },
+    getSheet(sheetKey) {
+      return sheetsData[sheetKey] || null;
+    },
+    isSheetCompleted(sheetKey) {
+      return isSheetCompleted(sheetKey);
+    },
+    subscribe(callback) {
+      if (typeof callback !== "function") return () => {};
+      runtimeSubscribers.add(callback);
+      return () => runtimeSubscribers.delete(callback);
+    }
+  };
 
   renderGroupReviewUI();
 

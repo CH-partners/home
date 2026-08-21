@@ -1,9 +1,8 @@
 import { getApps } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+// 이 모듈은 더 이상 Firestore를 읽지 않는다. 상태는 groupReviewRuntime에서 받고 쓰기만 직접 한다.
 import {
-  collection,
   doc,
-  getDocs,
   getFirestore,
   runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
@@ -19,9 +18,6 @@ let auth = null;
 let installed = false;
 let uiObserverInstalled = false;
 let patchFrame = 0;
-let currentProjectId = "";
-let projectNameCache = new Map();
-let projectCacheLoaded = false;
 let workflowUpdateCell = null;
 let workflowSaveSheet = null;
 let workflowSelectProject = null;
@@ -33,19 +29,10 @@ function isAdminUser() {
   return ADMIN_EMAILS.has(email);
 }
 
-function cleanProjectName(value) {
-  return String(value || "").replace(/\s*·\s*완료\s*$/u, "").trim();
-}
-
 function cleanSheetName(value) {
   return String(value || "")
     .replace(/\s*·\s*(완료|입력|리뷰완료)\s*$/u, "")
     .trim();
-}
-
-function currentProjectName() {
-  const badge = document.querySelector("#groupReviewProjectBadges .work-badge.active");
-  return cleanProjectName(badge?.textContent || "");
 }
 
 function currentSheetKey() {
@@ -56,23 +43,9 @@ function currentSheetKey() {
     || "";
 }
 
-async function ensureProjectCache() {
-  if (projectCacheLoaded || !db) return;
-  const snap = await getDocs(collection(db, "groupReviewProjects"));
-  const next = new Map();
-  snap.forEach(projectDoc => {
-    const data = projectDoc.data() || {};
-    next.set(String(data.name || projectDoc.id), projectDoc.id);
-  });
-  projectNameCache = next;
-  projectCacheLoaded = true;
-}
-
-async function resolveProjectId() {
-  if (currentProjectId) return currentProjectId;
-  await ensureProjectCache();
-  currentProjectId = projectNameCache.get(currentProjectName()) || "";
-  return currentProjectId;
+// Original의 onSnapshot이 선택된 프로젝트를 이미 알고 있으므로 목록을 다시 조회하지 않는다.
+function resolveProjectId() {
+  return window.groupReviewRuntime?.getSelectedProjectId() || "";
 }
 
 function rowKey(sheetKey, rowId) {
@@ -106,6 +79,16 @@ function applyPendingChecks() {
     checkbox.checked = Boolean(pendingChecks.get(key));
     tr.classList.toggle("review-row-checked", checkbox.checked);
   });
+}
+
+// 값이 같아도 대입하면 textContent는 텍스트 노드를 갈아끼워 childList 변경을 만든다.
+// 그 변경을 옵저버가 되받아 다시 패치하는 무한 루프가 있었으므로 반드시 비교 후 쓴다.
+function setText(el, value) {
+  if (el.textContent !== value) el.textContent = value;
+}
+
+function setStyle(el, prop, value) {
+  if (el.style[prop] !== value) el.style[prop] = value;
 }
 
 function normalizeBadgeText(text) {
@@ -142,17 +125,13 @@ function addAdminLowerControls(body) {
   const actions = body.querySelector(".work-header-actions");
   if (!actions) return;
 
-  actions.querySelectorAll('button[onclick="addGroupReviewRow()"]')
-    .forEach(button => button.style.display = "none");
-  actions.querySelectorAll('button[onclick="completeGroupReviewUse()"]')
-    .forEach(button => button.style.display = "none");
-  actions.querySelectorAll('button[onclick="reopenGroupReviewUse()"]')
-    .forEach(button => button.style.display = "none");
+  actions.querySelectorAll('button[onclick="addGroupReviewRow()"], button[onclick="completeGroupReviewUse()"], button[onclick="reopenGroupReviewUse()"]')
+    .forEach(button => setStyle(button, "display", "none"));
 
   const confirmButton = actions.querySelector('button[onclick="saveGroupReviewSheet()"]');
   if (confirmButton) {
-    confirmButton.style.display = "";
-    confirmButton.textContent = "확인";
+    setStyle(confirmButton, "display", "");
+    setText(confirmButton, "확인");
   }
 
   let refreshButton = actions.querySelector(".review-worker-refresh-action");
@@ -177,7 +156,7 @@ function addAdminLowerControls(body) {
     reviewButton.className = "action-btn review-lower-complete-action";
     actions.appendChild(reviewButton);
   }
-  reviewButton.textContent = reviewLabel;
+  setText(reviewButton, reviewLabel);
   reviewButton.onclick = reviewLabel === "리뷰 재개"
     ? () => window.reopenGroupReviewReview?.()
     : () => window.completeGroupReviewReview?.();
@@ -193,13 +172,13 @@ function patchWorkerControls(body) {
 
   body.querySelectorAll('button[onclick="saveGroupReviewSheet()"]')
     .forEach(button => {
-      if (!button.disabled) button.textContent = "수정요청";
+      if (!button.disabled) setText(button, "수정요청");
     });
 
   body.querySelectorAll('button[onclick="completeGroupReviewUse()"]')
     .forEach(button => {
-      if (!viewingOther) button.style.display = "";
-      button.textContent = "입력 완료";
+      if (!viewingOther) setStyle(button, "display", "");
+      setText(button, "입력 완료");
     });
 
   addWorkerHint(body, viewingOther);
@@ -210,23 +189,22 @@ function patchVisibleUi() {
   if (!body) return;
 
   body.querySelectorAll(".review-workflow-badge").forEach(badge => {
-    const next = normalizeBadgeText(badge.textContent);
-    if (badge.textContent !== next) badge.textContent = next;
+    setText(badge, normalizeBadgeText(badge.textContent));
   });
 
   body.querySelectorAll(".review-workflow-revise").forEach(button => {
-    if (button.textContent !== "수정요청") button.textContent = "수정요청";
+    setText(button, "수정요청");
   });
 
   if (isAdminUser()) {
     const upperActions = body.querySelector(".review-admin-actions");
-    if (upperActions) upperActions.style.display = "none";
+    if (upperActions) setStyle(upperActions, "display", "none");
     addAdminLowerControls(body);
   } else {
     patchWorkerControls(body);
   }
 
-  requestAnimationFrame(() => applyPendingChecks());
+  applyPendingChecks();
 }
 
 function scheduleUiPatch() {
@@ -234,16 +212,15 @@ function scheduleUiPatch() {
   patchFrame = requestAnimationFrame(() => {
     patchFrame = 0;
     patchVisibleUi();
-    setTimeout(applyPendingChecks, 120);
   });
 }
 
+// MutationObserver는 자기가 만든 textContent 변경을 되받아 rAF마다 다시 도는 루프를 만들었다.
+// Original의 렌더 통지만 구독한다. Workflow/FinalUi가 먼저 그린 뒤 마지막에 다듬는다.
 function installUiObserver() {
   if (uiObserverInstalled) return;
-  const body = document.getElementById("groupReviewBody");
-  if (!body) return;
-  const observer = new MutationObserver(() => scheduleUiPatch());
-  observer.observe(body, { childList: true, subtree: true });
+  if (!window.groupReviewRuntime) return;
+  window.groupReviewRuntime.subscribe(() => scheduleUiPatch());
   uiObserverInstalled = true;
   scheduleUiPatch();
 }
@@ -321,43 +298,19 @@ function restoreRefreshScroll(state) {
   });
 }
 
+// 예전에는 프로젝트를 다시 선택해 sheets 리스너를 재구독했는데,
+// 재구독은 시트 11개를 전부 다시 읽는다. 리스너가 이미 최신이므로 다시 그리기만 하면 된다.
 async function refreshCurrentView() {
-  const projectId = await resolveProjectId();
   const sheetKey = currentSheetKey();
-  if (!projectId || !sheetKey) throw new Error("새로고침할 현재 작업자 시트를 찾을 수 없습니다.");
-  if (typeof workflowSelectProject !== "function" || typeof workflowSelectSheet !== "function") {
-    throw new Error("그룹리뷰 새로고침 기능을 준비하지 못했습니다.");
-  }
+  if (!sheetKey) throw new Error("새로고침할 현재 작업자 시트를 찾을 수 없습니다.");
 
   const scrollState = captureRefreshScroll();
-  workflowSelectProject(projectId);
 
-  let attempts = 0;
-  await new Promise((resolve, reject) => {
-    const restoreSheet = () => {
-      attempts += 1;
-      const targetButton = Array.from(document.querySelectorAll("#groupReviewBody .review-sheet-btn"))
-        .find(button => cleanSheetName(button.textContent) === sheetKey);
+  if (typeof workflowSelectSheet === "function") workflowSelectSheet(sheetKey);
+  else window.groupReviewApi?.renderGroupReviewUI?.({ preserveScroll: true });
 
-      if (targetButton) {
-        workflowSelectSheet(sheetKey);
-        scheduleUiPatch();
-        setTimeout(() => {
-          applyPendingChecks();
-          restoreRefreshScroll(scrollState);
-        }, 80);
-        resolve();
-        return;
-      }
-
-      if (attempts >= 40) {
-        reject(new Error("현재 작업자 시트를 다시 표시하지 못했습니다."));
-        return;
-      }
-      setTimeout(restoreSheet, 50);
-    };
-    setTimeout(restoreSheet, 50);
-  });
+  scheduleUiPatch();
+  restoreRefreshScroll(scrollState);
 }
 
 function transformWorkerAlert(message) {
@@ -405,25 +358,17 @@ function installFinalOverrides() {
     }
   };
 
+  // 프로젝트를 바꾸면 다른 프로젝트의 확인 대기값이 섞이므로 여기서만 비운다.
+  // 화면 갱신은 runtime 구독이 처리하므로 따로 예약하지 않는다.
   workflowSelectProject = window.selectGroupReviewProject;
   if (typeof workflowSelectProject === "function") {
-    window.selectGroupReviewProject = function(projectId) {
-      currentProjectId = String(projectId || "");
+    window.selectGroupReviewProject = function() {
       pendingChecks.clear();
-      const result = workflowSelectProject.apply(this, arguments);
-      scheduleUiPatch();
-      return result;
+      return workflowSelectProject.apply(this, arguments);
     };
   }
 
   workflowSelectSheet = window.selectGroupReviewSheet;
-  if (typeof workflowSelectSheet === "function") {
-    window.selectGroupReviewSheet = function() {
-      const result = workflowSelectSheet.apply(this, arguments);
-      scheduleUiPatch();
-      return result;
-    };
-  }
 
   window.refreshGroupReviewWorkerView = async function() {
     try {
