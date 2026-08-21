@@ -187,7 +187,9 @@ function patchWorkerControls(body) {
   if (isAdminUser()) return;
 
   // 다른 작업자 시트를 열람 중일 때는 입력/저장 버튼을 되살리지 않는다.
-  const viewingOther = currentSheetKey() !== (sessionStorage.getItem("groupReviewActiveMember") || "");
+  // 활성 이름이 없으면 아직 이름 선택 단계이므로 열람 모드로 보지 않는다.
+  const activeMember = sessionStorage.getItem("groupReviewActiveMember") || "";
+  const viewingOther = Boolean(activeMember) && currentSheetKey() !== activeMember;
 
   body.querySelectorAll('button[onclick="saveGroupReviewSheet()"]')
     .forEach(button => {

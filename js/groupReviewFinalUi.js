@@ -168,7 +168,8 @@ function patchWorkerUi(state) {
   const body = document.getElementById("groupReviewBody");
   if (!body) return;
 
-  const viewingOther = !state.ownSheet;
+  // 활성 이름이 없으면 아직 이름 선택 단계라 열람 모드가 아니다.
+  const viewingOther = Boolean(state.ownKey) && !state.ownSheet;
   const locked = viewingOther || Boolean(state.completed || state.projectCompleted);
 
   body.querySelectorAll('button[onclick="reopenGroupReviewUse()"]')

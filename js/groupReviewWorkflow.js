@@ -178,6 +178,12 @@ function isOwnSheet(sheetKey) {
   return Boolean(sheetKey) && sheetKey === activeMemberKey();
 }
 
+// 사용 시작 전에는 아직 점유한 시트가 없으므로 "다른 사람 시트 열람"이 아니라 이름 선택 단계다.
+// 이때까지 열람 모드로 보면 사용 시작 버튼까지 숨겨진다.
+function isViewingOtherSheet(sheetKey) {
+  return Boolean(activeMemberKey()) && !isOwnSheet(sheetKey);
+}
+
 function contextKey(projectId, sheetKey) {
   return `${projectId}::${sheetKey}`;
 }
@@ -436,7 +442,7 @@ function applyToolbarUi(sheetKey, rawSheet) {
   const body = document.getElementById("groupReviewBody");
   if (!body) return;
 
-  const viewingOther = !admin && !isOwnSheet(sheetKey);
+  const viewingOther = !admin && isViewingOtherSheet(sheetKey);
   const workerLocked = viewingOther || Boolean(rawSheet.completed);
 
   body.querySelectorAll('button[onclick="completeGroupReviewUse()"]').forEach(button => {
@@ -469,7 +475,8 @@ function applyToolbarUi(sheetKey, rawSheet) {
       button.style.display = viewingOther ? "none" : "";
     });
 
-    if (rawSheet.completed || viewingOther) {
+    // 사용 시작 전 화면의 유일한 버튼이 "사용 시작"이므로, 활성 이름이 있을 때만 정리한다.
+    if (activeMemberKey() && (rawSheet.completed || viewingOther)) {
       body.querySelectorAll(".review-use-controls button").forEach(button => {
         // 재사용 요청 버튼은 입력 완료 상태에서만 노출되는 버튼이라 숨기지 않는다.
         if (button.classList.contains("review-worker-reuse-request")) return;
