@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Cookie, Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -9,15 +9,9 @@ from app.db.session import get_db
 from app.models.user import AppUser
 
 
-def get_current_user(
-    session_token: str | None = Cookie(default=None, alias="ch_home_session"),
-    db: Session = Depends(get_db),
-) -> AppUser:
+def get_current_user(request: Request, db: Session = Depends(get_db)) -> AppUser:
     settings = get_settings()
-    token = session_token
-    if token is None and settings.auth_cookie_name != "ch_home_session":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-
+    token = request.cookies.get(settings.auth_cookie_name)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
