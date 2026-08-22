@@ -35,6 +35,56 @@ export function installLimitedDeploymentMode() {
         font-size:10px;
         font-weight:700;
       }
+
+      body.limited-deployment-mode .sidebar-content {
+        padding-right:0;
+      }
+      body.limited-deployment-mode #topNav {
+        gap:7px;
+      }
+      body.limited-deployment-mode #topNav > .nav-item,
+      body.limited-deployment-mode #topNav > div > .nav-item,
+      body.limited-deployment-mode #bottomNav > .nav-item {
+        width:calc(100% - 12px)!important;
+        min-width:0!important;
+        height:44px!important;
+        margin:0 0 0 12px!important;
+        padding:0 16px!important;
+        justify-content:flex-start!important;
+        text-align:left!important;
+        border:1px solid rgba(255,255,255,.28)!important;
+        border-right:0!important;
+        border-radius:12px 0 0 12px!important;
+        background:rgba(255,255,255,.08)!important;
+        color:#e8eef8!important;
+        font-size:13px!important;
+        font-weight:700!important;
+        box-shadow:none!important;
+        transition:all .15s ease!important;
+      }
+      body.limited-deployment-mode #topNav > .nav-item:hover,
+      body.limited-deployment-mode #topNav > div > .nav-item:hover,
+      body.limited-deployment-mode #bottomNav > .nav-item:hover {
+        background:rgba(255,255,255,.16)!important;
+        color:#ffffff!important;
+        transform:translateX(3px);
+      }
+      body.limited-deployment-mode #topNav > .nav-item.active,
+      body.limited-deployment-mode #topNav > div > .nav-item.active,
+      body.limited-deployment-mode #bottomNav > .nav-item.active {
+        width:100%!important;
+        margin-left:12px!important;
+        padding-left:18px!important;
+        background:#f7f9fc!important;
+        border-color:#f7f9fc!important;
+        color:#1f4e79!important;
+        font-size:14px!important;
+        font-weight:900!important;
+        transform:none!important;
+        position:relative;
+        z-index:2;
+        box-shadow:-4px 0 14px rgba(15,23,42,.12)!important;
+      }
     `;
     document.head.appendChild(style);
   }
