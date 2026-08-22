@@ -24,6 +24,12 @@ def _row_has_worker_value(row: GroupReviewRow) -> bool:
     )
 
 
+def _row_ready_for_submission(row: GroupReviewRow) -> bool:
+    if row.parent_revision_row_id is not None:
+        return any(str(value or "").strip() for value in (row.change_before_text, row.change_after_text))
+    return _row_has_worker_value(row)
+
+
 def _sheet_rows(db: Session, sheet_id: int) -> list[GroupReviewRow]:
     return list(
         db.scalars(
@@ -83,18 +89,17 @@ def request_row_revision(
     if parent.review_status not in {"submitted", "approved"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="검토대기 또는 확인완료 행만 재수정 요청할 수 있습니다.")
 
-    existing_child = db.scalar(
-        select(GroupReviewRow)
-        .where(
-            GroupReviewRow.parent_revision_row_id == parent.id,
-            GroupReviewRow.review_status == "draft",
-        )
-        .order_by(GroupReviewRow.revision_no.desc(), GroupReviewRow.id.desc())
+    rows = _sheet_rows(db, sheet.id)
+    existing_child = next(
+        (
+            row for row in rows
+            if row.parent_revision_row_id == parent.id and row.review_status == "draft"
+        ),
+        None,
     )
     if existing_child is not None:
         return sheet, parent, existing_child
 
-    rows = _sheet_rows(db, sheet.id)
     insert_position = parent.position + 1
     offset = len(rows) + 2
     for row in rows:
@@ -170,9 +175,26 @@ def complete_worker_sheet_revision_aware(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Review is already completed")
 
     rows = _sheet_rows(db, sheet_id)
-    meaningful = [row for row in rows if _row_has_worker_value(row)]
-    if not meaningful:
+    leaves = effective_revision_leaves(rows)
+    if not leaves:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="입력된 리뷰 행이 없습니다.")
+
+    incomplete_revision = [
+        row for row in leaves
+        if row.parent_revision_row_id is not None and row.review_status == "draft" and not _row_ready_for_submission(row)
+    ]
+    if incomplete_revision:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"재수정 내용을 입력하지 않은 행이 {len(incomplete_revision)}건 있습니다.",
+        )
+
+    now = datetime.now(timezone.utc)
+    for row in leaves:
+        if row.review_status == "draft" and _row_ready_for_submission(row):
+            row.review_status = "submitted"
+            row.submitted_at = now
+            row.submitted_by = current_user.display_name
 
     unresolved = unresolved_revision_parents(rows)
     if unresolved:
@@ -180,13 +202,6 @@ def complete_worker_sheet_revision_aware(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"재수정 요청 처리 중인 행이 {len(unresolved)}건 남아 있습니다.",
         )
-
-    now = datetime.now(timezone.utc)
-    for row in effective_revision_leaves(rows):
-        if row.review_status == "draft":
-            row.review_status = "submitted"
-            row.submitted_at = now
-            row.submitted_by = current_user.display_name
 
     sheet.completed = True
     sheet.reuse_requested = False
