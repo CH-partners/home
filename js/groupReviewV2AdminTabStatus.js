@@ -31,23 +31,24 @@ export function installGroupReviewAdminTabStatusV2() {
         color: #334155 !important;
         font-weight: 600;
       }
-      .grv2-tab.grv2-admin-complete:not(.active) {
-        background: #fff3b0 !important;
-        border-color: #eab308 !important;
-        color: #713f12 !important;
-      }
-      .grv2-tab.grv2-admin-reuse:not(.active) {
-        background: #fecaca !important;
-        border-color: #ef4444 !important;
-        color: #991b1b !important;
-      }
-      .grv2-tab.grv2-admin-tab.active,
-      .grv2-tab.grv2-admin-complete.active,
-      .grv2-tab.grv2-admin-reuse.active {
+      .grv2-tab.grv2-admin-tab.active:not(.grv2-admin-complete):not(.grv2-admin-reuse) {
         background: #1f4e79 !important;
         border-color: #1f4e79 !important;
         color: #ffffff !important;
         font-weight: 800;
+      }
+      .grv2-tab.grv2-admin-complete {
+        background: #facc15 !important;
+        border-color: #ca8a04 !important;
+        color: #713f12 !important;
+        font-weight: 800;
+      }
+      .grv2-tab.grv2-admin-reuse {
+        background: #dc2626 !important;
+        border-color: #991b1b !important;
+        color: #ffffff !important;
+        font-weight: 900;
+        box-shadow: inset 0 0 0 1px #7f1d1d !important;
       }
     `;
     document.head.appendChild(style);
