@@ -99,6 +99,7 @@ class GroupReviewRowResponse(BaseModel):
     id: int
     sheet_id: int
     position: int
+    parent_revision_row_id: int | None
     collateral_no: str
     sheet_label: str
     field_no: str
@@ -107,6 +108,12 @@ class GroupReviewRowResponse(BaseModel):
     cell_styles: dict
     review_status: str
     revision_no: int
+
+
+class GroupReviewRevisionRequestResponse(BaseModel):
+    sheet: GroupReviewSheetResponse
+    parent_row: GroupReviewRowResponse
+    child_row: GroupReviewRowResponse
 
 
 class GroupReviewRowOrderRequest(BaseModel):
