@@ -24,6 +24,7 @@ from app.schemas.group_review_v2 import (
 )
 from app.services.group_review_v2 import (
     approve_row,
+    approve_sheet_reuse,
     complete_project,
     complete_worker_sheet,
     create_project_with_worker_sheets,
@@ -34,8 +35,10 @@ from app.services.group_review_v2 import (
     list_project_sheets,
     list_projects,
     list_rows,
+    reject_sheet_reuse,
     reopen_project,
     reorder_rows,
+    request_sheet_reuse,
     update_row,
 )
 
@@ -216,6 +219,53 @@ async def complete_group_review_sheet(
         "type": "sheet_completed",
         "sheet": _sheet_response(sheet).model_dump(),
         "rows": [_row_payload(row) for row in rows],
+        "actor_login_id": current_user.login_id,
+    })
+    return _sheet_response(sheet)
+
+
+@router.post("/sheets/{sheet_id}/reuse-request", response_model=GroupReviewSheetResponse)
+async def request_group_review_sheet_reuse(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(require_worker_or_admin),
+) -> GroupReviewSheetResponse:
+    sheet = request_sheet_reuse(db, sheet_id=sheet_id, current_user=current_user)
+    await manager.broadcast(sheet.project_id, {
+        "type": "reuse_requested",
+        "sheet": _sheet_response(sheet).model_dump(),
+        "actor_login_id": current_user.login_id,
+    })
+    return _sheet_response(sheet)
+
+
+@router.post("/sheets/{sheet_id}/reuse-approve", response_model=GroupReviewSheetResponse)
+async def approve_group_review_sheet_reuse(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(require_admin),
+) -> GroupReviewSheetResponse:
+    sheet, rows, reopened_count = approve_sheet_reuse(db, sheet_id=sheet_id, current_user=current_user)
+    await manager.broadcast(sheet.project_id, {
+        "type": "reuse_approved",
+        "sheet": _sheet_response(sheet).model_dump(),
+        "rows": [_row_payload(row) for row in rows],
+        "reopened_count": reopened_count,
+        "actor_login_id": current_user.login_id,
+    })
+    return _sheet_response(sheet)
+
+
+@router.post("/sheets/{sheet_id}/reuse-reject", response_model=GroupReviewSheetResponse)
+async def reject_group_review_sheet_reuse(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(require_admin),
+) -> GroupReviewSheetResponse:
+    sheet = reject_sheet_reuse(db, sheet_id=sheet_id, current_user=current_user)
+    await manager.broadcast(sheet.project_id, {
+        "type": "reuse_rejected",
+        "sheet": _sheet_response(sheet).model_dump(),
         "actor_login_id": current_user.login_id,
     })
     return _sheet_response(sheet)
