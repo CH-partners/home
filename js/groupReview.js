@@ -9,6 +9,7 @@ import { installGroupReviewProjectDeleteV2 } from "./groupReviewV2ProjectDelete.
 import { installGroupReviewKeyboardV2 } from "./groupReviewV2Keyboard.js";
 import { installGroupReviewTheme } from "./groupReviewTheme.js";
 import { installGroupReviewDefaultRowsV2 } from "./groupReviewDefaultRows.js";
+import { installGroupReviewPartialBoldV2 } from "./groupReviewPartialBold.js";
 
 export function initGroupReview() {
   installLimitedDeploymentMode();
@@ -22,5 +23,6 @@ export function initGroupReview() {
   installGroupReviewProjectDeleteV2(api);
   installGroupReviewKeyboardV2();
   installGroupReviewDefaultRowsV2(api);
+  installGroupReviewPartialBoldV2();
   return api;
 }
