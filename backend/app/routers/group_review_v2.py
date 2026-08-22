@@ -24,6 +24,8 @@ from app.schemas.group_review_v2 import (
 )
 from app.services.group_review_v2 import (
     approve_row,
+    complete_project,
+    complete_worker_sheet,
     create_project_with_worker_sheets,
     create_row,
     delete_row,
@@ -32,6 +34,7 @@ from app.services.group_review_v2 import (
     list_project_sheets,
     list_projects,
     list_rows,
+    reopen_project,
     reorder_rows,
     update_row,
 )
@@ -68,6 +71,23 @@ def _row_response(row: GroupReviewRow) -> GroupReviewRowResponse:
 
 def _row_payload(row: GroupReviewRow) -> dict:
     return _row_response(row).model_dump()
+
+
+def _project_detail(db: Session, project: GroupReviewProject) -> GroupReviewProjectDetailResponse:
+    members = list(project.members or [])
+    sheet_count = db.scalar(
+        select(func.count(GroupReviewSheet.id)).where(GroupReviewSheet.project_id == project.id)
+    ) or 0
+    return GroupReviewProjectDetailResponse(
+        id=project.id,
+        name=project.name,
+        completed=project.completed,
+        members=members,
+        member_count=len(members),
+        sheet_count=int(sheet_count),
+        created_at=project.created_at,
+        created_by=project.created_by,
+    )
 
 
 def _project_id_for_sheet(db: Session, sheet_id: int) -> str:
@@ -114,11 +134,7 @@ def create_group_review_project(
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(require_admin),
 ) -> GroupReviewProjectCreatedResponse:
-    project, sheets = create_project_with_worker_sheets(
-        db,
-        name=payload.name,
-        current_user=current_user,
-    )
+    project, sheets = create_project_with_worker_sheets(db, name=payload.name, current_user=current_user)
     return GroupReviewProjectCreatedResponse(
         id=project.id,
         name=project.name,
@@ -163,20 +179,7 @@ def get_group_review_project(
     members = list(project.members or [])
     if current_user.role == "WORKER" and current_user.display_name not in members:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Project access denied")
-
-    sheet_count = db.scalar(
-        select(func.count(GroupReviewSheet.id)).where(GroupReviewSheet.project_id == project.id)
-    ) or 0
-    return GroupReviewProjectDetailResponse(
-        id=project.id,
-        name=project.name,
-        completed=project.completed,
-        members=members,
-        member_count=len(members),
-        sheet_count=int(sheet_count),
-        created_at=project.created_at,
-        created_by=project.created_by,
-    )
+    return _project_detail(db, project)
 
 
 @router.get("/projects/{project_id}/sheets", response_model=list[GroupReviewSheetResponse])
@@ -200,6 +203,54 @@ def get_my_group_review_sheet(
     if current_user.role != "WORKER":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker role required")
     return _sheet_response(get_worker_sheet(db, project_id=project_id, current_user=current_user))
+
+
+@router.post("/sheets/{sheet_id}/complete", response_model=GroupReviewSheetResponse)
+async def complete_group_review_sheet(
+    sheet_id: int,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(require_worker_or_admin),
+) -> GroupReviewSheetResponse:
+    sheet, rows = complete_worker_sheet(db, sheet_id=sheet_id, current_user=current_user)
+    await manager.broadcast(sheet.project_id, {
+        "type": "sheet_completed",
+        "sheet": _sheet_response(sheet).model_dump(),
+        "rows": [_row_payload(row) for row in rows],
+        "actor_login_id": current_user.login_id,
+    })
+    return _sheet_response(sheet)
+
+
+@router.post("/projects/{project_id}/complete", response_model=GroupReviewProjectDetailResponse)
+async def complete_group_review_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(require_admin),
+) -> GroupReviewProjectDetailResponse:
+    project, sheets = complete_project(db, project_id=project_id, current_user=current_user)
+    await manager.broadcast(project_id, {
+        "type": "project_completed",
+        "project": _project_detail(db, project).model_dump(mode="json"),
+        "sheets": [_sheet_response(sheet).model_dump() for sheet in sheets],
+        "actor_login_id": current_user.login_id,
+    })
+    return _project_detail(db, project)
+
+
+@router.post("/projects/{project_id}/reopen", response_model=GroupReviewProjectDetailResponse)
+async def reopen_group_review_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(require_admin),
+) -> GroupReviewProjectDetailResponse:
+    project, sheets = reopen_project(db, project_id=project_id, current_user=current_user)
+    await manager.broadcast(project_id, {
+        "type": "project_reopened",
+        "project": _project_detail(db, project).model_dump(mode="json"),
+        "sheets": [_sheet_response(sheet).model_dump() for sheet in sheets],
+        "actor_login_id": current_user.login_id,
+    })
+    return _project_detail(db, project)
 
 
 @router.get("/sheets/{sheet_id}/rows", response_model=list[GroupReviewRowResponse])
