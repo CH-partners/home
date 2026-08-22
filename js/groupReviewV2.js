@@ -13,11 +13,7 @@ async function api(path, options = {}) {
   if (options.body && !(options.body instanceof FormData)) {
     headers["Content-Type"] = headers["Content-Type"] || "application/json; charset=utf-8";
   }
-  const response = await fetch(`${API_ROOT}${path}`, {
-    ...options,
-    headers,
-    credentials: "include"
-  });
+  const response = await fetch(`${API_ROOT}${path}`, { ...options, headers, credentials: "include" });
   if (response.status === 204) return null;
   const data = await response.json().catch(() => null);
   if (!response.ok) {
@@ -78,9 +74,7 @@ export function initGroupReviewV2() {
   }
 
   function setLegacyToolbarState() {
-    const panel = panelEl();
-    if (!panel) return;
-    const buttons = panel.querySelectorAll(".work-toolbar button");
+    const buttons = panelEl()?.querySelectorAll(".work-toolbar button") || [];
     if (buttons[0]) buttons[0].style.display = state.user?.role === "ADMIN" ? "" : "none";
     if (buttons[1]) buttons[1].style.display = state.user ? "" : "none";
     if (buttons[2]) buttons[2].style.display = "none";
@@ -91,10 +85,7 @@ export function initGroupReviewV2() {
     const wrap = badgesEl();
     if (!wrap) return;
     if (!state.user || !state.projects.length) return void (wrap.innerHTML = "");
-    wrap.innerHTML = state.projects.map(project => `
-      <button type="button" class="grv2-project-badge ${state.project?.id === project.id ? "active" : ""}" data-project-id="${escapeHtml(project.id)}">
-        ${escapeHtml(project.name)}${project.completed ? " · 완료" : ""}
-      </button>`).join("");
+    wrap.innerHTML = state.projects.map(project => `<button type="button" class="grv2-project-badge ${state.project?.id === project.id ? "active" : ""}" data-project-id="${escapeHtml(project.id)}">${escapeHtml(project.name)}${project.completed ? " · 완료" : ""}</button>`).join("");
     wrap.querySelectorAll("[data-project-id]").forEach(button => button.addEventListener("click", () => selectProject(button.dataset.projectId)));
   }
 
@@ -135,6 +126,19 @@ export function initGroupReviewV2() {
     return isOwnSheet() && !state.sheet?.completed && !state.sheet?.review_completed && !state.project?.completed && row.review_status === "draft";
   }
 
+  function status(text) {
+    const el = document.getElementById("grv2Status");
+    if (el) el.textContent = text;
+  }
+
+  function updateLiveIndicator() {
+    const el = document.getElementById("grv2Live");
+    if (!el) return;
+    const connected = state.socket?.readyState === WebSocket.OPEN;
+    el.className = `grv2-live ${connected ? "on" : "off"}`;
+    el.textContent = connected ? "● 실시간 연결" : "● 연결 중";
+  }
+
   function renderMain() {
     ensureStyles();
     setLegacyToolbarState();
@@ -146,42 +150,38 @@ export function initGroupReviewV2() {
     const ownSheet = isOwnSheet();
     const sheetEditable = ownSheet && !state.sheet?.completed && !state.sheet?.review_completed && !state.project?.completed;
     const tabs = state.sheets.map(sheet => `<button type="button" class="grv2-tab ${state.sheet?.id === sheet.id ? "active" : ""} ${isOwnSheet(sheet) ? "own" : ""}" data-sheet-id="${sheet.id}">${escapeHtml(sheet.member_name)}${isOwnSheet(sheet) ? " · 나" : ""}</button>`).join("");
+    const rowHtml = state.rows.map((row, index) => renderRowHtml(row, index)).join("");
+    const readonlyMessage = state.user.role === "ADMIN" ? "관리자: 행별 확인 가능" : ownSheet ? (sheetEditable ? "자동저장 사용 중" : "현재 시트는 읽기 전용") : `${state.sheet?.member_name || "다른 작업자"} 시트 · 읽기 전용`;
 
-    const rowHtml = state.rows.map((row, index) => {
-      const editable = rowEditable(row);
-      const approved = row.review_status === "approved";
-      const cells = fieldDefs.map(([field, styleKey, centered]) => `<td><div class="grv2-cell ${centered ? "center" : ""} ${editable ? "editable" : "readonly"}" ${editable ? 'contenteditable="true"' : ""} spellcheck="false" data-row-id="${row.id}" data-field="${field}" data-style-key="${styleKey}" style="${escapeHtml(styleText(styleFor(row, styleKey)))}">${escapeHtml(row[field])}</div></td>`).join("");
-      const action = state.user.role === "ADMIN"
-        ? (approved ? '<span class="grv2-approved">확인완료</span>' : `<button type="button" class="grv2-approve" data-approve-row="${row.id}">확인</button>`)
-        : (editable ? `<button class="grv2-del" type="button" data-delete-row="${row.id}">×</button>` : "");
-      return `<tr class="grv2-row ${approved ? "approved" : ""}" data-row-id="${row.id}"><td class="grv2-no">${index + 1}</td>${cells}<td>${action}</td></tr>`;
-    }).join("");
+    body.innerHTML = `<div class="grv2"><div class="grv2-userbar"><div class="grv2-user"><strong>${escapeHtml(state.user.display_name)}</strong><span class="grv2-role">${escapeHtml(state.user.role)}</span><span id="grv2Live" class="grv2-live off">● 연결 중</span></div><button id="grv2Logout" type="button" class="grv2-btn">그룹리뷰 로그아웃</button></div>${state.project ? `<div class="grv2-project-title">${escapeHtml(state.project.name)}${state.project.completed ? " · 완료" : ""}</div>` : ""}${!state.project ? '<div class="grv2-note">생성된 리뷰 프로젝트가 없습니다.</div>' : `<div class="grv2-tabs">${tabs}</div><div class="grv2-toolbar"><select id="grv2Size" ${sheetEditable ? "" : "disabled"}><option>12</option><option selected>13</option><option>15</option><option>18</option><option>22</option></select><button id="grv2Bold" class="bold" type="button" ${sheetEditable ? "" : "disabled"}>B</button><button id="grv2Strike" class="strike" type="button" ${sheetEditable ? "" : "disabled"}>S</button><label style="font-size:12px">셀 색 <input id="grv2Bg" type="color" value="#fff3b0" ${sheetEditable ? "" : "disabled"}></label><button id="grv2Clear" type="button" ${sheetEditable ? "" : "disabled"}>서식 지우기</button><span class="spacer"></span><span id="grv2Status" class="grv2-status">${readonlyMessage}</span></div><div class="grv2-grid"><table><thead><tr><th style="width:46px">#</th><th style="width:86px">Collateral#</th><th style="width:68px">Sheet</th><th style="width:76px">Field No.</th><th style="width:390px">변경전</th><th style="width:390px">변경후</th><th style="width:74px">${state.user.role === "ADMIN" ? "확인" : "삭제"}</th></tr></thead><tbody>${rowHtml}</tbody></table></div><div class="grv2-bottom"><button id="grv2Add" type="button" class="grv2-btn" ${sheetEditable ? "" : "disabled"}>+ 행 추가</button><span class="grv2-savehint">${sheetEditable ? "0.5초 입력 멈춤 또는 셀 이동 시 자동 저장" : readonlyMessage}</span></div>`}</div>`;
 
-    const readonlyMessage = state.user.role === "ADMIN"
-      ? "관리자: 행별 확인 가능"
-      : ownSheet
-        ? (sheetEditable ? "자동저장 사용 중" : "현재 시트는 읽기 전용")
-        : `${state.sheet?.member_name || "다른 작업자"} 시트 · 읽기 전용`;
+    bindViewEvents();
+    updateLiveIndicator();
+  }
 
-    body.innerHTML = `<div class="grv2">
-      <div class="grv2-userbar"><div class="grv2-user"><strong>${escapeHtml(state.user.display_name)}</strong><span class="grv2-role">${escapeHtml(state.user.role)}</span><span id="grv2Live" class="grv2-live ${state.socket?.readyState === WebSocket.OPEN ? "on" : "off"}">${state.socket?.readyState === WebSocket.OPEN ? "● 실시간 연결" : "● 연결 중"}</span></div><button id="grv2Logout" type="button" class="grv2-btn">그룹리뷰 로그아웃</button></div>
-      ${state.project ? `<div class="grv2-project-title">${escapeHtml(state.project.name)}${state.project.completed ? " · 완료" : ""}</div>` : ""}
-      ${!state.project ? '<div class="grv2-note">생성된 리뷰 프로젝트가 없습니다.</div>' : `<div class="grv2-tabs">${tabs}</div>
-      <div class="grv2-toolbar"><select id="grv2Size" ${sheetEditable ? "" : "disabled"}><option>12</option><option selected>13</option><option>15</option><option>18</option><option>22</option></select><button id="grv2Bold" class="bold" type="button" ${sheetEditable ? "" : "disabled"}>B</button><button id="grv2Strike" class="strike" type="button" ${sheetEditable ? "" : "disabled"}>S</button><label style="font-size:12px">셀 색 <input id="grv2Bg" type="color" value="#fff3b0" ${sheetEditable ? "" : "disabled"}></label><button id="grv2Clear" type="button" ${sheetEditable ? "" : "disabled"}>서식 지우기</button><span class="spacer"></span><span id="grv2Status" class="grv2-status">${readonlyMessage}</span></div>
-      <div class="grv2-grid"><table><thead><tr><th style="width:46px">#</th><th style="width:86px">Collateral#</th><th style="width:68px">Sheet</th><th style="width:76px">Field No.</th><th style="width:390px">변경전</th><th style="width:390px">변경후</th><th style="width:74px">${state.user.role === "ADMIN" ? "확인" : "삭제"}</th></tr></thead><tbody>${rowHtml}</tbody></table></div>
-      <div class="grv2-bottom"><button id="grv2Add" type="button" class="grv2-btn" ${sheetEditable ? "" : "disabled"}>+ 행 추가</button><span class="grv2-savehint">${sheetEditable ? "0.5초 입력 멈춤 또는 셀 이동 시 자동 저장" : readonlyMessage}</span></div>`}
-    </div>`;
+  function renderRowHtml(row, index) {
+    const editable = rowEditable(row);
+    const approved = row.review_status === "approved";
+    const cells = fieldDefs.map(([field, styleKey, centered]) => `<td><div class="grv2-cell ${centered ? "center" : ""} ${editable ? "editable" : "readonly"}" ${editable ? 'contenteditable="true"' : ""} spellcheck="false" data-row-id="${row.id}" data-field="${field}" data-style-key="${styleKey}" style="${escapeHtml(styleText(styleFor(row, styleKey)))}">${escapeHtml(row[field])}</div></td>`).join("");
+    const action = state.user.role === "ADMIN" ? (approved ? '<span class="grv2-approved">확인완료</span>' : `<button type="button" class="grv2-approve" data-approve-row="${row.id}">확인</button>`) : (editable ? `<button class="grv2-del" type="button" data-delete-row="${row.id}">×</button>` : "");
+    return `<tr class="grv2-row ${approved ? "approved" : ""}" data-row-id="${row.id}"><td class="grv2-no">${index + 1}</td>${cells}<td>${action}</td></tr>`;
+  }
 
-    document.getElementById("grv2Logout")?.addEventListener("click", logoutLocal);
-    body.querySelectorAll("[data-sheet-id]").forEach(button => button.addEventListener("click", () => selectSheet(Number(button.dataset.sheetId))));
-    body.querySelectorAll(".grv2-cell.editable").forEach(cell => {
+  function bindRowEvents(rowEl) {
+    rowEl.querySelectorAll(".grv2-cell.editable").forEach(cell => {
       cell.addEventListener("focus", () => selectCell(cell));
       cell.addEventListener("click", () => selectCell(cell));
       cell.addEventListener("input", () => scheduleCellSave(cell));
       cell.addEventListener("blur", () => flushCellSave(cell));
     });
-    body.querySelectorAll("[data-delete-row]").forEach(button => button.addEventListener("click", () => removeRow(Number(button.dataset.deleteRow))));
-    body.querySelectorAll("[data-approve-row]").forEach(button => button.addEventListener("click", () => approveRow(Number(button.dataset.approveRow))));
+    rowEl.querySelector("[data-delete-row]")?.addEventListener("click", event => removeRow(Number(event.currentTarget.dataset.deleteRow)));
+    rowEl.querySelector("[data-approve-row]")?.addEventListener("click", event => approveRow(Number(event.currentTarget.dataset.approveRow)));
+  }
+
+  function bindViewEvents() {
+    document.getElementById("grv2Logout")?.addEventListener("click", logoutLocal);
+    bodyEl()?.querySelectorAll("[data-sheet-id]").forEach(button => button.addEventListener("click", () => selectSheet(Number(button.dataset.sheetId))));
+    bodyEl()?.querySelectorAll(".grv2-row").forEach(bindRowEvents);
     document.getElementById("grv2Add")?.addEventListener("click", addRow);
     document.getElementById("grv2Size")?.addEventListener("change", event => updateSelectedStyle("fontSize", Number(event.target.value)));
     document.getElementById("grv2Bold")?.addEventListener("click", () => toggleSelectedStyle("bold"));
@@ -190,9 +190,18 @@ export function initGroupReviewV2() {
     document.getElementById("grv2Clear")?.addEventListener("click", clearSelectedStyle);
   }
 
-  function status(text) {
-    const el = document.getElementById("grv2Status");
-    if (el) el.textContent = text;
+  function replaceRowDom(row) {
+    const current = bodyEl()?.querySelector(`.grv2-row[data-row-id="${row.id}"]`);
+    if (!current) {
+      renderMain();
+      return;
+    }
+    const index = state.rows.findIndex(item => item.id === row.id);
+    const template = document.createElement("tbody");
+    template.innerHTML = renderRowHtml(row, index);
+    const replacement = template.firstElementChild;
+    current.replaceWith(replacement);
+    bindRowEvents(replacement);
   }
 
   function selectCell(cell) {
@@ -203,10 +212,7 @@ export function initGroupReviewV2() {
     state.selectedCell = row ? { row, field: cell.dataset.field, styleKey: cell.dataset.styleKey, el: cell } : null;
   }
 
-  function cellKey(cell) {
-    return `${cell.dataset.rowId}:${cell.dataset.field}`;
-  }
-
+  const cellKey = cell => `${cell.dataset.rowId}:${cell.dataset.field}`;
   function scheduleCellSave(cell) {
     const key = cellKey(cell);
     clearTimeout(state.saveTimers.get(key));
@@ -229,7 +235,6 @@ export function initGroupReviewV2() {
     if (!row || row.review_status !== "draft") return;
     const value = cell.innerText.replace(/\r/g, "");
     if (value === row[field]) return;
-
     const key = cellKey(cell);
     if (state.saveInFlight.get(key) === value) return;
     state.saveInFlight.set(key, value);
@@ -249,18 +254,14 @@ export function initGroupReviewV2() {
 
   async function addRow() {
     if (!state.sheet || !isOwnSheet()) return;
-    try {
-      await api(`/group-review/sheets/${state.sheet.id}/rows`, { method: "POST", body: JSON.stringify({}) });
-      await loadRows();
-    } catch (error) { alert(`행 추가 실패: ${error.message}`); }
+    try { await api(`/group-review/sheets/${state.sheet.id}/rows`, { method: "POST", body: JSON.stringify({}) }); await loadRows(); }
+    catch (error) { alert(`행 추가 실패: ${error.message}`); }
   }
 
   async function removeRow(rowId) {
     if (!isOwnSheet() || !confirm("이 행을 삭제하시겠습니까?")) return;
-    try {
-      await api(`/group-review/rows/${rowId}`, { method: "DELETE" });
-      await loadRows();
-    } catch (error) { alert(`행 삭제 실패: ${error.message}`); }
+    try { await api(`/group-review/rows/${rowId}`, { method: "DELETE" }); await loadRows(); }
+    catch (error) { alert(`행 삭제 실패: ${error.message}`); }
   }
 
   async function approveRow(rowId) {
@@ -269,7 +270,7 @@ export function initGroupReviewV2() {
       status("확인 처리 중...");
       const updated = await api(`/group-review/rows/${rowId}/approve`, { method: "POST" });
       applyRowUpdate(updated);
-      renderMain();
+      replaceRowDom(updated);
       status("확인 완료");
     } catch (error) { alert(`확인 처리 실패: ${error.message}`); }
   }
@@ -279,7 +280,7 @@ export function initGroupReviewV2() {
     try {
       const updated = await api(`/group-review/rows/${state.selectedCell.row.id}`, { method: "PATCH", body: JSON.stringify({ cell_styles: state.selectedCell.row.cell_styles || {} }) });
       Object.assign(state.selectedCell.row, updated);
-      renderMain();
+      replaceRowDom(updated);
     } catch (error) { alert(`서식 저장 실패: ${error.message}`); }
   }
 
@@ -318,16 +319,17 @@ export function initGroupReviewV2() {
     if (message.type === "row_upserted" || message.type === "row_approved") {
       const focused = document.activeElement?.classList?.contains("grv2-cell") ? document.activeElement : null;
       const focusedRowId = Number(focused?.dataset?.rowId || 0);
-      if (focusedRowId === Number(message.row?.id) && message.type === "row_upserted") return;
+      if (message.type === "row_upserted" && focusedRowId === Number(message.row?.id)) return;
       applyRowUpdate(message.row);
-      renderMain();
+      replaceRowDom(message.row);
       if (message.type === "row_approved") status("관리자 확인이 실시간 반영되었습니다.");
     } else if (message.type === "row_deleted") {
       state.rows = state.rows.filter(row => row.id !== Number(message.row_id));
-      renderMain();
+      bodyEl()?.querySelector(`.grv2-row[data-row-id="${message.row_id}"]`)?.remove();
     } else if (message.type === "rows_reordered") {
+      const focused = document.activeElement?.classList?.contains("grv2-cell");
       state.rows = Array.isArray(message.rows) ? message.rows : state.rows;
-      renderMain();
+      if (!focused) renderMain();
     }
   }
 
@@ -339,6 +341,7 @@ export function initGroupReviewV2() {
       state.socket.close();
       state.socket = null;
     }
+    updateLiveIndicator();
   }
 
   function connectSocket() {
@@ -347,13 +350,11 @@ export function initGroupReviewV2() {
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     const socket = new WebSocket(`${protocol}//${location.host}/api/v1/group-review/ws/projects/${encodeURIComponent(state.project.id)}`);
     state.socket = socket;
-    socket.onopen = () => renderMain();
-    socket.onmessage = event => {
-      try { handleRealtime(JSON.parse(event.data)); } catch (_) {}
-    };
+    socket.onopen = updateLiveIndicator;
+    socket.onmessage = event => { try { handleRealtime(JSON.parse(event.data)); } catch (_) {} };
     socket.onclose = () => {
       if (state.socket === socket) state.socket = null;
-      renderMain();
+      updateLiveIndicator();
       if (state.user && state.project) state.reconnectTimer = setTimeout(connectSocket, 1500);
     };
   }
@@ -374,9 +375,7 @@ export function initGroupReviewV2() {
     try {
       state.project = await api(`/group-review/projects/${projectId}`);
       state.sheets = await api(`/group-review/projects/${projectId}/sheets`);
-      state.sheet = state.user.role === "WORKER"
-        ? (state.sheets.find(sheet => sheet.member_name === state.user.display_name) || state.sheets[0] || null)
-        : (state.sheets[0] || null);
+      state.sheet = state.user.role === "WORKER" ? (state.sheets.find(sheet => sheet.member_name === state.user.display_name) || state.sheets[0] || null) : (state.sheets[0] || null);
       await loadRows();
       renderBadges();
       connectSocket();
@@ -387,9 +386,7 @@ export function initGroupReviewV2() {
     if (!state.user) return renderLogin();
     state.projects = await api("/group-review/projects");
     const targetId = preferredProjectId || state.project?.id || state.projects[0]?.id || null;
-    if (!targetId) {
-      state.project = null; state.sheets = []; state.sheet = null; state.rows = []; closeSocket(); renderMain(); return;
-    }
+    if (!targetId) { state.project = null; state.sheets = []; state.sheet = null; state.rows = []; closeSocket(); renderMain(); return; }
     await selectProject(targetId);
   }
 
@@ -397,16 +394,10 @@ export function initGroupReviewV2() {
     if (state.loading) return;
     state.loading = true;
     ensureStyles();
-    try {
-      state.user = await api("/auth/me");
-      await loadProjects();
-    } catch (error) {
-      if (error.status === 401) {
-        closeSocket(); state.user = null; state.projects = []; state.project = null; state.sheets = []; state.sheet = null; state.rows = []; renderLogin();
-      } else {
-        const body = bodyEl();
-        if (body) body.innerHTML = `<div class="grv2"><div class="grv2-note">그룹리뷰 연결 실패: ${escapeHtml(error.message)}</div></div>`;
-      }
+    try { state.user = await api("/auth/me"); await loadProjects(); }
+    catch (error) {
+      if (error.status === 401) { closeSocket(); state.user = null; state.projects = []; state.project = null; state.sheets = []; state.sheet = null; state.rows = []; renderLogin(); }
+      else { const body = bodyEl(); if (body) body.innerHTML = `<div class="grv2"><div class="grv2-note">그룹리뷰 연결 실패: ${escapeHtml(error.message)}</div></div>`; }
     } finally { state.loading = false; }
   }
 
@@ -421,10 +412,8 @@ export function initGroupReviewV2() {
     if (state.user?.role !== "ADMIN") return alert("그룹리뷰 관리자 계정으로 로그인해야 합니다.");
     const name = prompt("리뷰 프로젝트명을 입력하세요.");
     if (!name?.trim()) return;
-    try {
-      const created = await api("/group-review/projects", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
-      await loadProjects(created.id);
-    } catch (error) { alert(`프로젝트 생성 실패: ${error.message}`); }
+    try { const created = await api("/group-review/projects", { method: "POST", body: JSON.stringify({ name: name.trim() }) }); await loadProjects(created.id); }
+    catch (error) { alert(`프로젝트 생성 실패: ${error.message}`); }
   }
 
   async function downloadExcel() {
@@ -451,6 +440,5 @@ export function initGroupReviewV2() {
 
   ensureStyles();
   refreshSessionAndData();
-
   return { renderGroupReviewUI: refreshSessionAndData, refresh: refreshSessionAndData };
 }
