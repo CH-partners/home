@@ -43,9 +43,10 @@ export function installGroupReviewProjectDeleteV2(groupReviewApi) {
 
     try {
       await api(`/group-review/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' });
+      // Core V2 keeps the selected project id in memory. Reloading after delete clears
+      // that stale id, including when the deleted project was the final project.
       alert('그룹리뷰 프로젝트를 삭제했습니다.');
-      await groupReviewApi?.refresh?.();
-      scheduleUpdate(100);
+      window.location.reload();
     } catch (error) {
       alert(`프로젝트 삭제 실패: ${error.message}`);
     }
