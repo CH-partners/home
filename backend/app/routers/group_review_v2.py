@@ -139,12 +139,10 @@ def get_group_review_sheets(
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(require_worker_or_admin),
 ) -> list[GroupReviewSheetResponse]:
-    if current_user.role == "ADMIN":
-        sheets = list_project_sheets(db, project_id)
-        return [_sheet_response(sheet) for sheet in sheets]
-
-    sheet = get_worker_sheet(db, project_id=project_id, current_user=current_user)
-    return [_sheet_response(sheet)]
+    project = get_project(db, project_id)
+    if current_user.role == "WORKER" and current_user.display_name not in (project.members or []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Project access denied")
+    return [_sheet_response(sheet) for sheet in list_project_sheets(db, project_id)]
 
 
 @router.get("/projects/{project_id}/my-sheet", response_model=GroupReviewSheetResponse)
