@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -43,6 +45,14 @@ from app.services.group_review_v2 import (
 )
 
 router = APIRouter(prefix="/api/v1/group-review", tags=["group-review-v2"])
+
+EDITABLE_CELL_FIELDS = {
+    "collateral_no",
+    "sheet_label",
+    "field_no",
+    "change_before_text",
+    "change_after_text",
+}
 
 
 def _sheet_response(sheet: GroupReviewSheet) -> GroupReviewSheetResponse:
@@ -129,6 +139,33 @@ def _websocket_project_allowed(project_id: str, user: AppUser) -> bool:
         if user.role == "ADMIN":
             return True
         return user.role == "WORKER" and user.display_name in (project.members or [])
+
+
+def _cell_lock_allowed(
+    project_id: str,
+    user: AppUser,
+    *,
+    sheet_id: int,
+    row_id: int,
+    field_name: str,
+) -> bool:
+    if user.role != "WORKER" or field_name not in EDITABLE_CELL_FIELDS:
+        return False
+
+    session_factory = get_session_factory()
+    with session_factory() as db:
+        sheet = db.get(GroupReviewSheet, sheet_id)
+        row = db.get(GroupReviewRow, row_id)
+        project = db.get(GroupReviewProject, project_id)
+        if not sheet or not row or not project:
+            return False
+        if sheet.project_id != project_id or row.sheet_id != sheet_id:
+            return False
+        if sheet.member_name != user.display_name:
+            return False
+        if project.completed or sheet.completed or sheet.review_completed:
+            return False
+        return row.review_status == "draft"
 
 
 @router.post("/projects", response_model=GroupReviewProjectCreatedResponse, status_code=status.HTTP_201_CREATED)
@@ -416,22 +453,116 @@ async def group_review_project_websocket(websocket: WebSocket, project_id: str) 
         await websocket.close(code=4401)
         return
 
-    await manager.connect(project_id, websocket)
+    connection_id = await manager.connect(project_id, websocket)
     await websocket.send_json({
         "type": "connected",
         "project_id": project_id,
         "login_id": user.login_id,
         "display_name": user.display_name,
         "role": user.role,
+        "connection_id": connection_id,
+        "locks": manager.list_locks(project_id),
     })
 
     try:
         while True:
-            await websocket.receive_text()
+            raw = await websocket.receive_text()
+            try:
+                message = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+
+            message_type = message.get("type")
+            if message_type == "cell_lock_request":
+                try:
+                    sheet_id = int(message.get("sheet_id"))
+                    row_id = int(message.get("row_id"))
+                except (TypeError, ValueError):
+                    continue
+                field_name = str(message.get("field_name") or "")
+                request_id = str(message.get("request_id") or "")
+
+                if not _cell_lock_allowed(
+                    project_id,
+                    user,
+                    sheet_id=sheet_id,
+                    row_id=row_id,
+                    field_name=field_name,
+                ):
+                    await websocket.send_json({
+                        "type": "cell_lock_denied",
+                        "request_id": request_id,
+                        "reason": "not_editable",
+                    })
+                    continue
+
+                acquired, lock = manager.acquire_cell_lock(
+                    project_id,
+                    websocket,
+                    sheet_id=sheet_id,
+                    row_id=row_id,
+                    field_name=field_name,
+                    login_id=user.login_id,
+                    display_name=user.display_name,
+                )
+                if not acquired:
+                    await websocket.send_json({
+                        "type": "cell_lock_denied",
+                        "request_id": request_id,
+                        "reason": "locked",
+                        "lock": lock,
+                    })
+                    continue
+
+                await websocket.send_json({
+                    "type": "cell_lock_granted",
+                    "request_id": request_id,
+                    "lock": lock,
+                })
+                await manager.broadcast(
+                    project_id,
+                    {"type": "cell_locked", "lock": lock},
+                    exclude=websocket,
+                )
+
+            elif message_type == "cell_unlock":
+                try:
+                    sheet_id = int(message.get("sheet_id"))
+                    row_id = int(message.get("row_id"))
+                except (TypeError, ValueError):
+                    continue
+                field_name = str(message.get("field_name") or "")
+                released = manager.release_cell_lock(
+                    project_id,
+                    websocket,
+                    sheet_id=sheet_id,
+                    row_id=row_id,
+                    field_name=field_name,
+                )
+                if released:
+                    await manager.broadcast(
+                        project_id,
+                        {"type": "cell_unlocked", "lock": released},
+                        exclude=websocket,
+                    )
+
+            elif message_type == "ping":
+                await websocket.send_json({"type": "pong"})
+
     except WebSocketDisconnect:
-        manager.disconnect(project_id, websocket)
+        released = manager.disconnect(project_id, websocket)
+        for lock in released:
+            await manager.broadcast(
+                project_id,
+                {"type": "cell_unlocked", "lock": lock, "reason": "connection_closed"},
+            )
     except Exception:
-        manager.disconnect(project_id, websocket)
+        released = manager.disconnect(project_id, websocket)
+        for lock in released:
+            await manager.broadcast(
+                project_id,
+                {"type": "cell_unlocked", "lock": lock, "reason": "connection_closed"},
+            )
         try:
             await websocket.close()
         except Exception:
