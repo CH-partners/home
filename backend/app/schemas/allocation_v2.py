@@ -20,6 +20,7 @@ class AllocationColumn(BaseModel):
 
 class AllocationRow(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    active: bool = True
     values: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("name")
