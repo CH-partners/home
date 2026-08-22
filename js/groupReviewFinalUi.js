@@ -300,6 +300,17 @@ async function requestWorkerReuse() {
 
   const requestedAt = new Date().toISOString();
   const requestedBy = sheetKey;
+  const committed = {
+    reuseRequested: true,
+    reuseRequestedAt: requestedAt,
+    reuseRequestedBy: requestedBy,
+    reuseRequestedByEmail: auth?.currentUser?.email || "",
+    reuseRequestRejectedAt: "",
+    reuseRequestRejectedByEmail: "",
+    updatedAt: requestedAt,
+    updatedBy: requestedBy,
+    updatedByEmail: auth?.currentUser?.email || ""
+  };
 
   await runTransaction(db, async transaction => {
     const projectRef = doc(db, "groupReviewProjects", projectId);
@@ -313,19 +324,10 @@ async function requestWorkerReuse() {
     if (!sheet.completed) throw new Error("현재 시트는 이미 작업 가능한 상태입니다.");
     if (sheet.reuseRequested) throw new Error("이미 재사용 요청 중입니다.");
 
-    transaction.set(sheetRef, {
-      reuseRequested: true,
-      reuseRequestedAt: requestedAt,
-      reuseRequestedBy: requestedBy,
-      reuseRequestedByEmail: auth?.currentUser?.email || "",
-      reuseRequestRejectedAt: "",
-      reuseRequestRejectedByEmail: "",
-      updatedAt: requestedAt,
-      updatedBy: requestedBy,
-      updatedByEmail: auth?.currentUser?.email || ""
-    }, { merge: true });
+    transaction.set(sheetRef, committed, { merge: true });
   });
 
+  runtime()?.applyCommittedSheet(sheetKey, committed);
   stabilizeUi();
   alert("재사용 요청을 보냈습니다. 관리자 승인 전까지 입력은 계속 잠긴 상태입니다.");
 }
@@ -376,6 +378,7 @@ async function approveReuse() {
   const approvedAt = new Date().toISOString();
   const reviewer = auth?.currentUser?.email || "";
   let reopenedCount = 0;
+  let committed = null;
 
   await runTransaction(db, async transaction => {
     const projectRef = doc(db, "groupReviewProjects", projectId);
@@ -392,7 +395,7 @@ async function approveReuse() {
     const { rows, reopened } = reopenRowsForWorker(sheet.rows);
     reopenedCount = reopened;
 
-    transaction.set(sheetRef, {
+    committed = {
       rows,
       completed: false,
       reviewCompleted: false,
@@ -409,10 +412,11 @@ async function approveReuse() {
       lockedAt: "",
       updatedAt: approvedAt,
       updatedByEmail: reviewer
-    }, { merge: true });
+    };
+    transaction.set(sheetRef, committed, { merge: true });
   });
 
-  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
+  runtime()?.applyCommittedSheet(sheetKey, committed);
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
   }
@@ -429,6 +433,16 @@ async function rejectReuse() {
 
   const rejectedAt = new Date().toISOString();
   const reviewer = auth?.currentUser?.email || "";
+  const committed = {
+    reuseRequested: false,
+    reuseRequestedAt: "",
+    reuseRequestedBy: "",
+    reuseRequestedByEmail: "",
+    reuseRequestRejectedAt: rejectedAt,
+    reuseRequestRejectedByEmail: reviewer,
+    updatedAt: rejectedAt,
+    updatedByEmail: reviewer
+  };
 
   await runTransaction(db, async transaction => {
     const sheetRef = doc(db, "groupReviewProjects", projectId, "sheets", sheetKey);
@@ -436,19 +450,10 @@ async function rejectReuse() {
     const sheet = sheetSnap.data() || {};
     if (!sheet.reuseRequested) throw new Error("대기 중인 재사용 요청이 없습니다.");
 
-    transaction.set(sheetRef, {
-      reuseRequested: false,
-      reuseRequestedAt: "",
-      reuseRequestedBy: "",
-      reuseRequestedByEmail: "",
-      reuseRequestRejectedAt: rejectedAt,
-      reuseRequestRejectedByEmail: reviewer,
-      updatedAt: rejectedAt,
-      updatedByEmail: reviewer
-    }, { merge: true });
+    transaction.set(sheetRef, committed, { merge: true });
   });
 
-  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
+  runtime()?.applyCommittedSheet(sheetKey, committed);
   if (typeof window.refreshGroupReviewWorkerView === "function") {
     await window.refreshGroupReviewWorkerView();
   }

@@ -241,6 +241,30 @@ export function initGroupReview(ctx) {
     return Array.from({ length: count }, () => createMemberRow());
   }
 
+  // 화면 렌더에는 안 쓰이지만 groupReviewWorkflow / groupReviewFinalUi가 읽는 필드.
+  // 여기서 버리면 그 레이어들이 같은 문서를 getDoc으로 다시 읽어야 한다.
+  // 정규화된 rows는 저장 시 통째로 다시 기록되므로, 필요한 것만 골라 남기고
+  // 마이그레이션이 끝난 레거시 필드(changeText 등)는 예전처럼 흘려보낸다.
+  const WORKFLOW_ROW_FIELDS = [
+    "reviewStatus",
+    "revisionNo",
+    "parentRevisionId",
+    "submittedAt",
+    "submittedBy",
+    "reviewedAt",
+    "reviewedByEmail",
+    "revisionRequestedAt",
+    "revisionRequestedByEmail"
+  ];
+
+  function pickWorkflowRowFields(row) {
+    const picked = {};
+    WORKFLOW_ROW_FIELDS.forEach(field => {
+      if (row?.[field] !== undefined) picked[field] = row[field];
+    });
+    return picked;
+  }
+
   function normalizeMemberRows(rows) {
     if (!Array.isArray(rows)) return [];
 
@@ -261,10 +285,8 @@ export function initGroupReview(ctx) {
         row?.changeAfterHtml || (hasSplitFields ? wrapHtmlWithSize(textToReviewTextHtml(row?.changeAfterText ?? ""), row?.changeAfterSize) : legacyAfterHtml)
       );
 
-      // 원본 필드를 먼저 펼쳐 reviewStatus·revisionNo·parentRevisionId 같은 워크플로 필드를 보존한다.
-      // 이 값들이 없으면 상위 레이어가 같은 문서를 getDoc으로 다시 읽어야 한다.
       return {
-        ...row,
+        ...pickWorkflowRowFields(row),
         id: row?.id || "row_" + Date.now() + "_" + Math.random().toString(36).slice(2),
         collateralNo: String(row?.collateralNo ?? ""),
         sheet: String(row?.sheet ?? ""),
@@ -1731,6 +1753,18 @@ export function initGroupReview(ctx) {
     isSheetCompleted(sheetKey) {
       return isSheetCompleted(sheetKey);
     },
+    // runTransaction은 로컬 낙관적 반영이 없어 스냅샷이 서버 왕복 뒤에야 도착한다.
+    // 커밋 결과를 공용 상태에 먼저 반영해, 그 사이 상위 레이어가 옛 상태로 화면을
+    // 되돌려 놓는 것을 막는다. 곧 도착할 스냅샷이 같은 값으로 덮어쓴다.
+    applyCommittedSheet(sheetKey, data) {
+      if (!sheetKey || !data) return;
+      sheetsData[sheetKey] = normalizeSheetDoc(sheetKey, {
+        ...(sheetsData[sheetKey] || {}),
+        ...data
+      });
+      dirtySheetKeys.delete(sheetKey);
+      notifyRuntime();
+    },
     subscribe(callback) {
       if (typeof callback !== "function") return () => {};
       runtimeSubscribers.add(callback);
@@ -1743,11 +1777,6 @@ export function initGroupReview(ctx) {
   return {
     renderGroupReviewUI,
     requireMemberSelection,
-    fitTextareas: fitReviewTextareas,
-    // 저장/상태 전환은 모두 상위 레이어가 가로채므로, 여기서 로컬 dirty 표시를 지울 수단을 열어둔다.
-    clearDirtySheet(sheetKey) {
-      if (sheetKey) dirtySheetKeys.delete(sheetKey);
-      else dirtySheetKeys.clear();
-    }
+    fitTextareas: fitReviewTextareas
   };
 }

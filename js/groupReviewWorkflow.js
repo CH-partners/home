@@ -643,7 +643,7 @@ async function persistWorkerSubmission() {
   });
 
   deleted.clear();
-  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
+  runtime()?.applyCommittedSheet(sheetKey, committedSheet);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -696,7 +696,7 @@ async function persistAdminChecks() {
   });
 
   relevant.forEach(([key]) => pendingChecks.delete(key));
-  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
+  runtime()?.applyCommittedSheet(sheetKey, committedSheet);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -792,7 +792,7 @@ async function completeWorkerSheet() {
     transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
+  runtime()?.applyCommittedSheet(sheetKey, committedSheet);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -871,7 +871,7 @@ async function requestRevision(rowId) {
     transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
+  runtime()?.applyCommittedSheet(sheetKey, committedSheet);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -917,7 +917,7 @@ async function completeAdminReview() {
     transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
+  runtime()?.applyCommittedSheet(sheetKey, committedSheet);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
@@ -962,7 +962,7 @@ async function reopenAdminReview() {
     transaction.set(sheetRef, committedSheet, { merge: true });
   });
 
-  window.groupReviewApi?.clearDirtySheet?.(sheetKey);
+  runtime()?.applyCommittedSheet(sheetKey, committedSheet);
   suppressObserver = true;
   try {
     applyRowUi(projectId, sheetKey, committedSheet);
