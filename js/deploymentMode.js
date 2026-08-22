@@ -29,6 +29,10 @@ export function installLimitedDeploymentMode() {
       if (node.classList.contains("nav-item")) {
         const label = normalizeLabel(node.textContent);
         node.style.display = ALLOWED_LABELS.has(label) ? "" : "none";
+        if (label === "분배표" && !node.dataset.allocationV2RefreshBound) {
+          node.dataset.allocationV2RefreshBound = "1";
+          node.addEventListener("click", () => setTimeout(() => window.allocationApi?.refresh?.(), 0));
+        }
       } else {
         node.style.display = "none";
       }
@@ -42,7 +46,7 @@ export function installLimitedDeploymentMode() {
       if (allocationButton) allocationButton.click();
       else {
         document.querySelector('.sheet-panel[data-index="11"]')?.classList.add("active");
-        window.allocationApi?.renderAllocationUI?.();
+        window.allocationApi?.refresh?.();
       }
     }
   }
