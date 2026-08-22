@@ -1,4 +1,1 @@
-export { initGroupReview } from "./groupReviewOriginal.js";
-import "./groupReviewCompat.js";
-import "./groupReviewWorkflow.js";
-import "./groupReviewFinalUi.js";
+export { initGroupReviewV2 as initGroupReview } from "./groupReviewV2.js";
