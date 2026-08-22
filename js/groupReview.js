@@ -8,6 +8,7 @@ import { installGroupReviewAdminNavigationV2 } from "./groupReviewV2AdminNavigat
 import { installGroupReviewProjectDeleteV2 } from "./groupReviewV2ProjectDelete.js";
 import { installGroupReviewKeyboardV2 } from "./groupReviewV2Keyboard.js";
 import { installGroupReviewTheme } from "./groupReviewTheme.js";
+import { installGroupReviewDefaultRowsV2 } from "./groupReviewDefaultRows.js";
 
 export function initGroupReview() {
   installLimitedDeploymentMode();
@@ -20,5 +21,6 @@ export function initGroupReview() {
   installGroupReviewAdminNavigationV2();
   installGroupReviewProjectDeleteV2(api);
   installGroupReviewKeyboardV2();
+  installGroupReviewDefaultRowsV2(api);
   return api;
 }
