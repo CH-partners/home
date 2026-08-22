@@ -76,38 +76,33 @@ export function installGroupReviewRevisionV2(groupReviewApi) {
       const actionCell = rowEl.lastElementChild;
       if (!actionCell) return;
 
+      const baseApprove = actionCell.querySelector(".grv2-approve");
+      if (baseApprove) {
+        baseApprove.style.display = row.review_status === "submitted" ? "" : "none";
+      }
+
       let wrap = actionCell.querySelector(".grv2-revision-wrap");
       if (!wrap) {
         wrap = document.createElement("div");
         wrap.className = "grv2-revision-wrap";
         actionCell.appendChild(wrap);
       }
-      wrap.innerHTML = "";
 
+      const desired = [];
       if (row.review_status === "revision_requested") {
-        const badge = document.createElement("span");
-        badge.className = "grv2-revision-badge";
-        badge.textContent = "재수정 요청";
-        wrap.appendChild(badge);
+        desired.push('<span class="grv2-revision-badge">재수정 요청</span>');
       } else if (row.parent_revision_row_id && Number(row.revision_no) > 1) {
-        const badge = document.createElement("span");
-        badge.className = "grv2-revision-badge grv2-revision-child";
-        badge.textContent = `재수정 v${row.revision_no}`;
-        wrap.appendChild(badge);
+        desired.push(`<span class="grv2-revision-badge grv2-revision-child">재수정 v${Number(row.revision_no)}</span>`);
       }
-
       if (
         state.user?.role === "ADMIN" &&
         !projectCompleted() &&
         ["submitted", "approved"].includes(row.review_status)
       ) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "grv2-revision-btn";
-        button.dataset.revisionRow = String(row.id);
-        button.textContent = "재수정 요청";
-        wrap.appendChild(button);
+        desired.push(`<button type="button" class="grv2-revision-btn" data-revision-row="${Number(row.id)}">재수정 요청</button>`);
       }
+      const html = desired.join("");
+      if (wrap.innerHTML !== html) wrap.innerHTML = html;
     });
   }
 
@@ -128,11 +123,12 @@ export function installGroupReviewRevisionV2(groupReviewApi) {
   }
 
   async function completeSheetRevisionAware() {
-    if (state.busy || state.user?.role !== "WORKER" || !state.sheetId) return;
+    const sheetId = activeSheetId();
+    if (state.busy || state.user?.role !== "WORKER" || !sheetId) return;
     if (!confirm("현재 시트 입력을 완료할까요? 재수정 행도 함께 검토 대상으로 제출됩니다.")) return;
     state.busy = true;
     try {
-      await api(`/group-review/sheets/${state.sheetId}/complete-revision-aware`, { method: "POST" });
+      await api(`/group-review/sheets/${sheetId}/complete-revision-aware`, { method: "POST" });
       await groupReviewApi?.refresh?.();
       setTimeout(refreshContext, 100);
       alert("입력 완료되었습니다.");
@@ -144,12 +140,13 @@ export function installGroupReviewRevisionV2(groupReviewApi) {
   }
 
   async function completeProjectRevisionAware() {
-    if (state.busy || state.user?.role !== "ADMIN" || !state.projectId) return;
+    const projectId = activeProjectId();
+    if (state.busy || state.user?.role !== "ADMIN" || !projectId) return;
     const name = document.querySelector("#groupReviewBody .grv2-project-title")?.textContent?.replace(/\s*·\s*완료\s*$/, "") || "선택 프로젝트";
     if (!confirm(`"${name}" 프로젝트를 완료할까요?`)) return;
     state.busy = true;
     try {
-      await api(`/group-review/projects/${state.projectId}/complete-revision-aware`, { method: "POST" });
+      await api(`/group-review/projects/${projectId}/complete-revision-aware`, { method: "POST" });
       await groupReviewApi?.refresh?.();
       setTimeout(refreshContext, 100);
       alert("프로젝트가 완료되었습니다.");
@@ -183,6 +180,11 @@ export function installGroupReviewRevisionV2(groupReviewApi) {
       event.preventDefault();
       event.stopImmediatePropagation();
       void completeProjectRevisionAware();
+      return;
+    }
+
+    if (target.closest(".grv2-tab,.grv2-project-badge,#grv2Refresh,[data-approve-row]")) {
+      setTimeout(refreshContext, 120);
     }
   }
 
@@ -229,9 +231,9 @@ export function installGroupReviewRevisionV2(groupReviewApi) {
     const body = document.getElementById("groupReviewBody");
     if (!body) return setTimeout(startObserver, 100);
     state.observer = new MutationObserver(mutations => {
-      if (mutations.some(mutation => mutation.target === body || mutation.addedNodes.length)) scheduleRefresh();
+      if (mutations.some(mutation => mutation.target === body)) scheduleRefresh();
     });
-    state.observer.observe(body, { childList: true, subtree: true });
+    state.observer.observe(body, { childList: true });
     refreshContext();
   }
 
