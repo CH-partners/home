@@ -49,7 +49,11 @@ def _project_response(project: AllocationProject) -> AllocationProjectResponse:
                 column["id"]: str(legacy_values.get(column["label"], legacy_values.get(column["id"], "")))
                 for column in normalized_columns
             }
-        rows.append({"name": str(row.get("name") or ""), "values": values})
+        rows.append({
+            "name": str(row.get("name") or ""),
+            "active": bool(row.get("active", True)),
+            "values": values,
+        })
 
     return AllocationProjectResponse(
         id=project.id,
