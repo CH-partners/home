@@ -95,10 +95,10 @@ export function installLimitedDeploymentMode() {
         min-height:48px;
         margin:10px 16px 18px;
         padding:7px 10px;
-        border:1px solid rgba(255,255,255,.20);
+        border:1px solid rgba(0,0,0,.16);
         border-radius:10px;
         background:#ece2a1;
-        color:#ffffff;
+        color:#111111;
         box-shadow:0 5px 14px rgba(0,0,0,.12);
       }
       #limitedLoginBox.visible {
@@ -119,10 +119,10 @@ export function installLimitedDeploymentMode() {
         align-items:center;
         height:23px;
         padding:0 7px;
-        border:1px solid rgba(255,255,255,.30);
+        border:1px solid rgba(0,0,0,.20);
         border-radius:999px;
-        background:rgba(31,78,121,.48);
-        color:#ffffff;
+        background:rgba(255,255,255,.28);
+        color:#111111;
         font-size:9px;
         font-weight:900;
         letter-spacing:.04em;
@@ -136,7 +136,7 @@ export function installLimitedDeploymentMode() {
         min-width:0;
         overflow:hidden;
         text-overflow:ellipsis;
-        color:#ffffff;
+        color:#111111;
         font-size:13px;
         font-weight:900;
         line-height:1.2;
@@ -146,8 +146,8 @@ export function installLimitedDeploymentMode() {
         margin-left:auto;
         padding:2px 6px;
         border-radius:999px;
-        background:rgba(255,255,255,.14);
-        color:#eaf0f6;
+        background:rgba(255,255,255,.28);
+        color:#111111;
         font-size:9px;
         font-weight:800;
       }
