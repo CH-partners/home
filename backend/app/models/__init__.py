@@ -7,11 +7,13 @@ from app.models.group_review import (
     GroupReviewSheet,
 )
 from app.models.schedule import Schedule
+from app.models.user import AppUser
 
 __all__ = [
     "AllocationProject",
     "AllocationState",
     "AppSettings",
+    "AppUser",
     "EditLog",
     "GroupReviewProject",
     "GroupReviewRow",
