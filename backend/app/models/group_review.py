@@ -172,6 +172,12 @@ class GroupReviewRow(Base):
         nullable=False,
         server_default="",
     )
+    cell_styles: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
     review_status: Mapped[str] = mapped_column(
         Text,
         nullable=False,
