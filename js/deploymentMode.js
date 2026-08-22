@@ -92,40 +92,63 @@ export function installLimitedDeploymentMode() {
       #limitedLoginBox {
         display:none;
         flex-shrink:0;
-        margin:12px 16px 18px;
-        padding:12px 13px;
-        border:1px solid rgba(255,255,255,.28);
-        border-radius:12px;
-        background:rgba(255,255,255,.10);
+        min-height:48px;
+        margin:10px 16px 18px;
+        padding:7px 10px;
+        border:1px solid rgba(255,255,255,.20);
+        border-radius:10px;
+        background:#5f7389;
         color:#ffffff;
-        box-shadow:0 6px 18px rgba(0,0,0,.10);
+        box-shadow:0 5px 14px rgba(0,0,0,.12);
       }
       #limitedLoginBox.visible {
-        display:block;
+        display:flex;
+        align-items:center;
+      }
+      #limitedLoginBox .limited-login-line {
+        width:100%;
+        min-width:0;
+        display:flex;
+        align-items:center;
+        gap:7px;
+        white-space:nowrap;
       }
       #limitedLoginBox .limited-login-caption {
-        margin-bottom:5px;
-        color:#b9c9df;
-        font-size:10px;
-        font-weight:700;
-        letter-spacing:.05em;
-      }
-      #limitedLoginBox .limited-login-name {
-        color:#ffffff;
-        font-size:14px;
-        font-weight:900;
-        line-height:1.35;
-      }
-      #limitedLoginBox .limited-login-role {
+        flex:0 0 auto;
         display:inline-flex;
         align-items:center;
-        margin-top:7px;
-        padding:3px 7px;
-        border:1px solid rgba(255,255,255,.32);
+        height:23px;
+        padding:0 7px;
+        border:1px solid rgba(255,255,255,.30);
         border-radius:999px;
-        background:rgba(255,255,255,.12);
-        color:#e8eef8;
-        font-size:10px;
+        background:rgba(31,78,121,.48);
+        color:#ffffff;
+        font-size:9px;
+        font-weight:900;
+        letter-spacing:.04em;
+      }
+      #limitedLoginBox .limited-login-icon {
+        flex:0 0 auto;
+        font-size:14px;
+        line-height:1;
+      }
+      #limitedLoginBox .limited-login-name {
+        min-width:0;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        color:#ffffff;
+        font-size:13px;
+        font-weight:900;
+        line-height:1.2;
+      }
+      #limitedLoginBox .limited-login-role {
+        flex:0 0 auto;
+        margin-left:auto;
+        padding:2px 6px;
+        border-radius:999px;
+        background:rgba(255,255,255,.14);
+        color:#eaf0f6;
+        font-size:9px;
         font-weight:800;
       }
 
@@ -171,9 +194,12 @@ export function installLimitedDeploymentMode() {
       box = document.createElement("div");
       box.id = "limitedLoginBox";
       box.innerHTML = `
-        <div class="limited-login-caption">LOGIN</div>
-        <div class="limited-login-name"></div>
-        <div class="limited-login-role"></div>
+        <div class="limited-login-line">
+          <span class="limited-login-caption">LOGIN</span>
+          <span class="limited-login-icon">👤</span>
+          <span class="limited-login-name"></span>
+          <span class="limited-login-role"></span>
+        </div>
       `;
       sidebar.appendChild(box);
     }
