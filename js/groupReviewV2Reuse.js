@@ -116,21 +116,21 @@ export function installGroupReviewReuseV2(groupReviewApi) {
       const { user, selectedSheet, ownSheet } = context;
       if (user.role === "WORKER" && ownSheet?.completed) {
         const button = makeButton(
-          ownSheet.reuse_requested ? "재사용 요청중" : "재사용 요청",
+          ownSheet.reuse_requested ? "재수정 요청중" : "재수정 요청",
           "grv2-reuse-request",
           async event => {
             event.stopPropagation();
             if (ownSheet.reuse_requested) return;
-            if (!confirm("본인 시트를 다시 사용할 수 있도록 관리자에게 재사용 요청을 보낼까요?")) return;
+            if (!confirm("입력 완료한 본인 시트를 다시 수정할 수 있도록 관리자에게 재수정 요청을 보낼까요?")) return;
             try {
               button.disabled = true;
               await api(`/group-review/sheets/${ownSheet.id}/reuse-request`, { method: "POST" });
               await refreshBasePreservingSheet();
               scheduleRender(0);
-              alert("재사용 요청을 보냈습니다. 관리자 승인 전까지 입력은 잠긴 상태입니다.");
+              alert("재수정 요청을 보냈습니다. 관리자 승인 전까지 입력은 잠긴 상태입니다.");
             } catch (error) {
               button.disabled = false;
-              alert(`재사용 요청 실패: ${error.message}`);
+              alert(`재수정 요청 실패: ${error.message}`);
             }
           }
         );
@@ -141,39 +141,39 @@ export function installGroupReviewReuseV2(groupReviewApi) {
       if (user.role === "ADMIN" && selectedSheet?.completed && selectedSheet.reuse_requested) {
         const note = document.createElement("span");
         note.className = "grv2-reuse-note";
-        note.textContent = `${selectedSheet.member_name} 재사용 요청`;
+        note.textContent = `${selectedSheet.member_name} 재수정 요청`;
         note.style.fontSize = "12px";
         note.style.fontWeight = "700";
         note.style.color = "#c2410c";
         host.appendChild(note);
 
-        host.appendChild(makeButton("재사용 승인", "grv2-success", async event => {
+        host.appendChild(makeButton("재수정 승인", "grv2-success", async event => {
           event.stopPropagation();
-          if (!confirm(`${selectedSheet.member_name} 시트 재사용을 승인할까요?\n확인 완료된 회색 행은 잠긴 채 유지됩니다.`)) return;
+          if (!confirm(`${selectedSheet.member_name} 시트 재수정을 승인할까요?\n확인 완료된 회색 행은 잠긴 채 유지됩니다.`)) return;
           try {
             event.currentTarget.disabled = true;
             await api(`/group-review/sheets/${selectedSheet.id}/reuse-approve`, { method: "POST" });
             await refreshBasePreservingSheet();
             scheduleRender(0);
-            alert("재사용을 승인했습니다.");
+            alert("재수정을 승인했습니다.");
           } catch (error) {
             event.currentTarget.disabled = false;
-            alert(`재사용 승인 실패: ${error.message}`);
+            alert(`재수정 승인 실패: ${error.message}`);
           }
         }));
 
         host.appendChild(makeButton("요청 거절", "grv2-danger", async event => {
           event.stopPropagation();
-          if (!confirm(`${selectedSheet.member_name} 시트 재사용 요청을 거절할까요?`)) return;
+          if (!confirm(`${selectedSheet.member_name} 시트 재수정 요청을 거절할까요?`)) return;
           try {
             event.currentTarget.disabled = true;
             await api(`/group-review/sheets/${selectedSheet.id}/reuse-reject`, { method: "POST" });
             await refreshBasePreservingSheet();
             scheduleRender(0);
-            alert("재사용 요청을 거절했습니다.");
+            alert("재수정 요청을 거절했습니다.");
           } catch (error) {
             event.currentTarget.disabled = false;
-            alert(`재사용 거절 실패: ${error.message}`);
+            alert(`재수정 요청 거절 실패: ${error.message}`);
           }
         }));
       }
