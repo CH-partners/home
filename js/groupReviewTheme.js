@@ -8,13 +8,17 @@ export function installGroupReviewTheme() {
       border-color: #9db3ca !important;
     }
 
+    #groupReviewBody .grv2 table {
+      border-color: #9db3ca !important;
+    }
+
     #groupReviewBody .grv2 th,
     #groupReviewBody .grv2 td {
       border-right-color: #9db3ca !important;
       border-bottom-color: #9db3ca !important;
     }
 
-    #groupReviewBody .grv2 th {
+    #groupReviewBody .grv2 thead th {
       background: #f3ead8 !important;
       color: #334155 !important;
     }
