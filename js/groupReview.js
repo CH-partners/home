@@ -6,6 +6,7 @@ import { installGroupReviewAdminTabStatusV2 } from "./groupReviewV2AdminTabStatu
 import { installGroupReviewCellLockV2 } from "./groupReviewV2CellLock.js";
 import { installGroupReviewAdminNavigationV2 } from "./groupReviewV2AdminNavigation.js";
 import { installGroupReviewProjectDeleteV2 } from "./groupReviewV2ProjectDelete.js";
+import { installGroupReviewKeyboardV2 } from "./groupReviewV2Keyboard.js";
 
 export function initGroupReview() {
   installLimitedDeploymentMode();
@@ -16,5 +17,6 @@ export function initGroupReview() {
   installGroupReviewCellLockV2();
   installGroupReviewAdminNavigationV2();
   installGroupReviewProjectDeleteV2(api);
+  installGroupReviewKeyboardV2();
   return api;
 }
