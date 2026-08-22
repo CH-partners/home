@@ -24,18 +24,29 @@ export function installGroupReviewAdminTabStatusV2() {
     const style = document.createElement("style");
     style.id = "grv2-admin-tab-status-styles";
     style.textContent = `
-      .grv2-tab.grv2-admin-complete {
+      .grv2-tab.grv2-admin-tab {
+        background: #ffffff !important;
+        border: 1px solid #6f8faa !important;
+        border-bottom-color: #6f8faa !important;
+        color: #334155 !important;
+        font-weight: 600;
+      }
+      .grv2-tab.grv2-admin-complete:not(.active) {
         background: #fff3b0 !important;
         border-color: #eab308 !important;
         color: #713f12 !important;
       }
-      .grv2-tab.grv2-admin-reuse {
+      .grv2-tab.grv2-admin-reuse:not(.active) {
         background: #fecaca !important;
         border-color: #ef4444 !important;
         color: #991b1b !important;
       }
+      .grv2-tab.grv2-admin-tab.active,
       .grv2-tab.grv2-admin-complete.active,
       .grv2-tab.grv2-admin-reuse.active {
+        background: #1f4e79 !important;
+        border-color: #1f4e79 !important;
+        color: #ffffff !important;
         font-weight: 800;
       }
     `;
@@ -48,7 +59,7 @@ export function installGroupReviewAdminTabStatusV2() {
 
   function clearAdminStatus() {
     document.querySelectorAll("#groupReviewBody .grv2-tab").forEach(tab => {
-      tab.classList.remove("grv2-admin-complete", "grv2-admin-reuse");
+      tab.classList.remove("grv2-admin-tab", "grv2-admin-complete", "grv2-admin-reuse");
       tab.removeAttribute("title");
     });
   }
@@ -60,6 +71,7 @@ export function installGroupReviewAdminTabStatusV2() {
     const name = String(sheet.member_name || "");
     if (tab.textContent !== name) tab.textContent = name;
 
+    tab.classList.add("grv2-admin-tab");
     const reuseRequested = Boolean(sheet.reuse_requested);
     const completed = Boolean(sheet.completed);
     tab.classList.toggle("grv2-admin-reuse", reuseRequested);
