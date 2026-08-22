@@ -18,6 +18,8 @@ export function installGroupReviewReuseV2(groupReviewApi) {
   let reconnectTimer = null;
   let refreshTimer = null;
   let rendering = false;
+  let currentLoginId = "";
+  let destroyed = false;
 
   const bodyEl = () => document.getElementById("groupReviewBody");
   const activeProjectButton = () => document.querySelector("#groupReviewProjectBadges [data-project-id].active");
@@ -41,7 +43,8 @@ export function installGroupReviewReuseV2(groupReviewApi) {
     const sheetId = selectedSheetId();
     await groupReviewApi?.refresh?.();
     if (sheetId) {
-      bodyEl()?.querySelector(`[data-sheet-id="${sheetId}"]`)?.click();
+      const button = bodyEl()?.querySelector(`[data-sheet-id="${sheetId}"]`);
+      if (button && !button.classList.contains("active")) button.click();
     }
   }
 
@@ -52,6 +55,7 @@ export function installGroupReviewReuseV2(groupReviewApi) {
       api("/auth/me"),
       api(`/group-review/projects/${projectId}/sheets`)
     ]);
+    currentLoginId = user?.login_id || "";
     const selectedId = selectedSheetId();
     const ownId = ownSheetId();
     const selectedSheet = sheets.find(sheet => sheet.id === selectedId) || null;
@@ -88,7 +92,7 @@ export function installGroupReviewReuseV2(groupReviewApi) {
   }
 
   async function renderControls() {
-    if (rendering) return;
+    if (destroyed || rendering) return;
     rendering = true;
     try {
       const body = bodyEl();
@@ -114,7 +118,8 @@ export function installGroupReviewReuseV2(groupReviewApi) {
         const button = makeButton(
           ownSheet.reuse_requested ? "재사용 요청중" : "재사용 요청",
           "grv2-reuse-request",
-          async () => {
+          async event => {
+            event.stopPropagation();
             if (ownSheet.reuse_requested) return;
             if (!confirm("본인 시트를 다시 사용할 수 있도록 관리자에게 재사용 요청을 보낼까요?")) return;
             try {
@@ -143,6 +148,7 @@ export function installGroupReviewReuseV2(groupReviewApi) {
         host.appendChild(note);
 
         host.appendChild(makeButton("재사용 승인", "grv2-success", async event => {
+          event.stopPropagation();
           if (!confirm(`${selectedSheet.member_name} 시트 재사용을 승인할까요?\n확인 완료된 회색 행은 잠긴 채 유지됩니다.`)) return;
           try {
             event.currentTarget.disabled = true;
@@ -157,6 +163,7 @@ export function installGroupReviewReuseV2(groupReviewApi) {
         }));
 
         host.appendChild(makeButton("요청 거절", "grv2-danger", async event => {
+          event.stopPropagation();
           if (!confirm(`${selectedSheet.member_name} 시트 재사용 요청을 거절할까요?`)) return;
           try {
             event.currentTarget.disabled = true;
@@ -176,6 +183,7 @@ export function installGroupReviewReuseV2(groupReviewApi) {
   }
 
   function scheduleRender(delay = 80) {
+    if (destroyed) return;
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => {
       refreshTimer = null;
@@ -196,6 +204,7 @@ export function installGroupReviewReuseV2(groupReviewApi) {
   }
 
   function ensureSocket() {
+    if (destroyed) return;
     const projectId = selectedProjectId();
     if (!projectId) return closeSocket();
     if (socket && socketProjectId === projectId && [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)) return;
@@ -208,31 +217,51 @@ export function installGroupReviewReuseV2(groupReviewApi) {
       try {
         const message = JSON.parse(event.data);
         if (!["reuse_requested", "reuse_approved", "reuse_rejected"].includes(message.type)) return;
+        if (message.actor_login_id && message.actor_login_id === currentLoginId) return;
         const sheetId = selectedSheetId();
         void refreshBasePreservingSheet().then(() => {
-          if (sheetId) bodyEl()?.querySelector(`[data-sheet-id="${sheetId}"]`)?.click();
+          if (sheetId) {
+            const button = bodyEl()?.querySelector(`[data-sheet-id="${sheetId}"]`);
+            if (button && !button.classList.contains("active")) button.click();
+          }
           scheduleRender(0);
         });
       } catch (_) {}
     };
     socket.onclose = () => {
       socket = null;
-      if (selectedProjectId()) reconnectTimer = setTimeout(ensureSocket, 1500);
+      if (!destroyed && selectedProjectId()) reconnectTimer = setTimeout(ensureSocket, 1500);
     };
   }
 
-  const observer = new MutationObserver(() => {
-    if (!rendering) scheduleRender();
-  });
-  const startObserver = () => {
-    const body = bodyEl();
-    const badges = document.getElementById("groupReviewProjectBadges");
-    if (!body || !badges) return setTimeout(startObserver, 100);
-    observer.observe(body, { childList: true, subtree: true });
-    observer.observe(badges, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
-    scheduleRender(0);
-  };
+  function onDocumentClick(event) {
+    if (destroyed) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target || target.closest(".grv2-reuse-control")) return;
+    if (target.closest(".grv2-tab, .grv2-project-badge, #grv2CompleteSheet, #grv2CompleteProject, #grv2ReopenProject, #grv2Refresh")) {
+      scheduleRender(350);
+    }
+  }
 
-  startObserver();
-  return { refresh: () => scheduleRender(0), destroy: () => { observer.disconnect(); closeSocket(); } };
+  function onDocumentSubmit(event) {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.matches("#grv2LoginForm")) scheduleRender(500);
+  }
+
+  document.addEventListener("click", onDocumentClick, true);
+  document.addEventListener("submit", onDocumentSubmit, true);
+
+  // 초기 로그인 상태/화면 렌더가 비동기이므로 짧게 몇 번만 확인한다.
+  [0, 150, 400, 900].forEach(delay => setTimeout(() => scheduleRender(0), delay));
+
+  return {
+    refresh: () => scheduleRender(0),
+    destroy: () => {
+      destroyed = true;
+      clearTimeout(refreshTimer);
+      document.removeEventListener("click", onDocumentClick, true);
+      document.removeEventListener("submit", onDocumentSubmit, true);
+      closeSocket();
+    }
+  };
 }
