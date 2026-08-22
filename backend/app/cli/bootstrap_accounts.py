@@ -25,8 +25,10 @@ WORKERS = [
 ]
 
 ADMINS = [
+    ("admin", "관리자"),
     ("admin1", "관리자1"),
     ("admin2", "관리자2"),
+    ("admin4", "관리자4"),
 ]
 
 
