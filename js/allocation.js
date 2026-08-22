@@ -61,7 +61,6 @@ export function initAllocation() {
     toolbar.innerHTML = `
       <button class="action-btn" onclick="createProjectPrompt()" ${isAdmin() ? "" : "style=\"display:none\""}>프로젝트 생성</button>
       <button class="action-btn" onclick="renameAllocationProjectPrompt()" ${isAdmin() ? "" : "style=\"display:none\""}>프로젝트명 변경</button>
-      <button class="action-btn" onclick="saveAllocationData()" ${isAdmin() ? "" : "style=\"display:none\""}>저장</button>
       <button class="action-btn" onclick="downloadAllAllocationExcel()" ${isAdmin() ? "" : "style=\"display:none\""}>엑셀 다운로드</button>
       <button class="action-btn danger" onclick="deleteSelectedProject()" ${isAdmin() ? "" : "style=\"display:none\""}>프로젝트 삭제</button>
     `;
@@ -162,7 +161,7 @@ export function initAllocation() {
       </div>
       ${admin ? '<div class="work-info">이름 열의 ☰를 드래그하면 행 순서를 바꿀 수 있습니다. 항목 추가/수정과 셀 입력 후 저장하세요.</div>' : ""}
       <div class="work-header-actions">
-        ${admin ? '<button class="action-btn" id="allocationAddColumn">열 추가</button>' : ""}
+        ${admin ? '<button class="action-btn" id="allocationAddColumn">열 추가</button><button class="action-btn" id="allocationSaveInline">저장</button>' : ""}
         <span id="allocationV2Status" style="font-size:12px;color:#64748b">${state.dirty ? "저장 필요" : "저장됨"}</span>
       </div>
       <div class="work-table-wrap">
@@ -180,6 +179,7 @@ export function initAllocation() {
       markDirty();
     });
     document.getElementById("allocationAddColumn")?.addEventListener("click", addColumnPrompt);
+    document.getElementById("allocationSaveInline")?.addEventListener("click", () => window.saveAllocationData?.());
     body.querySelectorAll("[data-edit-column]").forEach(button => button.addEventListener("click", () => editColumnPrompt(Number(button.dataset.editColumn))));
     body.querySelectorAll("[data-toggle-worker]").forEach(button => button.addEventListener("click", event => {
       event.preventDefault();
