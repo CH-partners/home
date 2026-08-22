@@ -231,6 +231,61 @@ export function installGroupReviewCellLockV2() {
     requestLock(cell);
   }
 
+  function findDirectionalTarget(cell, key) {
+    const row = cell.closest(".grv2-row");
+    if (!row) return null;
+
+    if (key === "ArrowLeft" || key === "ArrowRight") {
+      const cells = Array.from(row.querySelectorAll(".grv2-cell.editable"));
+      const index = cells.indexOf(cell);
+      if (index < 0) return null;
+      const nextIndex = index + (key === "ArrowLeft" ? -1 : 1);
+      return cells[nextIndex] || null;
+    }
+
+    const rows = Array.from(document.querySelectorAll("#groupReviewBody .grv2-row"));
+    const rowIndex = rows.indexOf(row);
+    if (rowIndex < 0) return null;
+    const step = key === "ArrowUp" ? -1 : 1;
+    const fieldName = cell.dataset.field;
+
+    for (let index = rowIndex + step; index >= 0 && index < rows.length; index += step) {
+      const candidate = Array.from(rows[index].querySelectorAll(".grv2-cell.editable"))
+        .find(item => item.dataset.field === fieldName);
+      if (candidate) return candidate;
+    }
+    return null;
+  }
+
+  function onKeyDown(event) {
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    const cell = event.target instanceof Element ? event.target.closest("#groupReviewBody .grv2-cell.editable") : null;
+    if (!cell) return;
+
+    const currentKey = cellKey(activeSheetId(), Number(cell.dataset.rowId), cell.dataset.field);
+    if (state.ownedKey !== currentKey) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const target = findDirectionalTarget(cell, event.key);
+    if (!target) return;
+
+    const targetLock = lockForCell(target);
+    const targetKey = cellKey(activeSheetId(), Number(target.dataset.rowId), target.dataset.field);
+    if (targetLock && state.ownedKey !== targetKey) {
+      const status = document.getElementById("grv2Status");
+      if (status) status.textContent = `${targetLock.display_name || "다른 작업자"} 편집 중`;
+      return;
+    }
+
+    // blur가 현재 셀의 변경값을 먼저 저장하고, 다음 셀은 별도 잠금을 얻어 편집한다.
+    cell.blur();
+    requestAnimationFrame(() => {
+      if (target.isConnected) requestLock(target);
+    });
+  }
+
   function onFocusOut(event) {
     const cell = event.target instanceof Element ? event.target.closest("#groupReviewBody .grv2-cell.editable") : null;
     if (!cell) return;
@@ -271,6 +326,7 @@ export function installGroupReviewCellLockV2() {
 
   ensureStyles();
   document.addEventListener("pointerdown", onPointerDown, true);
+  document.addEventListener("keydown", onKeyDown, true);
   document.addEventListener("focusout", onFocusOut, true);
   document.addEventListener("click", onClick, true);
   window.addEventListener("beforeunload", releaseOwnedLock);
