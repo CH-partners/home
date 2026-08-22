@@ -7,6 +7,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str = Field(..., validation_alias="DATABASE_URL")
+    auth_secret_key: str = Field(..., validation_alias="AUTH_SECRET_KEY")
+    auth_session_hours: int = Field(12, validation_alias="AUTH_SESSION_HOURS")
+    auth_cookie_name: str = Field("ch_home_session", validation_alias="AUTH_COOKIE_NAME")
+    auth_cookie_secure: bool = Field(False, validation_alias="AUTH_COOKIE_SECURE")
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parents[2] / ".env"),
