@@ -64,7 +64,7 @@ export function initGroupReviewV2() {
       .grv2-btn{border:1px solid #cbd5e1;background:#fff;border-radius:7px;padding:7px 10px;cursor:pointer}.grv2-btn:hover{background:#f8fafc}.grv2-btn:disabled{opacity:.5;cursor:not-allowed}
       .grv2-login{max-width:420px;margin:24px auto;padding:22px;background:white;border:1px solid #dbe2ea;border-radius:10px}.grv2-login h3{margin:0 0 14px}.grv2-login label{display:block;font-size:12px;font-weight:700;margin:10px 0 5px}.grv2-login input{width:100%;height:38px;border:1px solid #cbd5e1;border-radius:7px;padding:0 10px}.grv2-login button{width:100%;height:40px;margin-top:14px;background:#1d4ed8;color:white;border:0;border-radius:7px;font-weight:700;cursor:pointer}
       .grv2-note{padding:18px;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;color:#64748b;text-align:center}
-      .grv2-tabs{display:flex;gap:5px;overflow:auto;border:1px solid #dbe2ea;border-bottom:0;background:#fff;padding:8px 8px 0;border-radius:9px 9px 0 0}.grv2-tab{border:1px solid transparent;border-bottom:0;background:#f1f5f9;border-radius:7px 7px 0 0;padding:7px 11px;cursor:pointer;white-space:nowrap}.grv2-tab.active{background:#fff;border-color:#dbe2ea;font-weight:700;position:relative;top:1px}
+      .grv2-tabs{display:flex;gap:5px;overflow:auto;border:1px solid #dbe2ea;border-bottom:0;background:#fff;padding:8px 8px 0;border-radius:9px 9px 0 0}.grv2-tab{border:1px solid transparent;border-bottom:0;background:#f1f5f9;border-radius:7px 7px 0 0;padding:7px 11px;cursor:pointer;white-space:nowrap}.grv2-tab.active{background:#fff;border-color:#dbe2ea;font-weight:700;position:relative;top:1px}.grv2-tab.own{box-shadow:inset 0 2px 0 #2563eb}
       .grv2-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:white;border:1px solid #dbe2ea;padding:8px}.grv2-toolbar select,.grv2-toolbar button{height:32px;border:1px solid #cbd5e1;background:white;border-radius:6px;padding:0 9px}.grv2-toolbar button{cursor:pointer}.grv2-toolbar .bold{font-weight:800}.grv2-toolbar .strike{text-decoration:line-through}.grv2-toolbar .spacer{flex:1}.grv2-status{font-size:12px;color:#64748b}
       .grv2-grid{overflow:auto;border:1px solid #dbe2ea;border-top:0;background:white;min-height:360px}.grv2 table{width:100%;min-width:1080px;border-collapse:separate;border-spacing:0;table-layout:fixed}.grv2 th,.grv2 td{border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0}.grv2 th{position:sticky;top:0;z-index:2;background:#f8fafc;padding:9px 6px;font-size:12px}.grv2 td{padding:0;vertical-align:top}.grv2-no{width:46px;text-align:center;background:#fafafa;color:#64748b;font-size:12px;vertical-align:middle!important}.grv2-cell{min-height:38px;padding:8px;outline:none;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}.grv2-cell.center{text-align:center}.grv2-cell.editable:focus,.grv2-cell.selected{box-shadow:inset 0 0 0 2px #2563eb}.grv2-cell.readonly{background:#f8fafc}.grv2-del{width:100%;height:38px;border:0;background:transparent;color:#94a3b8;font-size:18px;cursor:pointer}.grv2-del:hover{background:#fef2f2;color:#dc2626}
       .grv2-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px solid #dbe2ea;border-top:0;border-radius:0 0 9px 9px;padding:9px}.grv2-savehint{font-size:12px;color:#64748b}.grv2-project-title{font-weight:700;font-size:14px;margin:0 0 8px}.grv2-error{color:#b91c1c;font-size:12px;margin-top:8px}
@@ -152,6 +152,10 @@ export function initGroupReviewV2() {
     return parts.join(";");
   }
 
+  function isOwnSheet(sheet = state.sheet) {
+    return !!(state.user?.role === "WORKER" && sheet && sheet.member_name === state.user.display_name);
+  }
+
   function renderMain() {
     ensureStyles();
     setLegacyToolbarState();
@@ -161,9 +165,10 @@ export function initGroupReviewV2() {
     if (!state.user) return renderLogin();
 
     const projectName = state.project?.name || "프로젝트를 선택하세요";
-    const canEdit = state.user.role === "WORKER" && state.sheet && !state.sheet.completed && !state.sheet.review_completed && !state.project?.completed;
+    const ownSheet = isOwnSheet();
+    const canEdit = ownSheet && state.sheet && !state.sheet.completed && !state.sheet.review_completed && !state.project?.completed;
     const tabs = state.sheets.map(sheet => `
-      <button type="button" class="grv2-tab ${state.sheet?.id === sheet.id ? "active" : ""}" data-sheet-id="${sheet.id}">${escapeHtml(sheet.member_name)}</button>
+      <button type="button" class="grv2-tab ${state.sheet?.id === sheet.id ? "active" : ""} ${isOwnSheet(sheet) ? "own" : ""}" data-sheet-id="${sheet.id}">${escapeHtml(sheet.member_name)}${isOwnSheet(sheet) ? " · 나" : ""}</button>
     `).join("");
 
     const rowHtml = state.rows.map((row, index) => {
@@ -173,6 +178,12 @@ export function initGroupReviewV2() {
       }).join("");
       return `<tr><td class="grv2-no">${index + 1}</td>${cells}<td>${canEdit ? `<button class="grv2-del" type="button" data-delete-row="${row.id}">×</button>` : ""}</td></tr>`;
     }).join("");
+
+    const readonlyMessage = state.user.role === "ADMIN"
+      ? "관리자는 작업자 시트를 조회할 수 있습니다."
+      : ownSheet
+        ? "현재 시트는 완료 상태라 읽기 전용입니다."
+        : `${state.sheet?.member_name || "다른 작업자"} 시트 · 읽기 전용`;
 
     body.innerHTML = `
       <div class="grv2">
@@ -189,10 +200,10 @@ export function initGroupReviewV2() {
             <button id="grv2Strike" class="strike" type="button" ${canEdit ? "" : "disabled"}>S</button>
             <label style="font-size:12px">셀 색 <input id="grv2Bg" type="color" value="#fff3b0" ${canEdit ? "" : "disabled"}></label>
             <button id="grv2Clear" type="button" ${canEdit ? "" : "disabled"}>서식 지우기</button>
-            <span class="spacer"></span><span id="grv2Status" class="grv2-status">${canEdit ? "셀을 선택하세요." : "읽기 전용"}</span>
+            <span class="spacer"></span><span id="grv2Status" class="grv2-status">${canEdit ? "셀을 선택하세요." : readonlyMessage}</span>
           </div>
           <div class="grv2-grid"><table><thead><tr><th style="width:46px">#</th><th style="width:86px">Collateral#</th><th style="width:68px">Sheet</th><th style="width:76px">Field No.</th><th style="width:390px">변경전</th><th style="width:390px">변경후</th><th style="width:54px">삭제</th></tr></thead><tbody>${rowHtml}</tbody></table></div>
-          <div class="grv2-bottom"><button id="grv2Add" type="button" class="grv2-btn" ${canEdit ? "" : "disabled"}>+ 행 추가</button><span class="grv2-savehint">${canEdit ? "셀 편집 후 다른 곳을 클릭하면 PostgreSQL에 저장됩니다." : "관리자는 작업자 시트를 조회할 수 있습니다."}</span></div>
+          <div class="grv2-bottom"><button id="grv2Add" type="button" class="grv2-btn" ${canEdit ? "" : "disabled"}>+ 행 추가</button><span class="grv2-savehint">${canEdit ? "내 시트만 편집할 수 있으며, 셀 편집 후 다른 곳을 클릭하면 PostgreSQL에 저장됩니다." : readonlyMessage}</span></div>
         `}
       </div>`;
 
@@ -218,7 +229,7 @@ export function initGroupReviewV2() {
   }
 
   function selectCell(cell) {
-    if (state.user?.role !== "WORKER") return;
+    if (!isOwnSheet() || state.user?.role !== "WORKER") return;
     document.querySelectorAll(".grv2-cell.selected").forEach(el => el.classList.remove("selected"));
     cell.classList.add("selected");
     const row = state.rows.find(item => item.id === Number(cell.dataset.rowId));
@@ -227,7 +238,7 @@ export function initGroupReviewV2() {
   }
 
   async function saveCellText(cell) {
-    if (state.user?.role !== "WORKER") return;
+    if (!isOwnSheet() || state.user?.role !== "WORKER") return;
     const rowId = Number(cell.dataset.rowId);
     const field = cell.dataset.field;
     const row = state.rows.find(item => item.id === rowId);
@@ -248,7 +259,7 @@ export function initGroupReviewV2() {
   }
 
   async function addRow() {
-    if (!state.sheet) return;
+    if (!state.sheet || !isOwnSheet()) return;
     try {
       status("행 추가 중...");
       await api(`/group-review/sheets/${state.sheet.id}/rows`, { method: "POST", body: JSON.stringify({}) });
@@ -258,6 +269,7 @@ export function initGroupReviewV2() {
   }
 
   async function removeRow(rowId) {
+    if (!isOwnSheet()) return;
     if (!confirm("이 행을 삭제하시겠습니까?")) return;
     try {
       await api(`/group-review/rows/${rowId}`, { method: "DELETE" });
@@ -266,7 +278,7 @@ export function initGroupReviewV2() {
   }
 
   async function persistSelectedStyles() {
-    if (!state.selectedCell) return;
+    if (!state.selectedCell || !isOwnSheet()) return;
     const { row } = state.selectedCell;
     try {
       const updated = await api(`/group-review/rows/${row.id}`, { method: "PATCH", body: JSON.stringify({ cell_styles: row.cell_styles || {} }) });
@@ -277,7 +289,7 @@ export function initGroupReviewV2() {
   }
 
   async function updateSelectedStyle(key, value) {
-    if (!state.selectedCell) return alert("먼저 셀을 선택하세요.");
+    if (!state.selectedCell) return alert("먼저 내 시트의 셀을 선택하세요.");
     const { row, styleKey } = state.selectedCell;
     row.cell_styles ||= {};
     row.cell_styles[styleKey] ||= {};
@@ -286,7 +298,7 @@ export function initGroupReviewV2() {
   }
 
   async function toggleSelectedStyle(key) {
-    if (!state.selectedCell) return alert("먼저 셀을 선택하세요.");
+    if (!state.selectedCell) return alert("먼저 내 시트의 셀을 선택하세요.");
     const { row, styleKey } = state.selectedCell;
     row.cell_styles ||= {};
     row.cell_styles[styleKey] ||= {};
@@ -295,7 +307,7 @@ export function initGroupReviewV2() {
   }
 
   async function clearSelectedStyle() {
-    if (!state.selectedCell) return alert("먼저 셀을 선택하세요.");
+    if (!state.selectedCell) return alert("먼저 내 시트의 셀을 선택하세요.");
     const { row, styleKey } = state.selectedCell;
     row.cell_styles ||= {};
     row.cell_styles[styleKey] = {};
@@ -317,13 +329,12 @@ export function initGroupReviewV2() {
   async function selectProject(projectId) {
     try {
       state.project = await api(`/group-review/projects/${projectId}`);
-      if (state.user.role === "ADMIN") {
-        state.sheets = await api(`/group-review/projects/${projectId}/sheets`);
+      state.sheets = await api(`/group-review/projects/${projectId}/sheets`);
+      if (state.user.role === "WORKER") {
+        state.sheet = state.sheets.find(sheet => sheet.member_name === state.user.display_name) || state.sheets[0] || null;
       } else {
-        const own = await api(`/group-review/projects/${projectId}/my-sheet`);
-        state.sheets = [own];
+        state.sheet = state.sheets[0] || null;
       }
-      state.sheet = state.sheets[0] || null;
       await loadRows();
       renderBadges();
     } catch (error) {
@@ -381,9 +392,7 @@ export function initGroupReviewV2() {
     if (!state.user || !state.project) return alert("프로젝트를 먼저 선택하세요.");
     if (!window.XLSX) return alert("엑셀 라이브러리를 불러오지 못했습니다.");
     try {
-      const sheets = state.user.role === "ADMIN"
-        ? await api(`/group-review/projects/${state.project.id}/sheets`)
-        : [await api(`/group-review/projects/${state.project.id}/my-sheet`)];
+      const sheets = await api(`/group-review/projects/${state.project.id}/sheets`);
       const workbook = XLSX.utils.book_new();
       for (const sheet of sheets) {
         const rows = await api(`/group-review/sheets/${sheet.id}/rows`);
