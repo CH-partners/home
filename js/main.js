@@ -30,6 +30,11 @@ const fixedMembers = [
   "우창균", "정동춘", "김현경", "김소라", "손성민", "심아영"
 ];
 
+// 그룹리뷰 임시 중단 스위치. Firestore 읽기 사용량 문제로 잠시 내려둔다.
+// false면 메뉴 버튼이 렌더되지 않고 실시간 구독도 시작하지 않는다.
+// 다시 켜려면 이 값만 true로 바꾸면 된다. 저장된 메뉴 설정과 리뷰 데이터는 그대로 남는다.
+const GROUP_REVIEW_ENABLED = false;
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -836,6 +841,15 @@ function renderMenus() {
   bottomNav.innerHTML = "";
 
   const renderedMenus = new Set();
+
+  // 렌더 완료 목록에 미리 넣어두면 아래의 어떤 경로(도구/그룹/미분류)로도 버튼이 만들어지지 않는다.
+  // menuData 자체는 건드리지 않으므로 저장된 메뉴 설정은 그대로 유지된다.
+  if (!GROUP_REVIEW_ENABLED) {
+    menuData
+      .filter(menu => Number(menu.panelIndex) === 13 || getFixedMenuKind(menu) === "review")
+      .forEach(menu => renderedMenus.add(menu));
+  }
+
   const noticeMenu = menuData.find(menu => Number(menu.panelIndex) === 0);
 
   if (noticeMenu) {
@@ -1918,15 +1932,19 @@ window.scheduleApi = initSchedule({
   getCurrentUser: () => currentUser
 });
 
-window.groupReviewApi = initGroupReview({
-  db,
-  fixedMembers,
-  isAdmin,
-  canUseGroupReview,
-  escapeHtml,
-  removeUndefinedDeep,
-  getCurrentUser: () => currentUser
-});
+// initGroupReview는 호출 즉시 groupReviewProjects와 sheets를 실시간 구독한다.
+// 메뉴만 숨기고 이걸 그대로 두면 읽기 사용량은 줄지 않으므로 함께 막는다.
+if (GROUP_REVIEW_ENABLED) {
+  window.groupReviewApi = initGroupReview({
+    db,
+    fixedMembers,
+    isAdmin,
+    canUseGroupReview,
+    escapeHtml,
+    removeUndefinedDeep,
+    getCurrentUser: () => currentUser
+  });
+}
 
 renderMenus();
 renderNotice();
