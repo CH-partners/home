@@ -212,6 +212,34 @@ def update_row(
     return row
 
 
+def approve_row(db: Session, *, row_id: int, current_user: AppUser) -> GroupReviewRow:
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+    row = db.get(GroupReviewRow, row_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+
+    sheet = _ensure_sheet_read_access(db, sheet_id=row.sheet_id, current_user=current_user)
+    project = get_project(db, sheet.project_id)
+    if project.completed or sheet.review_completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Review is read-only")
+    if row.review_status == "approved":
+        return row
+    if row.review_status not in {"draft", "submitted"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Row cannot be approved")
+
+    row.review_status = "approved"
+    row.checked = True
+    row.reviewed_at = datetime.now(timezone.utc)
+    row.reviewed_by_email = current_user.login_id
+    sheet.updated_at = datetime.now(timezone.utc)
+    sheet.updated_by = current_user.display_name
+    db.commit()
+    db.refresh(row)
+    return row
+
+
 def delete_row(db: Session, *, row_id: int, current_user: AppUser) -> None:
     row = db.get(GroupReviewRow, row_id)
     if row is None:
