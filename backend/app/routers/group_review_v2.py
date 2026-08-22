@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.core.config import get_settings
+from app.core.security import decode_session_token
+from app.db.session import get_db, get_session_factory
 from app.dependencies.auth import get_current_user, require_admin, require_worker_or_admin
 from app.models.group_review import GroupReviewProject, GroupReviewRow, GroupReviewSheet
 from app.models.user import AppUser
+from app.realtime.group_review_v2 import manager
 from app.schemas.group_review_v2 import (
     GroupReviewProjectCreate,
     GroupReviewProjectCreatedResponse,
@@ -20,6 +23,7 @@ from app.schemas.group_review_v2 import (
     GroupReviewSheetResponse,
 )
 from app.services.group_review_v2 import (
+    approve_row,
     create_project_with_worker_sheets,
     create_row,
     delete_row,
@@ -60,6 +64,48 @@ def _row_response(row: GroupReviewRow) -> GroupReviewRowResponse:
         review_status=row.review_status,
         revision_no=row.revision_no,
     )
+
+
+def _row_payload(row: GroupReviewRow) -> dict:
+    return _row_response(row).model_dump()
+
+
+def _project_id_for_sheet(db: Session, sheet_id: int) -> str:
+    sheet = db.get(GroupReviewSheet, sheet_id)
+    if sheet is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sheet not found")
+    return sheet.project_id
+
+
+def _websocket_user(websocket: WebSocket) -> AppUser | None:
+    settings = get_settings()
+    token = websocket.cookies.get(settings.auth_cookie_name)
+    if not token:
+        return None
+    try:
+        payload = decode_session_token(token)
+        user_id = int(payload["sub"])
+    except Exception:
+        return None
+
+    session_factory = get_session_factory()
+    with session_factory() as db:
+        user = db.get(AppUser, user_id)
+        if user is None or not user.active:
+            return None
+        db.expunge(user)
+        return user
+
+
+def _websocket_project_allowed(project_id: str, user: AppUser) -> bool:
+    session_factory = get_session_factory()
+    with session_factory() as db:
+        project = db.get(GroupReviewProject, project_id)
+        if project is None:
+            return False
+        if user.role == "ADMIN":
+            return True
+        return user.role == "WORKER" and user.display_name in (project.members or [])
 
 
 @router.post("/projects", response_model=GroupReviewProjectCreatedResponse, status_code=status.HTTP_201_CREATED)
@@ -166,7 +212,7 @@ def get_group_review_rows(
 
 
 @router.post("/sheets/{sheet_id}/rows", response_model=GroupReviewRowResponse, status_code=status.HTTP_201_CREATED)
-def add_group_review_row(
+async def add_group_review_row(
     sheet_id: int,
     payload: GroupReviewRowCreate,
     db: Session = Depends(get_db),
@@ -174,11 +220,19 @@ def add_group_review_row(
 ) -> GroupReviewRowResponse:
     values = payload.model_dump()
     values["cell_styles"] = payload.cell_styles.model_dump(exclude_none=True)
-    return _row_response(create_row(db, sheet_id=sheet_id, current_user=current_user, values=values))
+    row = create_row(db, sheet_id=sheet_id, current_user=current_user, values=values)
+    project_id = _project_id_for_sheet(db, sheet_id)
+    await manager.broadcast(project_id, {
+        "type": "row_upserted",
+        "sheet_id": sheet_id,
+        "row": _row_payload(row),
+        "actor_login_id": current_user.login_id,
+    })
+    return _row_response(row)
 
 
 @router.patch("/rows/{row_id}", response_model=GroupReviewRowResponse)
-def patch_group_review_row(
+async def patch_group_review_row(
     row_id: int,
     payload: GroupReviewRowUpdate,
     db: Session = Depends(get_db),
@@ -187,25 +241,97 @@ def patch_group_review_row(
     values = payload.model_dump(exclude_unset=True)
     if payload.cell_styles is not None:
         values["cell_styles"] = payload.cell_styles.model_dump(exclude_none=True)
-    return _row_response(update_row(db, row_id=row_id, current_user=current_user, values=values))
+    row = update_row(db, row_id=row_id, current_user=current_user, values=values)
+    project_id = _project_id_for_sheet(db, row.sheet_id)
+    await manager.broadcast(project_id, {
+        "type": "row_upserted",
+        "sheet_id": row.sheet_id,
+        "row": _row_payload(row),
+        "actor_login_id": current_user.login_id,
+    })
+    return _row_response(row)
+
+
+@router.post("/rows/{row_id}/approve", response_model=GroupReviewRowResponse)
+async def approve_group_review_row(
+    row_id: int,
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(require_admin),
+) -> GroupReviewRowResponse:
+    row = approve_row(db, row_id=row_id, current_user=current_user)
+    project_id = _project_id_for_sheet(db, row.sheet_id)
+    await manager.broadcast(project_id, {
+        "type": "row_approved",
+        "sheet_id": row.sheet_id,
+        "row": _row_payload(row),
+        "actor_login_id": current_user.login_id,
+    })
+    return _row_response(row)
 
 
 @router.delete("/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_group_review_row(
+async def remove_group_review_row(
     row_id: int,
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(require_worker_or_admin),
 ) -> Response:
+    row = db.get(GroupReviewRow, row_id)
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    sheet_id = row.sheet_id
+    project_id = _project_id_for_sheet(db, sheet_id)
     delete_row(db, row_id=row_id, current_user=current_user)
+    await manager.broadcast(project_id, {
+        "type": "row_deleted",
+        "sheet_id": sheet_id,
+        "row_id": row_id,
+        "actor_login_id": current_user.login_id,
+    })
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put("/sheets/{sheet_id}/row-order", response_model=list[GroupReviewRowResponse])
-def put_group_review_row_order(
+async def put_group_review_row_order(
     sheet_id: int,
     payload: GroupReviewRowOrderRequest,
     db: Session = Depends(get_db),
     current_user: AppUser = Depends(require_worker_or_admin),
 ) -> list[GroupReviewRowResponse]:
     rows = reorder_rows(db, sheet_id=sheet_id, row_ids=payload.row_ids, current_user=current_user)
+    project_id = _project_id_for_sheet(db, sheet_id)
+    await manager.broadcast(project_id, {
+        "type": "rows_reordered",
+        "sheet_id": sheet_id,
+        "rows": [_row_payload(row) for row in rows],
+        "actor_login_id": current_user.login_id,
+    })
     return [_row_response(row) for row in rows]
+
+
+@router.websocket("/ws/projects/{project_id}")
+async def group_review_project_websocket(websocket: WebSocket, project_id: str) -> None:
+    user = _websocket_user(websocket)
+    if user is None or not _websocket_project_allowed(project_id, user):
+        await websocket.close(code=4401)
+        return
+
+    await manager.connect(project_id, websocket)
+    await websocket.send_json({
+        "type": "connected",
+        "project_id": project_id,
+        "login_id": user.login_id,
+        "display_name": user.display_name,
+        "role": user.role,
+    })
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(project_id, websocket)
+    except Exception:
+        manager.disconnect(project_id, websocket)
+        try:
+            await websocket.close()
+        except Exception:
+            pass
