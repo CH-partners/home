@@ -97,7 +97,7 @@ export function installLimitedDeploymentMode() {
         padding:7px 10px;
         border:1px solid rgba(255,255,255,.20);
         border-radius:10px;
-        background:#5f7389;
+        background:#ece2a1;
         color:#ffffff;
         box-shadow:0 5px 14px rgba(0,0,0,.12);
       }
