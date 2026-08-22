@@ -1,5 +1,6 @@
 const ALLOWED_PANEL_INDEXES = new Set([11, 13]);
 const ALLOWED_LABELS = new Set(["분배표", "그룹리뷰"]);
+const WORKER_ALLOCATION_NOTICE = "조회 전용입니다. 분배표 수정은 관리자만 가능합니다.";
 
 function normalizeLabel(value) {
   return String(value || "").replace(/\s+/g, "").replace(/[📊📝]/g, "").trim();
@@ -36,6 +37,10 @@ export function installLimitedDeploymentMode() {
       } else {
         node.style.display = "none";
       }
+    });
+
+    document.querySelectorAll("#workAllocationBody .work-info").forEach(info => {
+      if (info.textContent?.trim() === WORKER_ALLOCATION_NOTICE) info.remove();
     });
 
     const active = document.querySelector(".sheet-panel.active");
