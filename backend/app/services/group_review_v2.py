@@ -115,7 +115,7 @@ def get_worker_sheet(
     return sheet
 
 
-def _ensure_sheet_access(
+def _ensure_sheet_read_access(
     db: Session,
     *,
     sheet_id: int,
@@ -124,18 +124,32 @@ def _ensure_sheet_access(
     sheet = db.get(GroupReviewSheet, sheet_id)
     if sheet is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sheet not found")
+
     project = get_project(db, sheet.project_id)
     if current_user.role == "ADMIN":
         return sheet
-    if current_user.role != "WORKER" or sheet.member_name != current_user.display_name:
+
+    if current_user.role != "WORKER":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sheet access denied")
     if current_user.display_name not in (project.members or []):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Project access denied")
     return sheet
 
 
+def _ensure_sheet_write_access(
+    db: Session,
+    *,
+    sheet_id: int,
+    current_user: AppUser,
+) -> GroupReviewSheet:
+    sheet = _ensure_sheet_read_access(db, sheet_id=sheet_id, current_user=current_user)
+    if current_user.role != "WORKER" or sheet.member_name != current_user.display_name:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Own sheet required")
+    return sheet
+
+
 def list_rows(db: Session, *, sheet_id: int, current_user: AppUser) -> list[GroupReviewRow]:
-    _ensure_sheet_access(db, sheet_id=sheet_id, current_user=current_user)
+    _ensure_sheet_read_access(db, sheet_id=sheet_id, current_user=current_user)
     stmt = (
         select(GroupReviewRow)
         .where(GroupReviewRow.sheet_id == sheet_id)
@@ -151,11 +165,9 @@ def create_row(
     current_user: AppUser,
     values: dict,
 ) -> GroupReviewRow:
-    sheet = _ensure_sheet_access(db, sheet_id=sheet_id, current_user=current_user)
+    sheet = _ensure_sheet_write_access(db, sheet_id=sheet_id, current_user=current_user)
     if sheet.completed or sheet.review_completed:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Sheet is read-only")
-    if current_user.role == "ADMIN":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker role required")
 
     existing = list_rows(db, sheet_id=sheet_id, current_user=current_user)
     row = GroupReviewRow(
@@ -187,11 +199,9 @@ def update_row(
     row = db.get(GroupReviewRow, row_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    sheet = _ensure_sheet_access(db, sheet_id=row.sheet_id, current_user=current_user)
+    sheet = _ensure_sheet_write_access(db, sheet_id=row.sheet_id, current_user=current_user)
     if sheet.completed or sheet.review_completed or row.review_status != "draft":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Row is read-only")
-    if current_user.role == "ADMIN":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker role required")
 
     for key, value in values.items():
         setattr(row, key, value)
@@ -206,11 +216,9 @@ def delete_row(db: Session, *, row_id: int, current_user: AppUser) -> None:
     row = db.get(GroupReviewRow, row_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    sheet = _ensure_sheet_access(db, sheet_id=row.sheet_id, current_user=current_user)
+    sheet = _ensure_sheet_write_access(db, sheet_id=row.sheet_id, current_user=current_user)
     if sheet.completed or sheet.review_completed or row.review_status != "draft":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Row is read-only")
-    if current_user.role == "ADMIN":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker role required")
 
     remaining = list(
         db.scalars(
@@ -235,11 +243,9 @@ def reorder_rows(
     row_ids: list[int],
     current_user: AppUser,
 ) -> list[GroupReviewRow]:
-    sheet = _ensure_sheet_access(db, sheet_id=sheet_id, current_user=current_user)
+    sheet = _ensure_sheet_write_access(db, sheet_id=sheet_id, current_user=current_user)
     if sheet.completed or sheet.review_completed:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Sheet is read-only")
-    if current_user.role == "ADMIN":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Worker role required")
 
     rows = list(
         db.scalars(
