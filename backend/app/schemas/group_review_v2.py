@@ -60,11 +60,25 @@ class GroupReviewCellStyle(BaseModel):
 
     fontSize: Literal[12, 13, 15, 18, 22] | None = None
     bold: bool | None = None
+    boldRanges: list[tuple[int, int]] | None = None
     strike: bool | None = None
     backgroundColor: str | None = Field(
         default=None,
         pattern=r"^(|#[0-9A-Fa-f]{6})$",
     )
+
+    @field_validator("boldRanges")
+    @classmethod
+    def validate_bold_ranges(
+        cls,
+        value: list[tuple[int, int]] | None,
+    ) -> list[tuple[int, int]] | None:
+        if value is None:
+            return value
+        for start, end in value:
+            if start < 0 or end <= start:
+                raise ValueError("boldRanges는 0 <= start < end 형식이어야 합니다.")
+        return value
 
 
 class GroupReviewCellStyles(BaseModel):
