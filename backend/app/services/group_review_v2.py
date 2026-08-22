@@ -20,6 +20,19 @@ def _active_workers(db: Session) -> list[AppUser]:
     return list(db.scalars(stmt).all())
 
 
+def _row_has_worker_value(row: GroupReviewRow) -> bool:
+    return any(
+        str(value or "").strip()
+        for value in (
+            row.collateral_no,
+            row.sheet_label,
+            row.field_no,
+            row.change_before_text,
+            row.change_after_text,
+        )
+    )
+
+
 def create_project_with_worker_sheets(
     db: Session,
     *,
@@ -148,6 +161,19 @@ def _ensure_sheet_write_access(
     return sheet
 
 
+def _ensure_worker_sheet_mutable(
+    db: Session,
+    *,
+    sheet_id: int,
+    current_user: AppUser,
+) -> GroupReviewSheet:
+    sheet = _ensure_sheet_write_access(db, sheet_id=sheet_id, current_user=current_user)
+    project = get_project(db, sheet.project_id)
+    if project.completed or sheet.completed or sheet.review_completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Sheet is read-only")
+    return sheet
+
+
 def list_rows(db: Session, *, sheet_id: int, current_user: AppUser) -> list[GroupReviewRow]:
     _ensure_sheet_read_access(db, sheet_id=sheet_id, current_user=current_user)
     stmt = (
@@ -165,10 +191,7 @@ def create_row(
     current_user: AppUser,
     values: dict,
 ) -> GroupReviewRow:
-    sheet = _ensure_sheet_write_access(db, sheet_id=sheet_id, current_user=current_user)
-    if sheet.completed or sheet.review_completed:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Sheet is read-only")
-
+    _ensure_worker_sheet_mutable(db, sheet_id=sheet_id, current_user=current_user)
     existing = list_rows(db, sheet_id=sheet_id, current_user=current_user)
     row = GroupReviewRow(
         sheet_id=sheet_id,
@@ -199,8 +222,8 @@ def update_row(
     row = db.get(GroupReviewRow, row_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    sheet = _ensure_sheet_write_access(db, sheet_id=row.sheet_id, current_user=current_user)
-    if sheet.completed or sheet.review_completed or row.review_status != "draft":
+    sheet = _ensure_worker_sheet_mutable(db, sheet_id=row.sheet_id, current_user=current_user)
+    if row.review_status != "draft":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Row is read-only")
 
     for key, value in values.items():
@@ -224,6 +247,8 @@ def approve_row(db: Session, *, row_id: int, current_user: AppUser) -> GroupRevi
     project = get_project(db, sheet.project_id)
     if project.completed or sheet.review_completed:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Review is read-only")
+    if not _row_has_worker_value(row):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="빈 행은 확인할 수 없습니다.")
     if row.review_status == "approved":
         return row
     if row.review_status not in {"draft", "submitted"}:
@@ -240,12 +265,176 @@ def approve_row(db: Session, *, row_id: int, current_user: AppUser) -> GroupRevi
     return row
 
 
+def complete_worker_sheet(
+    db: Session,
+    *,
+    sheet_id: int,
+    current_user: AppUser,
+) -> tuple[GroupReviewSheet, list[GroupReviewRow]]:
+    sheet = _ensure_sheet_write_access(db, sheet_id=sheet_id, current_user=current_user)
+    project = get_project(db, sheet.project_id)
+    if project.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project is read-only")
+    if sheet.review_completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Review is already completed")
+
+    rows = list(
+        db.scalars(
+            select(GroupReviewRow)
+            .where(GroupReviewRow.sheet_id == sheet_id)
+            .order_by(GroupReviewRow.position.asc())
+        ).all()
+    )
+    meaningful = [row for row in rows if _row_has_worker_value(row)]
+    if not meaningful:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="입력된 리뷰 행이 없습니다.")
+
+    unresolved = [row for row in meaningful if row.review_status == "revision_requested"]
+    if unresolved:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"재수정 요청 처리 중인 행이 {len(unresolved)}건 남아 있습니다.",
+        )
+
+    now = datetime.now(timezone.utc)
+    for row in meaningful:
+        if row.review_status == "draft":
+            row.review_status = "submitted"
+            row.submitted_at = now
+            row.submitted_by = current_user.display_name
+
+    sheet.completed = True
+    sheet.updated_at = now
+    sheet.updated_by = current_user.display_name
+    db.commit()
+    db.refresh(sheet)
+    for row in rows:
+        db.refresh(row)
+    return sheet, rows
+
+
+def complete_project(
+    db: Session,
+    *,
+    project_id: str,
+    current_user: AppUser,
+) -> tuple[GroupReviewProject, list[GroupReviewSheet]]:
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+    project = get_project(db, project_id)
+    if project.completed:
+        return project, list_project_sheets(db, project_id)
+
+    sheets = list_project_sheets(db, project_id)
+    rows = list(
+        db.scalars(
+            select(GroupReviewRow)
+            .join(GroupReviewSheet, GroupReviewRow.sheet_id == GroupReviewSheet.id)
+            .where(GroupReviewSheet.project_id == project_id)
+            .order_by(GroupReviewRow.sheet_id.asc(), GroupReviewRow.position.asc())
+        ).all()
+    )
+    rows_by_sheet: dict[int, list[GroupReviewRow]] = {sheet.id: [] for sheet in sheets}
+    for row in rows:
+        rows_by_sheet.setdefault(row.sheet_id, []).append(row)
+
+    relevant: list[GroupReviewSheet] = []
+    incomplete_names: list[str] = []
+    unapproved: list[tuple[str, int]] = []
+    for sheet in sheets:
+        meaningful = [row for row in rows_by_sheet.get(sheet.id, []) if _row_has_worker_value(row)]
+        is_relevant = sheet.completed or sheet.review_completed or bool(meaningful)
+        if not is_relevant:
+            continue
+        relevant.append(sheet)
+        if not sheet.completed:
+            incomplete_names.append(sheet.member_name)
+        pending_count = sum(1 for row in meaningful if row.review_status != "approved")
+        if pending_count:
+            unapproved.append((sheet.member_name, pending_count))
+
+    if not relevant:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="완료할 리뷰 데이터가 없습니다.")
+    if incomplete_names:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="입력 완료되지 않은 작업자: " + ", ".join(incomplete_names),
+        )
+    if unapproved:
+        detail = ", ".join(f"{name} {count}건" for name, count in unapproved)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="관리자 확인이 남아 있습니다: " + detail,
+        )
+
+    now = datetime.now(timezone.utc)
+    for sheet in relevant:
+        sheet.review_completed = True
+        sheet.review_completed_at = now
+        sheet.review_completed_by_email = current_user.login_id
+        sheet.updated_at = now
+        sheet.updated_by = current_user.display_name
+        sheet.lock_session_id = None
+        sheet.locked_by = None
+        sheet.locked_at = None
+
+    project.completed = True
+    project.completed_at = now
+    project.completed_by_email = current_user.login_id
+    db.commit()
+    db.refresh(project)
+    for sheet in sheets:
+        db.refresh(sheet)
+    return project, sheets
+
+
+def reopen_project(
+    db: Session,
+    *,
+    project_id: str,
+    current_user: AppUser,
+) -> tuple[GroupReviewProject, list[GroupReviewSheet]]:
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+    project = get_project(db, project_id)
+    sheets = list_project_sheets(db, project_id)
+    now = datetime.now(timezone.utc)
+
+    project.completed = False
+    project.reopened_at = now
+    project.reopened_by_email = current_user.login_id
+
+    for sheet in sheets:
+        if sheet.completed or sheet.review_completed:
+            sheet.completed = False
+            sheet.review_completed = False
+            sheet.review_completed_at = None
+            sheet.review_completed_by_email = None
+            sheet.reuse_requested = False
+            sheet.reuse_requested_at = None
+            sheet.reuse_requested_by = None
+            sheet.reuse_requested_by_email = None
+            sheet.updated_at = now
+            sheet.updated_by = current_user.display_name
+            sheet.lock_session_id = None
+            sheet.locked_by = None
+            sheet.locked_at = None
+
+    db.commit()
+    db.refresh(project)
+    for sheet in sheets:
+        db.refresh(sheet)
+    return project, sheets
+
+
 def delete_row(db: Session, *, row_id: int, current_user: AppUser) -> None:
     row = db.get(GroupReviewRow, row_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    sheet = _ensure_sheet_write_access(db, sheet_id=row.sheet_id, current_user=current_user)
-    if sheet.completed or sheet.review_completed or row.review_status != "draft":
+    sheet = _ensure_worker_sheet_mutable(db, sheet_id=row.sheet_id, current_user=current_user)
+    if row.review_status != "draft":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Row is read-only")
 
     remaining = list(
@@ -271,9 +460,7 @@ def reorder_rows(
     row_ids: list[int],
     current_user: AppUser,
 ) -> list[GroupReviewRow]:
-    sheet = _ensure_sheet_write_access(db, sheet_id=sheet_id, current_user=current_user)
-    if sheet.completed or sheet.review_completed:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Sheet is read-only")
+    sheet = _ensure_worker_sheet_mutable(db, sheet_id=sheet_id, current_user=current_user)
 
     rows = list(
         db.scalars(
@@ -282,6 +469,9 @@ def reorder_rows(
             .order_by(GroupReviewRow.position.asc())
         ).all()
     )
+    if any(row.review_status != "draft" for row in rows):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Approved or submitted rows cannot be reordered")
+
     current_ids = [row.id for row in rows]
     if set(row_ids) != set(current_ids) or len(row_ids) != len(current_ids):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="row_ids must include every row exactly once")
