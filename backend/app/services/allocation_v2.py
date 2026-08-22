@@ -70,7 +70,7 @@ def create_project(db: Session, *, name: str) -> AllocationProject:
         name=name,
         memo="",
         columns=[],
-        rows=[{"name": worker.display_name, "values": {}} for worker in workers],
+        rows=[{"name": worker.display_name, "active": True, "values": {}} for worker in workers],
         created_at=now,
         updated_at=now,
     )
@@ -117,6 +117,7 @@ def update_grid(db: Session, *, project_id: str, columns: list[dict], rows: list
     for row in rows:
         normalized_rows.append({
             "name": row["name"],
+            "active": bool(row.get("active", True)),
             "values": {key: str(value) for key, value in row.get("values", {}).items() if key in allowed},
         })
 
