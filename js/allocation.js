@@ -138,14 +138,17 @@ export function initAllocation() {
     `).join("");
 
     const rows = state.project.rows.map((row, rowIndex) => {
+      const active = row.active !== false;
       const cells = state.project.columns.map(column => `
         <td><input type="text" value="${escapeHtml(row.values?.[column.id] || "")}" data-row-index="${rowIndex}" data-column-id="${escapeHtml(column.id)}" ${admin ? "" : "readonly"}></td>
       `).join("");
       return `
-        <tr data-row-index="${rowIndex}" ${admin ? 'draggable="true"' : ""}>
+        <tr data-row-index="${rowIndex}" class="${active ? "" : "allocation-row-inactive"}" ${admin ? 'draggable="true"' : ""}>
           <td class="drag-member-cell">
             ${admin ? '<span class="drag-handle" title="드래그하여 순서 변경">☰</span>' : ""}
             <span>${escapeHtml(row.name)}</span>
+            ${admin ? `<button type="button" class="small-btn ${active ? "danger" : ""}" data-toggle-worker="${rowIndex}" style="margin-left:8px">${active ? "제외" : "참여"}</button>` : ""}
+            ${!active ? '<span class="allocation-inactive-label">비활성</span>' : ""}
           </td>
           ${cells}
         </tr>
@@ -157,7 +160,7 @@ export function initAllocation() {
         <div class="work-project-title">${escapeHtml(state.project.name)}</div>
         <input id="allocationMemo" type="text" class="work-project-memo" placeholder="프로젝트 메모" value="${escapeHtml(state.project.memo || "")}" ${admin ? "" : "readonly"}>
       </div>
-      <div class="work-info">${admin ? "이름 열의 ☰를 드래그하면 행 순서를 바꿀 수 있습니다. 항목 추가/수정과 셀 입력 후 저장하세요." : "조회 전용입니다. 분배표 수정은 관리자만 가능합니다."}</div>
+      ${admin ? '<div class="work-info">이름 열의 ☰를 드래그하면 행 순서를 바꿀 수 있습니다. 항목 추가/수정과 셀 입력 후 저장하세요.</div>' : ""}
       <div class="work-header-actions">
         ${admin ? '<button class="action-btn" id="allocationAddColumn">열 추가</button>' : ""}
         <span id="allocationV2Status" style="font-size:12px;color:#64748b">${state.dirty ? "저장 필요" : "저장됨"}</span>
@@ -178,6 +181,15 @@ export function initAllocation() {
     });
     document.getElementById("allocationAddColumn")?.addEventListener("click", addColumnPrompt);
     body.querySelectorAll("[data-edit-column]").forEach(button => button.addEventListener("click", () => editColumnPrompt(Number(button.dataset.editColumn))));
+    body.querySelectorAll("[data-toggle-worker]").forEach(button => button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const row = state.project.rows[Number(button.dataset.toggleWorker)];
+      if (!row) return;
+      row.active = row.active === false;
+      markDirty();
+      renderAllocationUI();
+    }));
     body.querySelectorAll("input[data-row-index][data-column-id]").forEach(input => input.addEventListener("input", event => {
       const row = state.project.rows[Number(event.target.dataset.rowIndex)];
       if (!row) return;
@@ -186,6 +198,10 @@ export function initAllocation() {
     }));
     body.querySelectorAll("tbody tr[draggable=true]").forEach(rowEl => {
       rowEl.addEventListener("dragstart", event => {
+        if (event.target.closest("button")) {
+          event.preventDefault();
+          return;
+        }
         state.draggedRowIndex = Number(rowEl.dataset.rowIndex);
         event.dataTransfer.effectAllowed = "move";
         rowEl.classList.add("dragging");
@@ -354,8 +370,8 @@ export function initAllocation() {
       const workbook = XLSX.utils.book_new();
       for (const item of state.projects) {
         const project = item.id === state.project?.id ? state.project : await api(`/allocation/projects/${item.id}`);
-        const data = [["이름", ...project.columns.map(column => column.label)]];
-        project.rows.forEach(row => data.push([row.name, ...project.columns.map(column => row.values?.[column.id] || "")]));
+        const data = [["이름", "상태", ...project.columns.map(column => column.label)]];
+        project.rows.forEach(row => data.push([row.name, row.active === false ? "제외" : "참여", ...project.columns.map(column => row.values?.[column.id] || "")]));
         const worksheet = XLSX.utils.aoa_to_sheet(data);
         const safeName = String(project.name || "분배표").replace(/[\\/?*\[\]:]/g, "_").slice(0, 31) || "분배표";
         XLSX.utils.book_append_sheet(workbook, worksheet, safeName);
