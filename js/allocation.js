@@ -258,6 +258,12 @@ export function initAllocation() {
       state.dirty = false;
       renderAllocationUI();
     } catch (error) {
+      if (error.status === 404) {
+        state.project = null;
+        state.dirty = false;
+        await loadProjects();
+        return;
+      }
       alert(`프로젝트 불러오기 실패: ${error.message}`);
     }
   }
@@ -265,13 +271,15 @@ export function initAllocation() {
   async function loadProjects(preferredId = null) {
     try {
       state.projects = await api("/allocation/projects");
-      const targetId = preferredId || state.project?.id || state.projects[0]?.id || null;
-      if (!targetId) {
+      if (!state.projects.length) {
         state.project = null;
         state.dirty = false;
         renderAllocationUI();
         return;
       }
+
+      const candidates = [preferredId, state.project?.id].filter(Boolean);
+      const targetId = candidates.find(id => state.projects.some(project => project.id === id)) || state.projects[0].id;
       await selectProject(targetId);
     } catch (error) {
       if (error.status === 401) {
