@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -38,6 +39,7 @@ def create_project_with_worker_sheets(
         name=name,
         members=member_names,
         completed=False,
+        created_at=datetime.now(timezone.utc),
         created_by=current_user.display_name,
         created_by_email=None,
     )
