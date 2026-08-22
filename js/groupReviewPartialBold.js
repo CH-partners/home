@@ -89,7 +89,7 @@ export function installGroupReviewPartialBoldV2() {
   async function decorate() {
     if (decorating) return;
     const body = document.getElementById("groupReviewBody");
-    if (!body || body.querySelector(".grv2-role")?.textContent?.trim() !== "WORKER") return;
+    if (!body || !body.querySelector(".grv2-role")) return;
     decorating = true;
     try {
       const rows = await fetchActiveRows();
