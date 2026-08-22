@@ -10,7 +10,37 @@ export function installLimitedDeploymentMode() {
   if (window.__limitedDeploymentModeInstalled) return;
   window.__limitedDeploymentModeInstalled = true;
 
+  function ensureLimitedStyles() {
+    if (document.getElementById("limited-deployment-styles")) return;
+    const style = document.createElement("style");
+    style.id = "limited-deployment-styles";
+    style.textContent = `
+      #workAllocationBody tr.allocation-row-inactive td,
+      #workAllocationBody tr.allocation-row-inactive input {
+        background:#f1f5f9!important;
+        color:#94a3b8!important;
+      }
+      #workAllocationBody tr.allocation-row-inactive td {
+        opacity:.68;
+      }
+      #workAllocationBody .allocation-inactive-label {
+        display:inline-flex;
+        align-items:center;
+        margin-left:6px;
+        padding:2px 6px;
+        border-radius:999px;
+        border:1px solid #cbd5e1;
+        background:#e2e8f0;
+        color:#64748b;
+        font-size:10px;
+        font-weight:700;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function applyDeploymentMode() {
+    ensureLimitedStyles();
     document.body.classList.add("limited-deployment-mode");
 
     const adminBox = document.querySelector(".admin-box");
