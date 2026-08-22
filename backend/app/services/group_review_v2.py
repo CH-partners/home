@@ -304,6 +304,10 @@ def complete_worker_sheet(
             row.submitted_by = current_user.display_name
 
     sheet.completed = True
+    sheet.reuse_requested = False
+    sheet.reuse_requested_at = None
+    sheet.reuse_requested_by = None
+    sheet.reuse_requested_by_email = None
     sheet.updated_at = now
     sheet.updated_by = current_user.display_name
     db.commit()
@@ -311,6 +315,127 @@ def complete_worker_sheet(
     for row in rows:
         db.refresh(row)
     return sheet, rows
+
+
+def request_sheet_reuse(
+    db: Session,
+    *,
+    sheet_id: int,
+    current_user: AppUser,
+) -> GroupReviewSheet:
+    sheet = _ensure_sheet_write_access(db, sheet_id=sheet_id, current_user=current_user)
+    project = get_project(db, sheet.project_id)
+    if project.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="프로젝트 완료 상태에서는 재사용 요청을 할 수 없습니다.")
+    if not sheet.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="현재 시트는 이미 작업 가능한 상태입니다.")
+    if sheet.reuse_requested:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 재사용 요청 중입니다.")
+
+    now = datetime.now(timezone.utc)
+    sheet.reuse_requested = True
+    sheet.reuse_requested_at = now
+    sheet.reuse_requested_by = current_user.display_name
+    sheet.reuse_requested_by_email = current_user.login_id
+    sheet.reuse_request_rejected_at = None
+    sheet.reuse_request_rejected_by_email = None
+    sheet.updated_at = now
+    sheet.updated_by = current_user.display_name
+    sheet.updated_by_email = current_user.login_id
+    db.commit()
+    db.refresh(sheet)
+    return sheet
+
+
+def approve_sheet_reuse(
+    db: Session,
+    *,
+    sheet_id: int,
+    current_user: AppUser,
+) -> tuple[GroupReviewSheet, list[GroupReviewRow], int]:
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+    sheet = _ensure_sheet_read_access(db, sheet_id=sheet_id, current_user=current_user)
+    project = get_project(db, sheet.project_id)
+    if project.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="프로젝트 완료 상태에서는 재사용 승인할 수 없습니다.")
+    if not sheet.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="현재 시트는 이미 작업 가능한 상태입니다.")
+    if not sheet.reuse_requested:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="대기 중인 재사용 요청이 없습니다.")
+
+    rows = list(
+        db.scalars(
+            select(GroupReviewRow)
+            .where(GroupReviewRow.sheet_id == sheet_id)
+            .order_by(GroupReviewRow.position.asc())
+        ).all()
+    )
+    reopened_count = 0
+    for row in rows:
+        if row.review_status in {"approved", "revision_requested"}:
+            continue
+        if not _row_has_worker_value(row):
+            continue
+        reopened_count += 1
+        row.checked = False
+        row.review_status = "draft"
+        row.submitted_at = None
+        row.submitted_by = None
+        row.reviewed_at = None
+        row.reviewed_by_email = None
+
+    now = datetime.now(timezone.utc)
+    sheet.completed = False
+    sheet.review_completed = False
+    sheet.review_completed_at = None
+    sheet.review_completed_by_email = None
+    sheet.reuse_requested = False
+    sheet.reuse_requested_at = None
+    sheet.reuse_requested_by = None
+    sheet.reuse_requested_by_email = None
+    sheet.reuse_approved_at = now
+    sheet.reuse_approved_by_email = current_user.login_id
+    sheet.lock_session_id = None
+    sheet.locked_by = None
+    sheet.locked_at = None
+    sheet.updated_at = now
+    sheet.updated_by = current_user.display_name
+    sheet.updated_by_email = current_user.login_id
+    db.commit()
+    db.refresh(sheet)
+    for row in rows:
+        db.refresh(row)
+    return sheet, rows, reopened_count
+
+
+def reject_sheet_reuse(
+    db: Session,
+    *,
+    sheet_id: int,
+    current_user: AppUser,
+) -> GroupReviewSheet:
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+    sheet = _ensure_sheet_read_access(db, sheet_id=sheet_id, current_user=current_user)
+    if not sheet.reuse_requested:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="대기 중인 재사용 요청이 없습니다.")
+
+    now = datetime.now(timezone.utc)
+    sheet.reuse_requested = False
+    sheet.reuse_requested_at = None
+    sheet.reuse_requested_by = None
+    sheet.reuse_requested_by_email = None
+    sheet.reuse_request_rejected_at = now
+    sheet.reuse_request_rejected_by_email = current_user.login_id
+    sheet.updated_at = now
+    sheet.updated_by = current_user.display_name
+    sheet.updated_by_email = current_user.login_id
+    db.commit()
+    db.refresh(sheet)
+    return sheet
 
 
 def complete_project(
@@ -341,6 +466,7 @@ def complete_project(
 
     relevant: list[GroupReviewSheet] = []
     incomplete_names: list[str] = []
+    reuse_pending_names: list[str] = []
     unapproved: list[tuple[str, int]] = []
     for sheet in sheets:
         meaningful = [row for row in rows_by_sheet.get(sheet.id, []) if _row_has_worker_value(row)]
@@ -350,12 +476,19 @@ def complete_project(
         relevant.append(sheet)
         if not sheet.completed:
             incomplete_names.append(sheet.member_name)
+        if sheet.reuse_requested:
+            reuse_pending_names.append(sheet.member_name)
         pending_count = sum(1 for row in meaningful if row.review_status != "approved")
         if pending_count:
             unapproved.append((sheet.member_name, pending_count))
 
     if not relevant:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="완료할 리뷰 데이터가 없습니다.")
+    if reuse_pending_names:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="재사용 요청 대기 중인 작업자: " + ", ".join(reuse_pending_names),
+        )
     if incomplete_names:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
