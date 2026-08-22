@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.group_review import GroupReviewProject, GroupReviewRow, GroupReviewSheet
+from app.models.user import AppUser
+
+
+def _row_has_worker_value(row: GroupReviewRow) -> bool:
+    return any(
+        str(value or "").strip()
+        for value in (
+            row.collateral_no,
+            row.sheet_label,
+            row.field_no,
+            row.change_before_text,
+            row.change_after_text,
+        )
+    )
+
+
+def _sheet_rows(db: Session, sheet_id: int) -> list[GroupReviewRow]:
+    return list(
+        db.scalars(
+            select(GroupReviewRow)
+            .where(GroupReviewRow.sheet_id == sheet_id)
+            .order_by(GroupReviewRow.position.asc())
+        ).all()
+    )
+
+
+def unresolved_revision_parents(rows: list[GroupReviewRow]) -> list[GroupReviewRow]:
+    children_by_parent: dict[int, list[GroupReviewRow]] = {}
+    for row in rows:
+        if row.parent_revision_row_id is not None:
+            children_by_parent.setdefault(row.parent_revision_row_id, []).append(row)
+
+    unresolved: list[GroupReviewRow] = []
+    for row in rows:
+        if row.review_status != "revision_requested":
+            continue
+        children = children_by_parent.get(row.id, [])
+        if not children:
+            unresolved.append(row)
+            continue
+        latest = max(children, key=lambda child: (child.revision_no, child.id))
+        if latest.review_status == "draft":
+            unresolved.append(row)
+    return unresolved
+
+
+def effective_revision_leaves(rows: list[GroupReviewRow]) -> list[GroupReviewRow]:
+    parent_ids = {row.parent_revision_row_id for row in rows if row.parent_revision_row_id is not None}
+    return [row for row in rows if row.id not in parent_ids and _row_has_worker_value(row)]
+
+
+def request_row_revision(
+    db: Session,
+    *,
+    row_id: int,
+    current_user: AppUser,
+) -> tuple[GroupReviewSheet, GroupReviewRow, GroupReviewRow]:
+    if current_user.role != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+    parent = db.get(GroupReviewRow, row_id)
+    if parent is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+
+    sheet = db.get(GroupReviewSheet, parent.sheet_id)
+    if sheet is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sheet not found")
+    project = db.get(GroupReviewProject, sheet.project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if project.completed:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="프로젝트 완료 상태에서는 재수정 요청할 수 없습니다.")
+    if parent.review_status not in {"submitted", "approved"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="검토대기 또는 확인완료 행만 재수정 요청할 수 있습니다.")
+
+    existing_child = db.scalar(
+        select(GroupReviewRow)
+        .where(
+            GroupReviewRow.parent_revision_row_id == parent.id,
+            GroupReviewRow.review_status == "draft",
+        )
+        .order_by(GroupReviewRow.revision_no.desc(), GroupReviewRow.id.desc())
+    )
+    if existing_child is not None:
+        return sheet, parent, existing_child
+
+    rows = _sheet_rows(db, sheet.id)
+    insert_position = parent.position + 1
+    offset = len(rows) + 2
+    for row in rows:
+        if row.position >= insert_position:
+            row.position += offset
+    db.flush()
+    for row in rows:
+        if row.position >= insert_position + offset:
+            row.position -= offset - 1
+
+    now = datetime.now(timezone.utc)
+    parent.review_status = "revision_requested"
+    parent.checked = False
+    parent.revision_requested_at = now
+    parent.revision_requested_by_email = current_user.login_id
+
+    child = GroupReviewRow(
+        sheet_id=sheet.id,
+        firestore_row_id=str(uuid4()),
+        position=insert_position,
+        parent_revision_row_id=parent.id,
+        parent_revision_firestore_row_id=parent.firestore_row_id,
+        collateral_no=parent.collateral_no,
+        sheet_label=parent.sheet_label,
+        field_no=parent.field_no,
+        checked=False,
+        change_before_text="",
+        change_before_html="",
+        change_after_text="",
+        change_after_html="",
+        cell_styles={},
+        review_status="draft",
+        revision_no=parent.revision_no + 1,
+    )
+    db.add(child)
+
+    sheet.completed = False
+    sheet.review_completed = False
+    sheet.review_completed_at = None
+    sheet.review_completed_by_email = None
+    sheet.reuse_requested = False
+    sheet.reuse_requested_at = None
+    sheet.reuse_requested_by = None
+    sheet.reuse_requested_by_email = None
+    sheet.updated_at = now
+    sheet.updated_by = current_user.display_name
+    sheet.updated_by_email = current_user.login_id
+
+    db.commit()
+    db.refresh(sheet)
+    db.refresh(parent)
+    db.refresh(child)
+    return sheet, parent, child
