@@ -99,7 +99,7 @@ class GroupReviewRowResponse(BaseModel):
     id: int
     sheet_id: int
     position: int
-    parent_revision_row_id: int | None
+    parent_revision_row_id: int | None = None
     collateral_no: str
     sheet_label: str
     field_no: str
