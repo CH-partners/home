@@ -7,9 +7,11 @@ import { installGroupReviewCellLockV2 } from "./groupReviewV2CellLock.js";
 import { installGroupReviewAdminNavigationV2 } from "./groupReviewV2AdminNavigation.js";
 import { installGroupReviewProjectDeleteV2 } from "./groupReviewV2ProjectDelete.js";
 import { installGroupReviewKeyboardV2 } from "./groupReviewV2Keyboard.js";
+import { installGroupReviewTheme } from "./groupReviewTheme.js";
 
 export function initGroupReview() {
   installLimitedDeploymentMode();
+  installGroupReviewTheme();
   const api = initGroupReviewV2();
   installGroupReviewReuseV2(api);
   installGroupReviewRefreshV2(api);
