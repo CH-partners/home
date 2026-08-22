@@ -10,6 +10,9 @@ export function installLimitedDeploymentMode() {
   if (window.__limitedDeploymentModeInstalled) return;
   window.__limitedDeploymentModeInstalled = true;
 
+  let sidebarUserSyncing = false;
+  let lastSidebarUserSync = 0;
+
   function ensureLimitedStyles() {
     if (document.getElementById("limited-deployment-styles")) return;
     const style = document.createElement("style");
@@ -85,13 +88,140 @@ export function installLimitedDeploymentMode() {
         z-index:2;
         box-shadow:-4px 0 14px rgba(15,23,42,.12)!important;
       }
+
+      #limitedLoginBox {
+        display:none;
+        flex-shrink:0;
+        margin:12px 16px 18px;
+        padding:12px 13px;
+        border:1px solid rgba(255,255,255,.28);
+        border-radius:12px;
+        background:rgba(255,255,255,.10);
+        color:#ffffff;
+        box-shadow:0 6px 18px rgba(0,0,0,.10);
+      }
+      #limitedLoginBox.visible {
+        display:block;
+      }
+      #limitedLoginBox .limited-login-caption {
+        margin-bottom:5px;
+        color:#b9c9df;
+        font-size:10px;
+        font-weight:700;
+        letter-spacing:.05em;
+      }
+      #limitedLoginBox .limited-login-name {
+        color:#ffffff;
+        font-size:14px;
+        font-weight:900;
+        line-height:1.35;
+      }
+      #limitedLoginBox .limited-login-role {
+        display:inline-flex;
+        align-items:center;
+        margin-top:7px;
+        padding:3px 7px;
+        border:1px solid rgba(255,255,255,.32);
+        border-radius:999px;
+        background:rgba(255,255,255,.12);
+        color:#e8eef8;
+        font-size:10px;
+        font-weight:800;
+      }
+
+      #groupReviewBody .grv2 th:last-child,
+      #groupReviewBody .grv2 td:last-child {
+        width:58px!important;
+        min-width:58px!important;
+        max-width:58px!important;
+      }
+      #groupReviewBody .grv2 td:last-child {
+        text-align:center!important;
+        vertical-align:middle!important;
+      }
+      #groupReviewBody .grv2-approve {
+        display:inline-flex!important;
+        align-items:center!important;
+        justify-content:center!important;
+        margin:4px auto!important;
+        padding:0 7px!important;
+      }
+      #groupReviewBody .grv2-del {
+        display:block!important;
+        width:30px!important;
+        min-width:30px!important;
+        margin:0 auto!important;
+        padding:0!important;
+      }
+      #groupReviewBody .grv2-approved {
+        padding-left:2px!important;
+        padding-right:2px!important;
+        text-align:center!important;
+      }
     `;
     document.head.appendChild(style);
+  }
+
+  function ensureLoginBox() {
+    const sidebar = document.querySelector(".sidebar");
+    if (!sidebar) return null;
+
+    let box = document.getElementById("limitedLoginBox");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "limitedLoginBox";
+      box.innerHTML = `
+        <div class="limited-login-caption">LOGIN</div>
+        <div class="limited-login-name"></div>
+        <div class="limited-login-role"></div>
+      `;
+      sidebar.appendChild(box);
+    }
+    return box;
+  }
+
+  function renderLoginBox(user) {
+    const box = ensureLoginBox();
+    if (!box) return;
+    if (!user) {
+      box.classList.remove("visible");
+      return;
+    }
+
+    const name = user.display_name || user.login_id || "";
+    const role = user.role === "ADMIN" ? "관리자" : user.role === "WORKER" ? "작업자" : String(user.role || "");
+    const nameEl = box.querySelector(".limited-login-name");
+    const roleEl = box.querySelector(".limited-login-role");
+    if (nameEl) nameEl.textContent = name;
+    if (roleEl) roleEl.textContent = role;
+    box.classList.add("visible");
+  }
+
+  async function syncSidebarLogin(force = false) {
+    const now = Date.now();
+    if (sidebarUserSyncing || (!force && now - lastSidebarUserSync < 1200)) return;
+    sidebarUserSyncing = true;
+    lastSidebarUserSync = now;
+    try {
+      const response = await fetch("/api/v1/auth/me", { credentials: "include" });
+      if (response.status === 401) {
+        renderLoginBox(null);
+        return;
+      }
+      if (!response.ok) return;
+      renderLoginBox(await response.json());
+    } catch (_) {
+      // 사이드바 로그인 표시는 부가 UI이므로 본문 동작은 유지한다.
+    } finally {
+      sidebarUserSyncing = false;
+    }
   }
 
   function applyDeploymentMode() {
     ensureLimitedStyles();
     document.body.classList.add("limited-deployment-mode");
+    ensureLoginBox();
+    void syncSidebarLogin();
 
     const adminBox = document.querySelector(".admin-box");
     if (adminBox) adminBox.style.display = "none";
@@ -141,6 +271,20 @@ export function installLimitedDeploymentMode() {
     clearTimeout(timer);
     timer = setTimeout(applyDeploymentMode, 20);
   });
+
+  document.addEventListener("submit", event => {
+    if (event.target?.matches?.("#grv2LoginForm,#allocationLoginForm")) {
+      setTimeout(() => void syncSidebarLogin(true), 250);
+      setTimeout(() => void syncSidebarLogin(true), 900);
+    }
+  }, true);
+
+  document.addEventListener("click", event => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("#grv2Logout")) {
+      setTimeout(() => void syncSidebarLogin(true), 250);
+    }
+  }, true);
 
   applyDeploymentMode();
   observer.observe(document.body, { childList: true, subtree: true });
