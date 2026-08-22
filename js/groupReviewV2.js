@@ -36,7 +36,6 @@ export function initGroupReviewV2() {
     loading: false,
     socket: null,
     reconnectTimer: null,
-    saveTimers: new Map(),
     saveInFlight: new Map()
   };
 
@@ -158,7 +157,7 @@ export function initGroupReviewV2() {
       : state.user.role === "ADMIN"
         ? "관리자: 행별 확인 가능"
         : ownSheet
-          ? (state.sheet?.completed ? "입력 완료 · 관리자 검토 중" : "자동저장 사용 중")
+          ? (state.sheet?.completed ? "입력 완료 · 관리자 검토 중" : "셀 이동 시 저장")
           : `${state.sheet?.member_name || "다른 작업자"} 시트 · 읽기 전용`;
 
     const workerActions = state.user.role === "WORKER" && ownSheet
@@ -178,7 +177,7 @@ export function initGroupReviewV2() {
       ["회색", "#E5E7EB"]
     ].map(([label, color]) => `<button type="button" class="grv2-color-btn" data-bg-color="${color}" title="${label}" aria-label="${label}" style="background:${color}" ${sheetEditable ? "" : "disabled"}></button>`).join("");
 
-    body.innerHTML = `<div class="grv2"><div class="grv2-userbar"><div class="grv2-user"><strong>${escapeHtml(state.user.display_name)}</strong><span class="grv2-role">${escapeHtml(state.user.role)}</span><span id="grv2Live" class="grv2-live off">● 연결 중</span></div><button id="grv2Logout" type="button" class="grv2-btn">그룹리뷰 로그아웃</button></div>${state.project ? `<div class="grv2-project-title">${escapeHtml(state.project.name)}${state.project.completed ? " · 완료" : ""}</div>` : ""}${!state.project ? '<div class="grv2-note">생성된 리뷰 프로젝트가 없습니다.</div>' : `<div class="grv2-tabs">${tabs}</div><div class="grv2-toolbar"><select id="grv2Size" ${sheetEditable ? "" : "disabled"}><option>12</option><option selected>13</option><option>15</option><option>18</option><option>22</option></select><button id="grv2Bold" class="bold" type="button" ${sheetEditable ? "" : "disabled"}>B</button><button id="grv2Strike" class="strike" type="button" ${sheetEditable ? "" : "disabled"}>S</button><span class="grv2-color-group"><span class="grv2-color-label">셀 색</span>${quickColors}<button type="button" class="grv2-color-btn clear" data-bg-color="" title="색 제거" aria-label="색 제거" ${sheetEditable ? "" : "disabled"}>×</button><label class="grv2-custom-color" title="직접 색상"><span>직접</span><input id="grv2BgCustom" type="color" value="#FFF3B0" ${sheetEditable ? "" : "disabled"}></label></span><button id="grv2Clear" type="button" ${sheetEditable ? "" : "disabled"}>서식 지우기</button><span class="spacer"></span><span id="grv2Status" class="grv2-status">${readonlyMessage}</span></div><div class="grv2-grid"><table><thead><tr><th style="width:46px">#</th><th style="width:86px">Collateral#</th><th style="width:68px">Sheet</th><th style="width:76px">Field No.</th><th style="width:390px">변경전</th><th style="width:390px">변경후</th><th style="width:74px">${state.user.role === "ADMIN" ? "확인" : "삭제"}</th></tr></thead><tbody>${rowHtml}</tbody></table></div><div class="grv2-bottom"><div class="grv2-bottom-actions"><button id="grv2Add" type="button" class="grv2-btn" ${sheetEditable ? "" : "disabled"}>+ 행 추가</button>${workerActions}${adminActions}</div><span class="grv2-savehint">${sheetEditable ? "0.5초 입력 멈춤 또는 셀 이동 시 자동 저장" : readonlyMessage}</span></div>`}</div>`;
+    body.innerHTML = `<div class="grv2"><div class="grv2-userbar"><div class="grv2-user"><strong>${escapeHtml(state.user.display_name)}</strong><span class="grv2-role">${escapeHtml(state.user.role)}</span><span id="grv2Live" class="grv2-live off">● 연결 중</span></div><button id="grv2Logout" type="button" class="grv2-btn">그룹리뷰 로그아웃</button></div>${state.project ? `<div class="grv2-project-title">${escapeHtml(state.project.name)}${state.project.completed ? " · 완료" : ""}</div>` : ""}${!state.project ? '<div class="grv2-note">생성된 리뷰 프로젝트가 없습니다.</div>' : `<div class="grv2-tabs">${tabs}</div><div class="grv2-toolbar"><select id="grv2Size" ${sheetEditable ? "" : "disabled"}><option>12</option><option selected>13</option><option>15</option><option>18</option><option>22</option></select><button id="grv2Bold" class="bold" type="button" ${sheetEditable ? "" : "disabled"}>B</button><button id="grv2Strike" class="strike" type="button" ${sheetEditable ? "" : "disabled"}>S</button><span class="grv2-color-group"><span class="grv2-color-label">셀 색</span>${quickColors}<button type="button" class="grv2-color-btn clear" data-bg-color="" title="색 제거" aria-label="색 제거" ${sheetEditable ? "" : "disabled"}>×</button><label class="grv2-custom-color" title="직접 색상"><span>직접</span><input id="grv2BgCustom" type="color" value="#FFF3B0" ${sheetEditable ? "" : "disabled"}></label></span><button id="grv2Clear" type="button" ${sheetEditable ? "" : "disabled"}>서식 지우기</button><span class="spacer"></span><span id="grv2Status" class="grv2-status">${readonlyMessage}</span></div><div class="grv2-grid"><table><thead><tr><th style="width:46px">#</th><th style="width:86px">Collateral#</th><th style="width:68px">Sheet</th><th style="width:76px">Field No.</th><th style="width:390px">변경전</th><th style="width:390px">변경후</th><th style="width:74px">${state.user.role === "ADMIN" ? "확인" : "삭제"}</th></tr></thead><tbody>${rowHtml}</tbody></table></div><div class="grv2-bottom"><div class="grv2-bottom-actions"><button id="grv2Add" type="button" class="grv2-btn" ${sheetEditable ? "" : "disabled"}>+ 행 추가</button>${workerActions}${adminActions}</div><span class="grv2-savehint">${sheetEditable ? "셀 이동 시 변경된 값 저장" : readonlyMessage}</span></div>`}</div>`;
 
     bindViewEvents();
     updateLiveIndicator();
@@ -198,7 +197,7 @@ export function initGroupReviewV2() {
     rowEl.querySelectorAll(".grv2-cell.editable").forEach(cell => {
       cell.addEventListener("focus", () => selectCell(cell));
       cell.addEventListener("click", () => selectCell(cell));
-      cell.addEventListener("input", () => scheduleCellSave(cell));
+      cell.addEventListener("input", () => status("입력 중..."));
       cell.addEventListener("blur", () => flushCellSave(cell));
     });
     rowEl.querySelector("[data-delete-row]")?.addEventListener("click", event => removeRow(Number(event.currentTarget.dataset.deleteRow)));
@@ -244,17 +243,8 @@ export function initGroupReviewV2() {
   }
 
   const cellKey = cell => `${cell.dataset.rowId}:${cell.dataset.field}`;
-  function scheduleCellSave(cell) {
-    const key = cellKey(cell);
-    clearTimeout(state.saveTimers.get(key));
-    status("입력 중...");
-    state.saveTimers.set(key, setTimeout(() => saveCellText(cell), 500));
-  }
 
   function flushCellSave(cell) {
-    const key = cellKey(cell);
-    clearTimeout(state.saveTimers.get(key));
-    state.saveTimers.delete(key);
     return saveCellText(cell);
   }
 
@@ -272,7 +262,10 @@ export function initGroupReviewV2() {
     const row = state.rows.find(item => item.id === rowId);
     if (!row || row.review_status !== "draft") return;
     const value = cell.innerText.replace(/\r/g, "");
-    if (value === row[field]) return;
+    if (value === row[field]) {
+      status("변경 없음");
+      return;
+    }
     const key = cellKey(cell);
     if (state.saveInFlight.get(key) === value) return;
     state.saveInFlight.set(key, value);
