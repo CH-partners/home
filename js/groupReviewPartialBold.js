@@ -86,6 +86,19 @@ export function installGroupReviewPartialBoldV2() {
     return api(`/group-review/sheets/${sheetId}/rows`);
   }
 
+  function captureSelection(cell) {
+    if (!cell?.classList.contains("editable")) return null;
+    const range = selectionOffsets(cell);
+    if (!range) return null;
+    return {
+      rowId: Number(cell.dataset.rowId),
+      field: cell.dataset.field,
+      styleKey: cell.dataset.styleKey,
+      range,
+      liveText: cell.innerText.replace(/\r/g, "")
+    };
+  }
+
   async function decorate() {
     if (decorating) return;
     const body = document.getElementById("groupReviewBody");
@@ -123,16 +136,28 @@ export function installGroupReviewPartialBoldV2() {
     savedSelection = null;
     if (!target) return alert("굵게 표시할 단어 또는 문구를 먼저 드래그해서 선택하세요.");
 
-    const rows = await fetchActiveRows();
-    const row = (Array.isArray(rows) ? rows : []).find(item => Number(item.id) === target.rowId);
+    let rows = await fetchActiveRows();
+    let row = (Array.isArray(rows) ? rows : []).find(item => Number(item.id) === target.rowId);
     if (!row) return;
+
+    // The user may click Bold before blur/save has run. Persist the visible text
+    // first so applying formatting cannot restore the previous server value.
+    if (target.liveText !== String(row[target.field] ?? "")) {
+      row = await api(`/group-review/rows/${target.rowId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ [target.field]: target.liveText })
+      });
+    }
 
     const styleKey = target.styleKey;
     row.cell_styles ||= {};
     row.cell_styles[styleKey] ||= {};
     const style = row.cell_styles[styleKey];
     style.bold = false;
-    style.boldRanges = normalizeRanges([...(style.boldRanges || []), target.range], String(row[target.field] ?? "").length);
+    style.boldRanges = normalizeRanges(
+      [...(style.boldRanges || []), target.range],
+      String(row[target.field] ?? "").length
+    );
 
     const updated = await api(`/group-review/rows/${target.rowId}`, {
       method: "PATCH",
@@ -143,6 +168,7 @@ export function installGroupReviewPartialBoldV2() {
     if (cell) {
       const updatedStyle = updated.cell_styles?.[styleKey] || {};
       cell.innerHTML = renderBoldText(String(updated[target.field] ?? ""), updatedStyle.boldRanges);
+      cell.dataset.partialBoldEdited = "";
     }
   }
 
@@ -175,17 +201,7 @@ export function installGroupReviewPartialBoldV2() {
     const button = event.target instanceof Element ? event.target.closest("#grv2Bold") : null;
     if (!button) return;
     const cell = document.activeElement?.classList?.contains("grv2-cell") ? document.activeElement : null;
-    if (!cell?.classList.contains("editable")) {
-      savedSelection = null;
-      return;
-    }
-    const range = selectionOffsets(cell);
-    savedSelection = range ? {
-      rowId: Number(cell.dataset.rowId),
-      field: cell.dataset.field,
-      styleKey: cell.dataset.styleKey,
-      range
-    } : null;
+    savedSelection = captureSelection(cell);
     event.preventDefault();
   }, true);
 
@@ -194,6 +210,18 @@ export function installGroupReviewPartialBoldV2() {
     if (!button) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    void applyBoldSelection().catch(error => alert(`굵게 저장 실패: ${error.message}`));
+  }, true);
+
+  document.addEventListener("keydown", event => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.key.toLowerCase() !== "b") return;
+    const cell = event.target instanceof Element
+      ? event.target.closest("#groupReviewBody .grv2-cell.editable")
+      : null;
+    if (!cell) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    savedSelection = captureSelection(cell);
     void applyBoldSelection().catch(error => alert(`굵게 저장 실패: ${error.message}`));
   }, true);
 
