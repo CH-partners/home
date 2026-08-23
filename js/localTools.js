@@ -79,6 +79,7 @@ function ensureTool(tool) {
   } else {
     const frame = panel.querySelector("iframe");
     if (frame && frame.getAttribute("src") !== tool.src) frame.setAttribute("src", tool.src);
+    if (panel.dataset.localSharedPublicReady !== "1") panel.dataset.localSharedPublicReady = "1";
   }
 
   let button = topNav.querySelector(`.nav-item[data-local-tool="${tool.key}"]`);
@@ -93,9 +94,9 @@ function ensureTool(tool) {
     button.addEventListener("click", () => showPanel(tool.panelIndex, button));
     topNav.appendChild(button);
   } else {
-    button.textContent = tool.title;
-    button.style.display = "";
-    button.dataset.localSharedPublic = "1";
+    if (button.textContent !== tool.title) button.textContent = tool.title;
+    if (button.style.display === "none") button.style.display = "";
+    if (button.dataset.localSharedPublic !== "1") button.dataset.localSharedPublic = "1";
   }
 }
 
@@ -107,12 +108,12 @@ function removeLegacySmallDepositMenu() {
     const label = String(button.textContent || "").replace(/\s+/g, "").trim();
     if (label !== "소액조회") return;
     if (button.dataset.localTool === "small-deposit") return;
-    button.style.display = "none";
+    if (button.style.display !== "none") button.style.display = "none";
   });
 
   const legacyPanel = document.querySelector('.sheet-panel[data-index="10"]');
   if (legacyPanel) {
-    legacyPanel.style.display = "none";
+    if (legacyPanel.style.display !== "none") legacyPanel.style.display = "none";
     legacyPanel.classList.remove("active");
   }
 }
@@ -129,12 +130,11 @@ export function installLocalTools() {
 
   applyLocalTools();
 
-  let timer = null;
-  const observer = new MutationObserver(() => {
-    clearTimeout(timer);
-    timer = setTimeout(applyLocalTools, 50);
+  // sharedPagesLocal이 기존 main.js 메뉴를 다시 그린 뒤에만 한 번 복구한다.
+  // DOM 자체를 MutationObserver로 감시하면 자기 변경을 다시 감지하는 루프가 생긴다.
+  window.addEventListener("local-shared-pages-loaded", () => {
+    applyLocalTools();
   });
-  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 installLocalTools();
