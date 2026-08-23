@@ -4,6 +4,12 @@ const LOCAL_TOOLS = [
     title: "최우선임금",
     panelIndex: 1001,
     src: "/최우선임금.html"
+  },
+  {
+    key: "mortgage-extract",
+    title: "근저당추출",
+    panelIndex: 1002,
+    src: "/tools/mortgage-extract"
   }
 ];
 
