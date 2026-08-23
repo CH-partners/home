@@ -4,11 +4,12 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.dependencies.auth import require_admin, require_worker_or_admin
+from app.models.app_settings import AppSettings
 from app.models.schedule import Schedule
 from app.models.user import AppUser
 from app.schemas.schedule import (
@@ -16,11 +17,14 @@ from app.schemas.schedule import (
     ScheduleBootstrapResponse,
     ScheduleCreate,
     ScheduleResponse,
+    ScheduleStatusResponse,
     ScheduleUpdate,
 )
 
 
 router = APIRouter(prefix="/api/v1/schedules", tags=["schedules"])
+SETTINGS_ID = "main"
+MIGRATION_STATE_KEY = "__local_schedule_migration__"
 
 
 def _to_response(item: Schedule) -> ScheduleResponse:
@@ -46,6 +50,48 @@ def _validate_times(payload: ScheduleCreate | ScheduleUpdate) -> None:
         )
 
 
+def _migration_complete(db: Session) -> bool:
+    settings = db.get(AppSettings, SETTINGS_ID)
+    if settings is None:
+        return False
+    state = dict(settings.page_contents or {}).get(MIGRATION_STATE_KEY)
+    return isinstance(state, dict) and state.get("complete") is True
+
+
+def _mark_migration_complete(db: Session, imported: int) -> None:
+    settings = db.get(AppSettings, SETTINGS_ID)
+    if settings is None:
+        settings = AppSettings(
+            id=SETTINGS_ID,
+            menus=[],
+            notice={},
+            page_contents={},
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    contents = dict(settings.page_contents or {})
+    contents[MIGRATION_STATE_KEY] = {
+        "complete": True,
+        "imported": imported,
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    settings.page_contents = contents
+    settings.updated_at = datetime.now(timezone.utc)
+    db.add(settings)
+
+
+@router.get("/status", response_model=ScheduleStatusResponse)
+def schedule_status(
+    db: Session = Depends(get_db),
+    _user: AppUser = Depends(require_worker_or_admin),
+) -> ScheduleStatusResponse:
+    count = int(db.scalar(select(func.count()).select_from(Schedule)) or 0)
+    return ScheduleStatusResponse(
+        count=count,
+        migration_complete=_migration_complete(db),
+    )
+
+
 @router.get("", response_model=list[ScheduleResponse])
 def list_schedules(
     db: Session = Depends(get_db),
@@ -61,11 +107,15 @@ def bootstrap_schedules(
     db: Session = Depends(get_db),
     _admin: AppUser = Depends(require_admin),
 ) -> ScheduleBootstrapResponse:
+    if _migration_complete(db):
+        count = int(db.scalar(select(func.count()).select_from(Schedule)) or 0)
+        return ScheduleBootstrapResponse(imported=count, migration_complete=True)
+
     existing_id = db.scalar(select(Schedule.id).limit(1))
     if existing_id is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Local schedules are already initialized.",
+            detail="Local schedules already contain data before migration was confirmed.",
         )
 
     now = datetime.now(timezone.utc)
@@ -93,8 +143,9 @@ def bootstrap_schedules(
         db.add(item)
         imported += 1
 
+    _mark_migration_complete(db, imported)
     db.commit()
-    return ScheduleBootstrapResponse(imported=imported)
+    return ScheduleBootstrapResponse(imported=imported, migration_complete=True)
 
 
 @router.post("", response_model=ScheduleResponse, status_code=status.HTTP_201_CREATED)
@@ -103,6 +154,12 @@ def create_schedule(
     db: Session = Depends(get_db),
     user: AppUser = Depends(require_worker_or_admin),
 ) -> ScheduleResponse:
+    if not _migration_complete(db):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="기존 일정 이관 확인이 끝난 뒤 새 일정을 등록할 수 있습니다.",
+        )
+
     _validate_times(payload)
     now = datetime.now(timezone.utc)
     item = Schedule(
@@ -130,6 +187,12 @@ def update_schedule(
     db: Session = Depends(get_db),
     _user: AppUser = Depends(require_worker_or_admin),
 ) -> ScheduleResponse:
+    if not _migration_complete(db):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="기존 일정 이관 확인이 끝난 뒤 일정을 수정할 수 있습니다.",
+        )
+
     _validate_times(payload)
     item = db.get(Schedule, schedule_id)
     if item is None:
@@ -154,6 +217,12 @@ def delete_schedule(
     db: Session = Depends(get_db),
     _user: AppUser = Depends(require_worker_or_admin),
 ) -> None:
+    if not _migration_complete(db):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="기존 일정 이관 확인이 끝난 뒤 일정을 삭제할 수 있습니다.",
+        )
+
     item = db.get(Schedule, schedule_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="일정을 찾을 수 없습니다.")
