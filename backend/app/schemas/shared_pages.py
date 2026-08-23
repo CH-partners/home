@@ -19,6 +19,12 @@ class SharedPagesResponse(BaseModel):
     updated_at: datetime | None = None
 
 
+class SharedPagesUpdatePayload(BaseModel):
+    menus: list[Any] = Field(default_factory=list)
+    notice: dict[str, Any] = Field(default_factory=dict)
+    page_contents: dict[str, Any] = Field(default_factory=dict)
+
+
 class PageContentResponse(BaseModel):
     key: str
     content: dict[str, Any] = Field(default_factory=dict)
