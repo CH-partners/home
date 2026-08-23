@@ -129,6 +129,32 @@ export function initSchedule(ctx = {}) {
     };
   }
 
+  function normalizeLegacyDateTime(value) {
+    if (!value) return null;
+    if (typeof value === "string") return value;
+
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value.toISOString();
+    }
+
+    if (typeof value?.toDate === "function") {
+      try {
+        const date = value.toDate();
+        return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    const seconds = Number(value?.seconds ?? value?._seconds);
+    const nanoseconds = Number(value?.nanoseconds ?? value?._nanoseconds ?? 0);
+    if (!Number.isFinite(seconds)) return null;
+
+    const milliseconds = seconds * 1000 + Math.floor((Number.isFinite(nanoseconds) ? nanoseconds : 0) / 1_000_000);
+    const date = new Date(milliseconds);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
   function refreshCalendarEvents() {
     if (!calendar) return;
     calendar.removeAllEvents();
@@ -164,8 +190,8 @@ export function initSchedule(ctx = {}) {
           memo: String(data.memo || ""),
           color: String(data.color || "#3b82f6"),
           writer_email: String(data.writer || "anonymous"),
-          created_at: data.createdAt || null,
-          updated_at: data.updatedAt || data.createdAt || null
+          created_at: normalizeLegacyDateTime(data.createdAt),
+          updated_at: normalizeLegacyDateTime(data.updatedAt || data.createdAt)
         };
       }).filter(item => item.source_id && item.title && item.date);
     } catch (error) {
