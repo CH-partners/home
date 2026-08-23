@@ -18,6 +18,80 @@ async function api(path, options = {}) {
   return data;
 }
 
+function showPanel(panelIndex, button) {
+  document.querySelectorAll(".sheet-panel").forEach(panel => panel.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(item => item.classList.remove("active"));
+  const panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
+  if (panel) panel.classList.add("active");
+  if (button) button.classList.add("active");
+}
+
+function ensureLocalNoticeMenu() {
+  const topNav = document.getElementById("topNav");
+  if (!topNav) return;
+  const existing = Array.from(topNav.querySelectorAll(".nav-item"))
+    .find(item => item.textContent?.replace(/\s+/g, "").includes("공지사항"));
+  if (existing) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "nav-item nav-item-notice";
+  button.dataset.localSharedMenu = "notice";
+  button.textContent = "📢 청현 공지사항";
+  button.addEventListener("click", () => showPanel(0, button));
+  topNav.prepend(button);
+}
+
+function ensureLocalDynamicUi(snapshot) {
+  const main = document.querySelector(".main");
+  const topNav = document.getElementById("topNav");
+  if (!main || !topNav) return;
+
+  const menus = Array.isArray(snapshot?.menus) ? snapshot.menus : [];
+  const contents = snapshot?.page_contents || {};
+
+  menus.forEach(menu => {
+    const panelIndex = Number(menu?.panelIndex);
+    if (!Number.isFinite(panelIndex) || panelIndex <= 13 || menu?.kind === "iframe") return;
+
+    let panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.className = "sheet-panel";
+      panel.dataset.index = String(panelIndex);
+      panel.dataset.localSharedPanel = "1";
+      panel.innerHTML = `
+        <header class="sheet-header"><h1></h1></header>
+        <section class="major-card">
+          <div class="major-title"></div>
+          <div class="rich-preview"></div>
+        </section>
+      `;
+      main.appendChild(panel);
+    }
+    panel.querySelector(".sheet-header h1").textContent = String(menu.title || `게시판 ${panelIndex}`);
+
+    const existingButton = Array.from(topNav.querySelectorAll(".nav-item"))
+      .find(item => Number(item.dataset.localSharedPanelIndex) === panelIndex);
+    if (!existingButton) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "nav-item";
+      button.dataset.localSharedMenu = "dynamic";
+      button.dataset.localSharedPanelIndex = String(panelIndex);
+      button.textContent = String(menu.title || `게시판 ${panelIndex}`);
+      button.addEventListener("click", () => showPanel(panelIndex, button));
+      topNav.appendChild(button);
+    }
+
+    const config = contents[`panel_${panelIndex}`];
+    if (config) {
+      panel.querySelector(".major-title").textContent = String(config.majorTitle || menu.title || "");
+      panel.querySelector(".rich-preview").innerHTML = String(config.html || config.bodyHtml || "");
+    }
+  });
+}
+
 function renderNotice(notice) {
   const title = document.getElementById("noticeTitle");
   const date = document.getElementById("noticeDate");
@@ -50,19 +124,22 @@ function renderDynamicContents(snapshot) {
     const config = contents[`panel_${panelIndex}`];
     if (!panel || !section || !config) return;
 
-    const majorTitle = String(config.majorTitle || menu.title || "");
-    const html = String(config.html || config.bodyHtml || "");
-    section.innerHTML = `
-      <div class="major-title"></div>
-      <div class="rich-preview"></div>
-    `;
-    section.querySelector(".major-title").textContent = majorTitle;
-    section.querySelector(".rich-preview").innerHTML = html;
+    let majorTitle = section.querySelector(".major-title");
+    let preview = section.querySelector(".rich-preview");
+    if (!majorTitle || !preview) {
+      section.innerHTML = `<div class="major-title"></div><div class="rich-preview"></div>`;
+      majorTitle = section.querySelector(".major-title");
+      preview = section.querySelector(".rich-preview");
+    }
+    majorTitle.textContent = String(config.majorTitle || menu.title || "");
+    preview.innerHTML = String(config.html || config.bodyHtml || "");
   });
 }
 
 function applySnapshot(snapshot) {
   if (!snapshot) return;
+  ensureLocalNoticeMenu();
+  ensureLocalDynamicUi(snapshot);
   renderNotice(snapshot.notice || {});
   renderDynamicContents(snapshot);
   window.dispatchEvent(new CustomEvent("local-shared-pages-loaded", { detail: snapshot }));
