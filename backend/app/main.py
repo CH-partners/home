@@ -26,9 +26,11 @@ app.include_router(schedule_v2_router)
 repo_root = Path(__file__).resolve().parents[2]
 css_dir = repo_root / "css"
 js_dir = repo_root / "js"
+vendor_dir = repo_root / "vendor"
 
 app.mount("/css", StaticFiles(directory=css_dir), name="css")
 app.mount("/js", StaticFiles(directory=js_dir), name="js")
+app.mount("/vendor", StaticFiles(directory=vendor_dir), name="vendor")
 
 
 @app.get("/", include_in_schema=False)
