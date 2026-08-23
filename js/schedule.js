@@ -6,6 +6,7 @@ export function initSchedule(ctx = {}) {
   let currentScheduleEventId = null;
   let scheduleEvents = [];
   let refreshTimer = null;
+  let legacyImportChecked = false;
 
   async function api(path, options = {}) {
     const headers = { ...(options.headers || {}) };
@@ -121,9 +122,79 @@ export function initSchedule(ctx = {}) {
     scheduleEvents.forEach(evt => calendar.addEvent(evt));
   }
 
+  async function currentLocalUser() {
+    try {
+      return await api("/auth/me");
+    } catch (error) {
+      if (error.status === 401) return null;
+      throw error;
+    }
+  }
+
+  async function readLegacySchedules() {
+    try {
+      const [{ getApps }, { getFirestore, collection, getDocs }] = await Promise.all([
+        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
+        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js")
+      ]);
+      const app = getApps()[0];
+      if (!app) return [];
+      const snapshot = await getDocs(collection(getFirestore(app), "schedules"));
+      return snapshot.docs.map(docSnap => {
+        const data = docSnap.data() || {};
+        return {
+          source_id: docSnap.id,
+          title: String(data.title || "(제목 없음)"),
+          date: String(data.date || ""),
+          start_time: data.startTime ? String(data.startTime).slice(0, 5) : null,
+          end_time: data.endTime ? String(data.endTime).slice(0, 5) : null,
+          memo: String(data.memo || ""),
+          color: String(data.color || "#3b82f6"),
+          writer_email: String(data.writer || "anonymous"),
+          created_at: data.createdAt || null,
+          updated_at: data.updatedAt || data.createdAt || null
+        };
+      }).filter(item => item.source_id && item.title && item.date);
+    } catch (error) {
+      console.warn("기존 Firebase 일정 읽기 실패:", error);
+      return [];
+    }
+  }
+
+  async function maybeImportLegacySchedules(localRows) {
+    if (legacyImportChecked || localRows.length) return false;
+
+    const user = await currentLocalUser();
+    if (user?.role !== "ADMIN") return false;
+
+    legacyImportChecked = true;
+    const legacyItems = await readLegacySchedules();
+    if (!legacyItems.length) return false;
+
+    try {
+      const result = await api("/schedules/bootstrap", {
+        method: "POST",
+        body: JSON.stringify({ items: legacyItems })
+      });
+      console.info(`기존 일정 ${Number(result?.imported || 0)}건을 로컬 DB로 이관했습니다.`);
+      return Number(result?.imported || 0) > 0;
+    } catch (error) {
+      if (error.status === 409) return true;
+      throw error;
+    }
+  }
+
   async function loadSchedules() {
-    const rows = await api("/schedules");
-    scheduleEvents = Array.isArray(rows) ? rows.map(mapScheduleToEvent) : [];
+    let rows = await api("/schedules");
+    rows = Array.isArray(rows) ? rows : [];
+
+    const imported = await maybeImportLegacySchedules(rows);
+    if (imported) {
+      rows = await api("/schedules");
+      rows = Array.isArray(rows) ? rows : [];
+    }
+
+    scheduleEvents = rows.map(mapScheduleToEvent);
     refreshCalendarEvents();
     return scheduleEvents;
   }
@@ -231,6 +302,7 @@ export function initSchedule(ctx = {}) {
 
   document.addEventListener("submit", event => {
     if (event.target?.matches?.("#grv2LoginForm,#allocationLoginForm")) {
+      legacyImportChecked = false;
       scheduleRefresh(350);
       scheduleRefresh(900);
     }
