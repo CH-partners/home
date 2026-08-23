@@ -11,7 +11,8 @@ on:
 permissions:
   contents: write
 
-# This workflow vendors pinned runtime libraries so LAN tools do not depend on public CDNs.
+# This workflow vendors pinned runtime libraries and reference data so LAN tools
+# do not depend on public CDNs or GitHub at browser runtime.
 jobs:
   vendor:
     runs-on: ubuntu-latest
@@ -20,37 +21,62 @@ jobs:
         with:
           ref: feat/local-postgres-migration
 
-      - name: Download pinned browser libraries
+      - name: Download pinned runtime assets
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p vendor
+          mkdir -p vendor data
+
           curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" -o vendor/pdf.min.js
           curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js" -o vendor/pdf.worker.min.js
           curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" -o vendor/exceljs.min.js
+          curl -fsSL "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" -o vendor/bootstrap.min.css
+          curl -fsSL "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" -o vendor/bootstrap.bundle.min.js
+          curl -fsSL "https://raw.githubusercontent.com/CH-partners/housing-db/refs/heads/main/bjd_code.json" -o data/bjd_code.json
+
           cat > vendor/THIRD_PARTY_NOTICES.md <<'EOF'
           # Browser vendor assets
 
           - PDF.js 3.11.174 (`pdf.min.js`, `pdf.worker.min.js`) — Apache-2.0 — https://mozilla.github.io/pdf.js/
           - ExcelJS 4.4.0 (`exceljs.min.js`) — MIT — https://github.com/exceljs/exceljs
+          - Bootstrap 5.3.3 (`bootstrap.min.css`, `bootstrap.bundle.min.js`) — MIT — https://getbootstrap.com/
 
-          These files are pinned local copies used by the LAN-only tools. Runtime pages must load them from `/vendor/` rather than a public CDN.
+          These files are pinned local copies used by the LAN-only tools. Runtime pages load them from `/vendor/` rather than public CDNs.
           EOF
+
           test -s vendor/pdf.min.js
           test -s vendor/pdf.worker.min.js
           test -s vendor/exceljs.min.js
-          sha256sum vendor/pdf.min.js vendor/pdf.worker.min.js vendor/exceljs.min.js > vendor/SHA256SUMS
+          test -s vendor/bootstrap.min.css
+          test -s vendor/bootstrap.bundle.min.js
+          test -s data/bjd_code.json
 
-      - name: Commit vendor assets
+          sha256sum \
+            vendor/pdf.min.js \
+            vendor/pdf.worker.min.js \
+            vendor/exceljs.min.js \
+            vendor/bootstrap.min.css \
+            vendor/bootstrap.bundle.min.js \
+            data/bjd_code.json > vendor/SHA256SUMS
+
+      - name: Commit runtime assets
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add vendor/pdf.min.js vendor/pdf.worker.min.js vendor/exceljs.min.js vendor/THIRD_PARTY_NOTICES.md vendor/SHA256SUMS
+          git add \
+            vendor/pdf.min.js \
+            vendor/pdf.worker.min.js \
+            vendor/exceljs.min.js \
+            vendor/bootstrap.min.css \
+            vendor/bootstrap.bundle.min.js \
+            vendor/THIRD_PARTY_NOTICES.md \
+            vendor/SHA256SUMS \
+            data/bjd_code.json
           if git diff --cached --quiet; then
-            echo "Vendor assets already current."
+            echo "Runtime assets already current."
             exit 0
           fi
-          git commit -m "add pinned local browser vendor assets"
+          git commit -m "add pinned local rent tool assets"
           git push origin HEAD:feat/local-postgres-migration
