@@ -2,6 +2,7 @@ import "./sharedPagesLocal.js";
 import "./noticeLocalAdmin.js";
 import "./legacyBoardsLocal.js";
 import "./fixedBoardMenuCompat.js";
+import "./menuRollout.js";
 import "./menuAdminUnified.js";
 import "./menuPillStyle.js";
 import "./sidebarSession.js";
