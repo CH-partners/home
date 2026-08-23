@@ -19,6 +19,7 @@ const CORE_LABELS = {
 let currentUser = null;
 let workingBlocks = [];
 let saving = false;
+let lastPresentationKey = "";
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -76,7 +77,6 @@ function buildBlocks(menus) {
 
     const groupKey = inferGroup(menu);
     menu.group = groupKey;
-
     let block = groupBlocks.get(groupKey);
     if (!block) {
       block = { type: "group", groupKey, items: [] };
@@ -151,11 +151,8 @@ function configureModal() {
 
   modal.classList.add("local-menu-admin-mode");
   modal.querySelector(".modal-title").textContent = "메뉴 수정";
-
   const help = modal.querySelector(".help-text");
-  if (help) {
-    help.textContent = "↑↓로 단독 메뉴와 펼침그룹의 위치를 자유롭게 바꿀 수 있고, 펼침그룹 안에서도 게시판 순서를 따로 바꿀 수 있습니다.";
-  }
+  if (help) help.textContent = "↑↓로 단독 메뉴와 펼침그룹의 위치를 바꾸고, 펼침그룹 안에서도 게시판 순서를 바꿀 수 있습니다.";
 
   const labels = ["순서", "제목", "패널", "색상", "펼침그룹", "상태", "삭제"];
   modal.querySelectorAll(".menu-table thead th").forEach((th, index) => {
@@ -213,8 +210,7 @@ function renderGroupRow(tbody, block, blockIndex) {
   tr.innerHTML = `
     <td>${orderButtonsHtml(blockIndex === 0, blockIndex === workingBlocks.length - 1, "block")}</td>
     <td>${meta.icon} ${escapeHtml(meta.title)}</td>
-    <td></td>
-    <td></td>
+    <td></td><td></td>
     <td><span class="local-menu-status">펼침메뉴</span></td>
     <td><span class="local-menu-status">${visibleCount}개 게시판</span></td>
     <td></td>`;
@@ -241,22 +237,12 @@ function renderChildRow(tbody, block, blockIndex, menu, itemIndex) {
     <td><span class="local-menu-status">${hidden ? "삭제 예정" : "게시판"}</span></td>
     <td><button type="button" class="small-btn ${hidden ? "" : "danger"}" data-action="delete">${hidden ? "복원" : "삭제"}</button></td>`;
 
-  tr.querySelector('[data-field="title"]')?.addEventListener("input", event => {
-    menu.title = event.target.value;
-  });
-  tr.querySelector('[data-field="theme"]')?.addEventListener("change", event => {
-    menu.theme = event.target.value;
-  });
-  tr.querySelector('[data-field="group"]')?.addEventListener("change", event => {
-    changeItemGroup(blockIndex, itemIndex, event.target.value);
-  });
+  tr.querySelector('[data-field="title"]')?.addEventListener("input", event => { menu.title = event.target.value; });
+  tr.querySelector('[data-field="theme"]')?.addEventListener("change", event => { menu.theme = event.target.value; });
+  tr.querySelector('[data-field="group"]')?.addEventListener("change", event => changeItemGroup(blockIndex, itemIndex, event.target.value));
   tr.querySelector('[data-action="item-up"]')?.addEventListener("click", () => moveItem(blockIndex, itemIndex, -1));
   tr.querySelector('[data-action="item-down"]')?.addEventListener("click", () => moveItem(blockIndex, itemIndex, 1));
-  tr.querySelector('[data-action="delete"]')?.addEventListener("click", () => {
-    menu.hidden = !menu.hidden;
-    renderTable();
-  });
-
+  tr.querySelector('[data-action="delete"]')?.addEventListener("click", () => { menu.hidden = !menu.hidden; renderTable(); });
   tbody.appendChild(tr);
 }
 
@@ -264,7 +250,6 @@ function renderTable() {
   const tbody = document.getElementById("menuTableBody");
   if (!tbody) return;
   tbody.innerHTML = "";
-
   workingBlocks.forEach((block, blockIndex) => {
     if (block.type === "menu") renderCoreRow(tbody, block, blockIndex);
     else renderGroupRow(tbody, block, blockIndex);
@@ -289,7 +274,6 @@ function moveItem(blockIndex, itemIndex, direction) {
 
 function changeItemGroup(blockIndex, itemIndex, nextGroupKey) {
   if (!GROUP_META[nextGroupKey]) return;
-
   const sourceBlock = workingBlocks[blockIndex];
   if (!sourceBlock || sourceBlock.type !== "group") return;
 
@@ -300,8 +284,7 @@ function changeItemGroup(blockIndex, itemIndex, nextGroupKey) {
   let targetBlock = workingBlocks.find(block => block.type === "group" && block.groupKey === nextGroupKey);
   if (!targetBlock) {
     targetBlock = { type: "group", groupKey: nextGroupKey, items: [] };
-    const insertAt = Math.min(blockIndex + 1, workingBlocks.length);
-    workingBlocks.splice(insertAt, 0, targetBlock);
+    workingBlocks.splice(Math.min(blockIndex + 1, workingBlocks.length), 0, targetBlock);
   }
   targetBlock.items.push(menu);
 
@@ -318,15 +301,7 @@ function addMenu() {
     referenceBlock = { type: "group", groupKey: "reference", items: [] };
     workingBlocks.push(referenceBlock);
   }
-  referenceBlock.items.push({
-    title: "새 게시판",
-    panelIndex: null,
-    location: "top",
-    kind: "panel",
-    group: "reference",
-    theme: "",
-    hidden: false
-  });
+  referenceBlock.items.push({ title: "새 게시판", panelIndex: null, location: "top", kind: "panel", group: "reference", theme: "", hidden: false });
   renderTable();
 }
 
@@ -344,16 +319,12 @@ async function saveMenus() {
   if (currentUser?.role !== "ADMIN") return alert("관리자만 수정할 수 있습니다.");
 
   const menus = flattenBlocks();
-  if (menus.some(menu => !isCore(menu) && !menu.hidden && !String(menu.title || "").trim())) {
-    return alert("게시판 제목을 입력해주세요.");
-  }
+  if (menus.some(menu => !isCore(menu) && !menu.hidden && !String(menu.title || "").trim())) return alert("게시판 제목을 입력해주세요.");
 
   saving = true;
   try {
-    await api("/shared-pages/menus", {
-      method: "PUT",
-      body: JSON.stringify({ menus, notice: {}, page_contents: {} })
-    });
+    await api("/shared-pages/menus", { method: "PUT", body: JSON.stringify({ menus, notice: {}, page_contents: {} }) });
+    lastPresentationKey = "";
     document.getElementById("menuModal")?.classList.remove("show");
     window.localSharedPagesApi?.refresh?.();
     alert("메뉴가 저장되었습니다.");
@@ -376,9 +347,7 @@ function ensureGroupShell(groupKey) {
     toggle.className = "nav-item local-board-group-toggle";
     toggle.dataset.localSharedPublic = "1";
     toggle.dataset.localBoardGroupToggle = groupKey;
-    toggle.innerHTML = `
-      <span class="local-board-group-label"><span aria-hidden="true">${meta.icon}</span><span>${escapeHtml(meta.title)}</span></span>
-      <span class="local-board-group-arrow" aria-hidden="true">▶</span>`;
+    toggle.innerHTML = `<span class="local-board-group-label"><span aria-hidden="true">${meta.icon}</span><span>${escapeHtml(meta.title)}</span></span><span class="local-board-group-arrow" aria-hidden="true">▶</span>`;
     toggle.addEventListener("click", () => {
       const nextExpanded = wrap?.hidden !== false;
       if (wrap) wrap.hidden = !nextExpanded;
@@ -404,7 +373,6 @@ function ensureGroupShell(groupKey) {
 function findCoreButton(panelIndex) {
   const topNav = document.getElementById("topNav");
   if (!topNav) return null;
-
   const labels = CORE_LABELS[panelIndex] || [];
   return Array.from(topNav.querySelectorAll(":scope > .nav-item"))
     .find(button => labels.includes(compact(button.textContent))) || null;
@@ -414,10 +382,41 @@ function findBoardButton(panelIndex) {
   return document.querySelector(`.nav-item[data-local-shared-panel-index="${panelIndex}"]`);
 }
 
+function presentationKey(menus) {
+  return JSON.stringify(menus.map(menu => ({
+    panelIndex: Number(menu?.panelIndex),
+    title: String(menu?.title || ""),
+    group: inferGroup(menu),
+    theme: String(menu?.theme || ""),
+    hidden: Boolean(menu?.hidden)
+  })));
+}
+
+function presentationDomReady(menus) {
+  for (const menu of menus) {
+    const panelIndex = Number(menu?.panelIndex);
+    if (!Number.isFinite(panelIndex) || CORE_PANEL_INDEXES.has(panelIndex)) continue;
+    const button = findBoardButton(panelIndex);
+    if (!button) return false;
+    const wrap = document.querySelector(`[data-local-board-group-wrap="${inferGroup(menu)}"]`);
+    if (!wrap || button.parentElement !== wrap) return false;
+  }
+  return true;
+}
+
+function appendOnlyIfNeeded(parent, node) {
+  if (!parent || !node) return;
+  if (node.parentElement !== parent || parent.lastElementChild !== node) parent.appendChild(node);
+}
+
 function applyMenuPresentation(snapshot) {
   const menus = Array.isArray(snapshot?.menus) ? snapshot.menus : [];
   const topNav = document.getElementById("topNav");
   if (!topNav) return;
+
+  const nextKey = presentationKey(menus);
+  if (nextKey === lastPresentationKey && presentationDomReady(menus)) return;
+  lastPresentationKey = nextKey;
 
   const blocks = buildBlocks(menus);
   const order = new Map(menus.map((menu, index) => [Number(menu?.panelIndex), index]));
@@ -434,49 +433,53 @@ function applyMenuPresentation(snapshot) {
 
     if (panel) {
       if (hidden) panel.removeAttribute("data-local-shared-public-ready");
-      else panel.dataset.localSharedPublicReady = "1";
-      panel.style.display = hidden ? "none" : "";
+      else if (panel.dataset.localSharedPublicReady !== "1") panel.dataset.localSharedPublicReady = "1";
+      const wantedDisplay = hidden ? "none" : "";
+      if (panel.style.display !== wantedDisplay) panel.style.display = wantedDisplay;
       if (hidden) panel.classList.remove("active");
     }
 
     if (button) {
       if (hidden) button.removeAttribute("data-local-shared-public");
-      else button.dataset.localSharedPublic = "1";
-      button.style.display = hidden ? "none" : "";
-      button.dataset.menuTheme = String(menu.theme || "");
+      else if (button.dataset.localSharedPublic !== "1") button.dataset.localSharedPublic = "1";
+      const wantedDisplay = hidden ? "none" : "";
+      if (button.style.display !== wantedDisplay) button.style.display = wantedDisplay;
+      const theme = String(menu.theme || "");
+      if (button.dataset.menuTheme !== theme) button.dataset.menuTheme = theme;
       button.classList.add("local-board-sub-item");
       if (shell?.wrap && button.parentElement !== shell.wrap) shell.wrap.appendChild(button);
     }
   }
 
   document.querySelectorAll(".local-board-subgroup").forEach(wrap => {
-    Array.from(wrap.querySelectorAll(":scope > .nav-item"))
-      .sort((a, b) => {
-        const aIndex = Number(a.dataset.localSharedPanelIndex);
-        const bIndex = Number(b.dataset.localSharedPanelIndex);
-        return (order.get(aIndex) ?? 9999) - (order.get(bIndex) ?? 9999);
-      })
-      .forEach(button => wrap.appendChild(button));
+    const sorted = Array.from(wrap.querySelectorAll(":scope > .nav-item")).sort((a, b) => {
+      const aIndex = Number(a.dataset.localSharedPanelIndex);
+      const bIndex = Number(b.dataset.localSharedPanelIndex);
+      return (order.get(aIndex) ?? 9999) - (order.get(bIndex) ?? 9999);
+    });
+    sorted.forEach((button, index) => {
+      const current = wrap.children[index];
+      if (current !== button) wrap.insertBefore(button, current || null);
+    });
 
-    const visibleChildren = Array.from(wrap.querySelectorAll(":scope > .nav-item"))
-      .some(button => button.style.display !== "none");
+    const visibleChildren = sorted.some(button => button.style.display !== "none");
     const groupKey = wrap.dataset.localBoardGroupWrap;
     const toggle = topNav.querySelector(`[data-local-board-group-toggle="${groupKey}"]`);
-    if (toggle) toggle.style.display = visibleChildren ? "" : "none";
-    wrap.style.display = visibleChildren ? "" : "none";
+    const wantedDisplay = visibleChildren ? "" : "none";
+    if (toggle && toggle.style.display !== wantedDisplay) toggle.style.display = wantedDisplay;
+    if (wrap.style.display !== wantedDisplay) wrap.style.display = wantedDisplay;
   });
 
   for (const block of blocks) {
     if (block.type === "menu") {
       const button = findCoreButton(Number(block.menu?.panelIndex));
-      if (button) topNav.appendChild(button);
+      appendOnlyIfNeeded(topNav, button);
       continue;
     }
-
     const shell = ensureGroupShell(block.groupKey);
     if (!shell) continue;
-    topNav.appendChild(shell.toggle);
-    topNav.appendChild(shell.wrap);
+    appendOnlyIfNeeded(topNav, shell.toggle);
+    appendOnlyIfNeeded(topNav, shell.wrap);
   }
 }
 
@@ -509,9 +512,7 @@ function bindActions() {
       return;
     }
 
-    if (target.closest("#grv2Logout")) {
-      setTimeout(() => void syncUser(), 250);
-    }
+    if (target.closest("#grv2Logout")) setTimeout(() => void syncUser(), 250);
   }, true);
 
   document.addEventListener("submit", event => {
@@ -533,10 +534,7 @@ export function installLocalMenuAdmin() {
   ensureStyles();
   bindActions();
   [0, 250, 800, 1600].forEach(delay => {
-    setTimeout(
-      () => void syncUser().catch(error => console.error("메뉴 관리자 상태 확인 실패:", error)),
-      delay
-    );
+    setTimeout(() => void syncUser().catch(error => console.error("메뉴 관리자 상태 확인 실패:", error)), delay);
   });
 }
 
