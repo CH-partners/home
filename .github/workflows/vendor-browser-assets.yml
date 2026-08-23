@@ -1,0 +1,55 @@
+name: Vendor browser assets
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/local-postgres-migration
+    paths:
+      - .github/workflows/vendor-browser-assets.yml
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/local-postgres-migration
+
+      - name: Download pinned browser libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p vendor
+          curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" -o vendor/pdf.min.js
+          curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js" -o vendor/pdf.worker.min.js
+          curl -fsSL "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js" -o vendor/exceljs.min.js
+          cat > vendor/THIRD_PARTY_NOTICES.md <<'EOF'
+          # Browser vendor assets
+
+          - PDF.js 3.11.174 (`pdf.min.js`, `pdf.worker.min.js`) — Apache-2.0 — https://mozilla.github.io/pdf.js/
+          - ExcelJS 4.4.0 (`exceljs.min.js`) — MIT — https://github.com/exceljs/exceljs
+
+          These files are pinned local copies used by the LAN-only tools. Runtime pages must load them from `/vendor/` rather than a public CDN.
+          EOF
+          test -s vendor/pdf.min.js
+          test -s vendor/pdf.worker.min.js
+          test -s vendor/exceljs.min.js
+          sha256sum vendor/pdf.min.js vendor/pdf.worker.min.js vendor/exceljs.min.js > vendor/SHA256SUMS
+
+      - name: Commit vendor assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor/pdf.min.js vendor/pdf.worker.min.js vendor/exceljs.min.js vendor/THIRD_PARTY_NOTICES.md vendor/SHA256SUMS
+          if git diff --cached --quiet; then
+            echo "Vendor assets already current."
+            exit 0
+          fi
+          git commit -m "add pinned local browser vendor assets"
+          git push origin HEAD:feat/local-postgres-migration
