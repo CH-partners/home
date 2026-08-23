@@ -18,6 +18,21 @@ class ScheduleUpdate(ScheduleCreate):
     pass
 
 
+class ScheduleBootstrapItem(ScheduleCreate):
+    source_id: str = Field(min_length=1, max_length=300)
+    writer_email: str = Field(default="anonymous", max_length=300)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ScheduleBootstrapPayload(BaseModel):
+    items: list[ScheduleBootstrapItem] = Field(default_factory=list, max_length=5000)
+
+
+class ScheduleBootstrapResponse(BaseModel):
+    imported: int
+
+
 class ScheduleResponse(BaseModel):
     id: str
     title: str
