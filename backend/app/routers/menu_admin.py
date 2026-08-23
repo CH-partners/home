@@ -29,6 +29,13 @@ FIXED_CONTENT_KEYS = {
 ALLOWED_GROUPS = {"", "qna", "work", "search", "reference"}
 ALLOWED_KINDS = {"panel", "tool", "iframe"}
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+SYSTEM_MENU_DEFAULTS = [
+    {"title": "공지사항", "panelIndex": 0, "kind": "panel", "group": "", "color": "#1f4e79", "hidden": False},
+    {"title": "분배표", "panelIndex": 11, "kind": "panel", "group": "", "color": "#1f4e79", "hidden": False},
+    {"title": "스케줄", "panelIndex": 12, "kind": "panel", "group": "", "color": "#1f4e79", "hidden": False},
+    {"title": "그룹리뷰", "panelIndex": 13, "kind": "panel", "group": "", "color": "#1f4e79", "hidden": False},
+]
+SCHEDULE_VISIBLE_PRESET_VERSION = 1
 
 
 def _response(settings: AppSettings) -> SharedPagesResponse:
@@ -81,6 +88,75 @@ def _default_content(title: str) -> dict[str, object]:
 def _clean_color(value: object) -> str:
     color = str(value or "").strip()
     return color.lower() if COLOR_RE.fullmatch(color) else ""
+
+
+def _ensure_system_menus(settings: AppSettings) -> bool:
+    menus = [dict(menu) for menu in list(settings.menus or []) if isinstance(menu, dict)]
+    by_panel = {
+        panel_index: menu
+        for menu in menus
+        if (panel_index := _panel_index(menu)) is not None
+    }
+    changed = False
+
+    for default in SYSTEM_MENU_DEFAULTS:
+        panel_index = int(default["panelIndex"])
+        menu = by_panel.get(panel_index)
+        if menu is None:
+            menu = {
+                **default,
+                "location": "top",
+                "groupColor": "",
+                "visibilityInitialized": True,
+                "visibilityPresetVersion": 2,
+            }
+            if panel_index == 12:
+                menu["scheduleVisiblePresetVersion"] = SCHEDULE_VISIBLE_PRESET_VERSION
+            menus.append(menu)
+            by_panel[panel_index] = menu
+            changed = True
+            continue
+
+        if panel_index == 12 and int(menu.get("scheduleVisiblePresetVersion") or 0) < SCHEDULE_VISIBLE_PRESET_VERSION:
+            menu["hidden"] = False
+            menu["scheduleVisiblePresetVersion"] = SCHEDULE_VISIBLE_PRESET_VERSION
+            changed = True
+
+    if changed:
+        settings.menus = menus
+    return changed
+
+
+def _commit_menu_upgrade(db: Session, settings: AppSettings) -> None:
+    settings.updated_at = datetime.now(timezone.utc)
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+
+
+@router.get("/public-menu")
+def get_public_menu(db: Session = Depends(get_db)) -> dict[str, object]:
+    settings = db.get(AppSettings, SETTINGS_ID)
+    if settings is None:
+        menus = [
+            {
+                **menu,
+                "location": "top",
+                "groupColor": "",
+                "visibilityInitialized": True,
+                "visibilityPresetVersion": 2,
+                **({"scheduleVisiblePresetVersion": SCHEDULE_VISIBLE_PRESET_VERSION} if int(menu["panelIndex"]) == 12 else {}),
+            }
+            for menu in SYSTEM_MENU_DEFAULTS
+        ]
+        return {"menus": menus, "updated_at": None}
+
+    if _ensure_system_menus(settings):
+        _commit_menu_upgrade(db, settings)
+    return {
+        "menus": list(settings.menus or []),
+        "updated_at": settings.updated_at,
+    }
 
 
 @router.put("/menus", response_model=SharedPagesResponse)
