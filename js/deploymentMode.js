@@ -1,7 +1,7 @@
 import "./sharedPagesLocal.js";
 import "./noticeLocalAdmin.js";
 import "./legacyBoardsLocal.js";
-import "./localMenuAdmin.js";
+import "./menuAdminUnified.js";
 
 const ALLOWED_PANEL_INDEXES = new Set([0, 10, 11, 13]);
 const ALLOWED_LABELS = new Set(["청현공지사항", "공지사항", "일반게시판", "소액조회", "분배표", "그룹리뷰"]);
