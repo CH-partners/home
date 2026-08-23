@@ -4,6 +4,7 @@ import "./noticeLocalAdmin.js";
 const ALLOWED_PANEL_INDEXES = new Set([0, 10, 11, 13]);
 const ALLOWED_LABELS = new Set(["청현공지사항", "공지사항", "일반게시판", "소액조회", "분배표", "그룹리뷰"]);
 const WORKER_ALLOCATION_NOTICE = "조회 전용입니다. 분배표 수정은 관리자만 가능합니다.";
+let scheduleReady = false;
 
 function normalizeLabel(value) {
   return String(value || "")
@@ -15,6 +16,7 @@ function normalizeLabel(value) {
 function isAllowedPanel(panel) {
   const index = Number(panel?.dataset?.index);
   if (ALLOWED_PANEL_INDEXES.has(index)) return true;
+  if (index === 12 && scheduleReady) return true;
   if (panel?.dataset?.localSharedPublicReady === "1") return true;
   const title = normalizeLabel(panel?.querySelector?.(".sheet-header h1")?.textContent || "");
   return title === "일반게시판";
@@ -23,6 +25,7 @@ function isAllowedPanel(panel) {
 function isAllowedNavItem(node) {
   if (node?.dataset?.localSharedPublic === "1") return true;
   const label = normalizeLabel(node?.textContent);
+  if (label === "스케줄") return scheduleReady;
   return ALLOWED_LABELS.has(label);
 }
 
@@ -32,6 +35,7 @@ export function installLimitedDeploymentMode() {
 
   let sidebarUserSyncing = false;
   let lastSidebarUserSync = 0;
+  let scheduleStatusSyncing = false;
 
   function ensureLimitedStyles() {
     if (document.getElementById("limited-deployment-styles")) return;
@@ -263,6 +267,25 @@ export function installLimitedDeploymentMode() {
     }
   }
 
+  async function syncScheduleReadiness() {
+    if (scheduleStatusSyncing) return;
+    scheduleStatusSyncing = true;
+    try {
+      const response = await fetch("/api/v1/schedules/status", { credentials: "include" });
+      if (response.status === 401) {
+        scheduleReady = false;
+        return;
+      }
+      if (!response.ok) return;
+      const status = await response.json();
+      scheduleReady = status?.migration_complete === true;
+    } catch (_) {
+      scheduleReady = false;
+    } finally {
+      scheduleStatusSyncing = false;
+    }
+  }
+
   function applyDeploymentMode() {
     ensureLimitedStyles();
     document.body.classList.add("limited-deployment-mode");
@@ -288,6 +311,10 @@ export function installLimitedDeploymentMode() {
         if (label === "분배표" && !node.dataset.allocationV2RefreshBound) {
           node.dataset.allocationV2RefreshBound = "1";
           node.addEventListener("click", () => setTimeout(() => window.allocationApi?.refresh?.(), 0));
+        }
+        if (label === "스케줄" && !node.dataset.localScheduleRefreshBound) {
+          node.dataset.localScheduleRefreshBound = "1";
+          node.addEventListener("click", () => setTimeout(() => window.scheduleApi?.refresh?.(), 0));
         }
       } else {
         node.style.display = "none";
@@ -316,21 +343,31 @@ export function installLimitedDeploymentMode() {
     timer = setTimeout(applyDeploymentMode, 20);
   });
 
+  window.addEventListener("local-schedule-status", event => {
+    scheduleReady = event?.detail?.migration_complete === true;
+    applyDeploymentMode();
+  });
+
   document.addEventListener("submit", event => {
     if (event.target?.matches?.("#grv2LoginForm,#allocationLoginForm")) {
       setTimeout(() => void syncSidebarLogin(true), 250);
       setTimeout(() => void syncSidebarLogin(true), 900);
+      setTimeout(() => void syncScheduleReadiness().then(applyDeploymentMode), 350);
+      setTimeout(() => void syncScheduleReadiness().then(applyDeploymentMode), 1000);
     }
   }, true);
 
   document.addEventListener("click", event => {
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest("#grv2Logout")) {
+      scheduleReady = false;
       setTimeout(() => void syncSidebarLogin(true), 250);
+      setTimeout(applyDeploymentMode, 260);
     }
   }, true);
 
   applyDeploymentMode();
+  void syncScheduleReadiness().then(applyDeploymentMode);
   observer.observe(document.body, { childList: true, subtree: true });
   [100, 300, 700, 1200].forEach(delay => setTimeout(applyDeploymentMode, delay));
 }
