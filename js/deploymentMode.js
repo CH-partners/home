@@ -14,8 +14,15 @@ function normalizeLabel(value) {
 function isAllowedPanel(panel) {
   const index = Number(panel?.dataset?.index);
   if (ALLOWED_PANEL_INDEXES.has(index)) return true;
+  if (panel?.dataset?.localSharedPublicReady === "1") return true;
   const title = normalizeLabel(panel?.querySelector?.(".sheet-header h1")?.textContent || "");
   return title === "일반게시판";
+}
+
+function isAllowedNavItem(node) {
+  if (node?.dataset?.localSharedPublic === "1") return true;
+  const label = normalizeLabel(node?.textContent);
+  return ALLOWED_LABELS.has(label);
 }
 
 export function installLimitedDeploymentMode() {
@@ -276,7 +283,7 @@ export function installLimitedDeploymentMode() {
     document.querySelectorAll("#topNav .nav-item, #bottomNav .nav-item, #topNav .nav-group-toggle, #topNav .nav-sub-group, #topNav .nav-divider, #bottomNav .nav-divider").forEach(node => {
       if (node.classList.contains("nav-item")) {
         const label = normalizeLabel(node.textContent);
-        node.style.display = ALLOWED_LABELS.has(label) ? "" : "none";
+        node.style.display = isAllowedNavItem(node) ? "" : "none";
         if (label === "분배표" && !node.dataset.allocationV2RefreshBound) {
           node.dataset.allocationV2RefreshBound = "1";
           node.addEventListener("click", () => setTimeout(() => window.allocationApi?.refresh?.(), 0));
