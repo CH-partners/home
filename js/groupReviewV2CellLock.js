@@ -25,8 +25,8 @@ export function installGroupReviewCellLockV2() {
     return Number(document.querySelector("#groupReviewBody .grv2-tab.active")?.dataset?.sheetId || 0);
   }
 
-  function editableCells() {
-    return Array.from(document.querySelectorAll("#groupReviewBody .grv2-cell.editable"));
+  function reviewCells() {
+    return Array.from(document.querySelectorAll("#groupReviewBody .grv2-cell[data-row-id][data-field]"));
   }
 
   function ensureStyles() {
@@ -35,9 +35,11 @@ export function installGroupReviewCellLockV2() {
     style.id = "grv2-cell-lock-styles";
     style.textContent = `
       .grv2-cell.grv2-lock-wait{cursor:wait!important;background:#f8fafc!important}
-      .grv2-cell.grv2-locked-other{position:relative;cursor:not-allowed!important;background:#fff7ed!important;box-shadow:inset 0 0 0 2px #fb923c!important}
-      .grv2-cell.grv2-locked-other::after{content:attr(data-lock-label);position:absolute;right:4px;top:3px;max-width:80%;font-size:10px;line-height:1.2;padding:2px 5px;border-radius:999px;background:#fff7ed;color:#9a3412;border:1px solid #fdba74;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+      .grv2-cell.grv2-locked-other{position:relative;cursor:not-allowed!important;background:#fff7ed!important;box-shadow:inset 0 0 0 2px #f97316!important}
+      .grv2-cell.grv2-locked-other::after{content:attr(data-lock-label);position:absolute;right:4px;top:3px;max-width:88%;font-size:10px;line-height:1.2;padding:2px 5px;border-radius:999px;background:#f97316;color:#fff;border:1px solid #ea580c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;font-weight:800}
       .grv2-cell.grv2-lock-owned{box-shadow:inset 0 0 0 2px #2563eb!important}
+      .grv2-cell.grv2-lock-owned:not(.grv2-editing){caret-color:transparent!important}
+      .grv2-cell.grv2-lock-owned.grv2-editing{caret-color:auto!important}
     `;
     document.head.appendChild(style);
   }
@@ -50,13 +52,16 @@ export function installGroupReviewCellLockV2() {
     const key = cellKey(activeSheetId(), Number(cell.dataset.rowId), cell.dataset.field);
     const lock = state.locks.get(key);
     const owned = state.ownedKey === key;
+    const editable = cell.classList.contains("editable");
 
     cell.classList.toggle("grv2-lock-owned", owned);
     cell.classList.toggle("grv2-locked-other", Boolean(lock && !owned));
+    if (!owned) cell.classList.remove("grv2-editing");
+
     if (lock && !owned) {
-      cell.dataset.lockLabel = `${lock.display_name || "다른 작업자"} 편집 중`;
+      cell.dataset.lockLabel = `👤 ${lock.display_name || "다른 작업자"} 사용 중`;
       cell.setAttribute("contenteditable", "false");
-    } else if (owned) {
+    } else if (owned && editable) {
       cell.removeAttribute("data-lock-label");
       cell.setAttribute("contenteditable", "true");
     } else {
@@ -66,7 +71,7 @@ export function installGroupReviewCellLockV2() {
   }
 
   function applyAllCellStates() {
-    editableCells().forEach(applyCellState);
+    reviewCells().forEach(applyCellState);
   }
 
   function send(message) {
@@ -76,6 +81,7 @@ export function installGroupReviewCellLockV2() {
   }
 
   function requestLock(cell) {
+    if (!cell?.classList.contains("editable")) return;
     const sheetId = activeSheetId();
     const rowId = Number(cell.dataset.rowId);
     const fieldName = cell.dataset.field || "";
@@ -141,6 +147,7 @@ export function installGroupReviewCellLockV2() {
       pending.cell.classList.remove("grv2-lock-wait");
       state.locks.set(message.lock.key, message.lock);
       state.ownedKey = message.lock.key;
+      pending.cell.classList.remove("grv2-editing");
       applyAllCellStates();
       if (pending.cell.isConnected) {
         pending.cell.setAttribute("contenteditable", "true");
@@ -158,7 +165,7 @@ export function installGroupReviewCellLockV2() {
       applyAllCellStates();
       if (message.lock?.display_name) {
         const status = document.getElementById("grv2Status");
-        if (status) status.textContent = `${message.lock.display_name} 편집 중`;
+        if (status) status.textContent = `${message.lock.display_name} 사용 중`;
       }
       return;
     }
@@ -225,7 +232,7 @@ export function installGroupReviewCellLockV2() {
     event.stopPropagation();
     if (lock) {
       const status = document.getElementById("grv2Status");
-      if (status) status.textContent = `${lock.display_name || "다른 작업자"} 편집 중`;
+      if (status) status.textContent = `${lock.display_name || "다른 작업자"} 사용 중`;
       return;
     }
     requestLock(cell);
@@ -257,13 +264,33 @@ export function installGroupReviewCellLockV2() {
     return null;
   }
 
-  function onKeyDown(event) {
-    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+  function ownedCellFromEvent(event) {
     const cell = event.target instanceof Element ? event.target.closest("#groupReviewBody .grv2-cell.editable") : null;
+    if (!cell) return null;
+    const key = cellKey(activeSheetId(), Number(cell.dataset.rowId), cell.dataset.field);
+    return state.ownedKey === key ? cell : null;
+  }
+
+  function beginEditing(event) {
+    const cell = ownedCellFromEvent(event);
+    if (cell) cell.classList.add("grv2-editing");
+  }
+
+  function onKeyDown(event) {
+    const cell = ownedCellFromEvent(event);
     if (!cell) return;
 
-    const currentKey = cellKey(activeSheetId(), Number(cell.dataset.rowId), cell.dataset.field);
-    if (state.ownedKey !== currentKey) return;
+    if (event.key === "Escape" && cell.classList.contains("grv2-editing")) {
+      event.preventDefault();
+      event.stopPropagation();
+      cell.classList.remove("grv2-editing");
+      return;
+    }
+
+    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+
+    // Once text input has started, arrow keys belong to the text caret.
+    if (cell.classList.contains("grv2-editing")) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -275,11 +302,11 @@ export function installGroupReviewCellLockV2() {
     const targetKey = cellKey(activeSheetId(), Number(target.dataset.rowId), target.dataset.field);
     if (targetLock && state.ownedKey !== targetKey) {
       const status = document.getElementById("grv2Status");
-      if (status) status.textContent = `${targetLock.display_name || "다른 작업자"} 편집 중`;
+      if (status) status.textContent = `${targetLock.display_name || "다른 작업자"} 사용 중`;
       return;
     }
 
-    // blur가 현재 셀의 변경값을 먼저 저장하고, 다음 셀은 별도 잠금을 얻어 편집한다.
+    // Selection mode: save/release the current cell and select the next cell.
     cell.blur();
     requestAnimationFrame(() => {
       if (target.isConnected) requestLock(target);
@@ -326,6 +353,8 @@ export function installGroupReviewCellLockV2() {
 
   ensureStyles();
   document.addEventListener("pointerdown", onPointerDown, true);
+  document.addEventListener("beforeinput", beginEditing, true);
+  document.addEventListener("compositionstart", beginEditing, true);
   document.addEventListener("keydown", onKeyDown, true);
   document.addEventListener("focusout", onFocusOut, true);
   document.addEventListener("click", onClick, true);
