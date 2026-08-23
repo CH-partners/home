@@ -23,8 +23,8 @@ from app.schemas.schedule import (
 
 
 router = APIRouter(prefix="/api/v1/schedules", tags=["schedules"])
-SETTINGS_ID = "main"
-MIGRATION_STATE_KEY = "__local_schedule_migration__"
+SCHEDULE_STATE_ID = "schedule_migration"
+MIGRATION_STATE_KEY = "state"
 
 
 def _to_response(item: Schedule) -> ScheduleResponse:
@@ -51,7 +51,7 @@ def _validate_times(payload: ScheduleCreate | ScheduleUpdate) -> None:
 
 
 def _migration_complete(db: Session) -> bool:
-    settings = db.get(AppSettings, SETTINGS_ID)
+    settings = db.get(AppSettings, SCHEDULE_STATE_ID)
     if settings is None:
         return False
     state = dict(settings.page_contents or {}).get(MIGRATION_STATE_KEY)
@@ -59,10 +59,10 @@ def _migration_complete(db: Session) -> bool:
 
 
 def _mark_migration_complete(db: Session, imported: int) -> None:
-    settings = db.get(AppSettings, SETTINGS_ID)
+    settings = db.get(AppSettings, SCHEDULE_STATE_ID)
     if settings is None:
         settings = AppSettings(
-            id=SETTINGS_ID,
+            id=SCHEDULE_STATE_ID,
             menus=[],
             notice={},
             page_contents={},
