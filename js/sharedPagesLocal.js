@@ -12,11 +12,13 @@ const FIXED_CONTENTS = [
   { panelIndex: 9, key: "machineqa", title: "기계기구Q&A", targetId: "content-machineqa" }
 ];
 
-let currentLocalUser = null;
-let currentLocalSnapshot = null;
-let currentLocalContentKey = "";
-let currentLocalContentConfig = null;
-let legacyFirebaseSettingsPromise = null;
+let currentUser = null;
+let currentSnapshot = null;
+let editingKey = "";
+let editingConfig = null;
+let legacySettingsPromise = null;
+let observerTimer = null;
+let observerSuppressUntil = 0;
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -35,24 +37,20 @@ async function api(path, options = {}) {
   return data;
 }
 
-function compactLabel(value) {
+function compact(value) {
   return String(value || "").replace(/\s+/g, "").trim();
 }
 
 function isGeneralBoard(menu) {
-  return compactLabel(menu?.title) === "일반게시판";
-}
-
-function fixedContentForPanel(panelIndex) {
-  return FIXED_CONTENTS.find(item => item.panelIndex === Number(panelIndex)) || null;
+  return compact(menu?.title) === "일반게시판";
 }
 
 function menuForPanel(panelIndex) {
-  return (currentLocalSnapshot?.menus || []).find(menu => Number(menu?.panelIndex) === Number(panelIndex));
+  return (currentSnapshot?.menus || []).find(menu => Number(menu?.panelIndex) === Number(panelIndex)) || null;
 }
 
-function contentRefForPanel(panelIndex) {
-  const fixed = fixedContentForPanel(panelIndex);
+function refForPanel(panelIndex) {
+  const fixed = FIXED_CONTENTS.find(item => item.panelIndex === Number(panelIndex));
   if (fixed) return fixed;
   const menu = menuForPanel(panelIndex);
   return {
@@ -63,19 +61,30 @@ function contentRefForPanel(panelIndex) {
   };
 }
 
+function setText(node, value) {
+  if (!node) return;
+  const next = String(value ?? "");
+  if (node.textContent !== next) node.textContent = next;
+}
+
+function setHtml(node, value) {
+  if (!node) return;
+  const next = String(value ?? "");
+  if (node.innerHTML !== next) node.innerHTML = next;
+}
+
 function showPanel(panelIndex, button) {
   document.querySelectorAll(".sheet-panel").forEach(panel => panel.classList.remove("active"));
   document.querySelectorAll(".nav-item").forEach(item => item.classList.remove("active"));
-  const panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
-  if (panel) panel.classList.add("active");
-  if (button) button.classList.add("active");
+  document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`)?.classList.add("active");
+  button?.classList.add("active");
 }
 
-function ensureLocalNoticeMenu() {
+function ensureNoticeMenu() {
   const topNav = document.getElementById("topNav");
   if (!topNav) return;
   const existing = Array.from(topNav.querySelectorAll(".nav-item"))
-    .find(item => compactLabel(item.textContent).includes("공지사항"));
+    .find(item => compact(item.textContent).includes("공지사항"));
   if (existing) return;
 
   const button = document.createElement("button");
@@ -87,7 +96,7 @@ function ensureLocalNoticeMenu() {
   topNav.prepend(button);
 }
 
-function ensureContentEditButton(panel, ref, publicReady = false) {
+function ensureEditButton(panel, ref, publicReady = false) {
   const header = panel?.querySelector(".sheet-header");
   if (!header) return;
 
@@ -107,14 +116,15 @@ function ensureContentEditButton(panel, ref, publicReady = false) {
     tools.appendChild(button);
   }
 
-  button.dataset.localSharedPanelIndex = String(ref.panelIndex);
   button.dataset.localSharedContentKey = ref.key;
-  button.onclick = () => openLocalContentEditor(ref);
-  button.classList.toggle("local-admin-visible", currentLocalUser?.role === "ADMIN");
+  button.dataset.localSharedPanelIndex = String(ref.panelIndex);
+  button.classList.toggle("local-admin-visible", currentUser?.role === "ADMIN");
   if (publicReady) button.dataset.localSharedPublic = "1";
+  else button.removeAttribute("data-local-shared-public");
+  button.onclick = () => openContentEditor(ref);
 }
 
-function ensureDirectLocalMenu(ref) {
+function ensureDirectMenu(ref) {
   const topNav = document.getElementById("topNav");
   if (!topNav) return;
 
@@ -129,30 +139,54 @@ function ensureDirectLocalMenu(ref) {
     button.addEventListener("click", () => showPanel(ref.panelIndex, button));
     topNav.appendChild(button);
   }
-  button.textContent = ref.title;
+  setText(button, ref.title);
 }
 
-function ensureLocalFixedUi(snapshot) {
+function renderNotice(notice) {
+  setText(document.getElementById("noticeTitle"), notice?.title || "공지 제목");
+  setText(document.getElementById("noticeDate"), `기준일: ${notice?.date || "-"}`);
+  const items = document.getElementById("noticeItems");
+  if (!items) return;
+  const html = String(notice?.html || "").trim();
+  if (!html) return setHtml(items, DEFAULT_NOTICE_HTML);
+  const hasBlock = /<(li|ul|ol|p|div|h[1-6]|blockquote)/i.test(html);
+  setHtml(items, hasBlock ? html : `<li>${html}</li>`);
+}
+
+function renderFixed(snapshot) {
   const contents = snapshot?.page_contents || {};
-
-  FIXED_CONTENTS.forEach(ref => {
+  for (const ref of FIXED_CONTENTS) {
     const panel = document.querySelector(`.sheet-panel[data-index="${ref.panelIndex}"]`);
+    const target = document.getElementById(ref.targetId);
     const config = contents[ref.key];
-    const existingButton = document.querySelector(`.nav-item[data-local-shared-public-key="${ref.key}"]`);
+    const directButton = document.querySelector(`.nav-item[data-local-shared-public-key="${ref.key}"]`);
 
-    if (!panel || !config) {
+    if (!panel || !target || !config) {
       panel?.removeAttribute("data-local-shared-public-ready");
-      existingButton?.remove();
-      return;
+      directButton?.remove();
+      continue;
     }
 
     panel.dataset.localSharedPublicReady = "1";
-    ensureContentEditButton(panel, ref, true);
-    ensureDirectLocalMenu(ref);
-  });
+    ensureEditButton(panel, ref, true);
+    ensureDirectMenu(ref);
+
+    let title = target.querySelector(":scope > .major-title");
+    let preview = target.querySelector(":scope > .rich-preview");
+    if (!title || !preview || target.children.length !== 2) {
+      target.replaceChildren();
+      title = document.createElement("div");
+      title.className = "major-title";
+      preview = document.createElement("div");
+      preview.className = "rich-preview";
+      target.append(title, preview);
+    }
+    setText(title, config.majorTitle || ref.title);
+    setHtml(preview, config.html || config.bodyHtml || "");
+  }
 }
 
-function ensureLocalDynamicUi(snapshot) {
+function renderDynamic(snapshot) {
   const main = document.querySelector(".main");
   const topNav = document.getElementById("topNav");
   if (!main || !topNav) return;
@@ -160,35 +194,30 @@ function ensureLocalDynamicUi(snapshot) {
   const menus = Array.isArray(snapshot?.menus) ? snapshot.menus : [];
   const contents = snapshot?.page_contents || {};
 
-  menus.forEach(menu => {
+  for (const menu of menus) {
     const panelIndex = Number(menu?.panelIndex);
-    if (!Number.isFinite(panelIndex) || panelIndex <= 13 || menu?.kind === "iframe") return;
+    if (!Number.isFinite(panelIndex) || panelIndex <= 13 || menu?.kind === "iframe") continue;
 
-    const ref = contentRefForPanel(panelIndex);
-    const publicReady = isGeneralBoard(menu) && Boolean(contents[ref.key]);
+    const ref = refForPanel(panelIndex);
+    const config = contents[ref.key];
+    const publicReady = isGeneralBoard(menu) && Boolean(config);
+
     let panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
-
     if (!panel) {
       panel = document.createElement("div");
       panel.className = "sheet-panel";
       panel.dataset.index = String(panelIndex);
       panel.dataset.localSharedPanel = "1";
-      panel.innerHTML = `
-        <header class="sheet-header"><h1></h1><div class="sheet-tools"></div></header>
-        <section class="major-card">
-          <div class="major-title"></div>
-          <div class="rich-preview"></div>
-        </section>
-      `;
+      panel.innerHTML = '<header class="sheet-header"><h1></h1><div class="sheet-tools"></div></header><section class="major-card"><div class="major-title"></div><div class="rich-preview"></div></section>';
       main.appendChild(panel);
     }
 
-    panel.querySelector(".sheet-header h1").textContent = String(menu.title || ref.title);
+    setText(panel.querySelector(".sheet-header h1"), menu.title || ref.title);
     if (publicReady) panel.dataset.localSharedPublicReady = "1";
     else panel.removeAttribute("data-local-shared-public-ready");
-    ensureContentEditButton(panel, ref, publicReady);
+    ensureEditButton(panel, ref, publicReady);
 
-    let button = topNav.querySelector(`.nav-item[data-local-shared-panel-index="${panelIndex}"][data-local-shared-menu="dynamic"]`);
+    let button = topNav.querySelector(`.nav-item[data-local-shared-menu="dynamic"][data-local-shared-panel-index="${panelIndex}"]`);
     if (!button) {
       button = document.createElement("button");
       button.type = "button";
@@ -198,259 +227,40 @@ function ensureLocalDynamicUi(snapshot) {
       button.addEventListener("click", () => showPanel(panelIndex, button));
       topNav.appendChild(button);
     }
-    button.textContent = String(menu.title || ref.title);
+    setText(button, menu.title || ref.title);
     if (publicReady) button.dataset.localSharedPublic = "1";
     else button.removeAttribute("data-local-shared-public");
 
-    const config = contents[ref.key];
     if (config) {
-      panel.querySelector(".major-title").textContent = String(config.majorTitle || menu.title || "");
-      panel.querySelector(".rich-preview").innerHTML = String(config.html || config.bodyHtml || "");
-    }
-  });
-}
-
-function renderNotice(notice) {
-  const title = document.getElementById("noticeTitle");
-  const date = document.getElementById("noticeDate");
-  const items = document.getElementById("noticeItems");
-  if (!title || !date || !items) return;
-
-  title.textContent = notice?.title || "공지 제목";
-  date.textContent = `기준일: ${notice?.date || "-"}`;
-
-  const html = String(notice?.html || "").trim();
-  if (!html) {
-    items.innerHTML = DEFAULT_NOTICE_HTML;
-    return;
-  }
-
-  const hasBlockTags = /<(li|ul|ol|p|div|h[1-6]|blockquote)/i.test(html);
-  items.innerHTML = hasBlockTags ? html : `<li>${html}</li>`;
-}
-
-function renderFixedContents(snapshot) {
-  const contents = snapshot?.page_contents || {};
-  FIXED_CONTENTS.forEach(ref => {
-    const target = document.getElementById(ref.targetId);
-    const config = contents[ref.key];
-    if (!target || !config) return;
-    target.innerHTML = `
-      <div class="major-title"></div>
-      <div class="rich-preview"></div>
-    `;
-    target.querySelector(".major-title").textContent = String(config.majorTitle || ref.title);
-    target.querySelector(".rich-preview").innerHTML = String(config.html || config.bodyHtml || "");
-  });
-}
-
-function renderDynamicContents(snapshot) {
-  const contents = snapshot?.page_contents || {};
-  const menus = Array.isArray(snapshot?.menus) ? snapshot.menus : [];
-
-  menus.forEach(menu => {
-    const panelIndex = Number(menu?.panelIndex);
-    if (!Number.isFinite(panelIndex) || panelIndex <= 13 || menu?.kind === "iframe") return;
-
-    const ref = contentRefForPanel(panelIndex);
-    const panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
-    const section = panel?.querySelector("section.major-card");
-    const config = contents[ref.key];
-    if (!panel || !section || !config) return;
-
-    let majorTitle = section.querySelector(".major-title");
-    let preview = section.querySelector(".rich-preview");
-    if (!majorTitle || !preview) {
-      section.innerHTML = `<div class="major-title"></div><div class="rich-preview"></div>`;
-      majorTitle = section.querySelector(".major-title");
-      preview = section.querySelector(".rich-preview");
-    }
-    majorTitle.textContent = String(config.majorTitle || menu.title || "");
-    preview.innerHTML = String(config.html || config.bodyHtml || "");
-    ensureContentEditButton(panel, ref, isGeneralBoard(menu));
-  });
-}
-
-function noticeEditorHtml() {
-  return document.querySelector("#noticeEditor .ql-editor")?.innerHTML ?? "";
-}
-
-function setNoticeEditorHtml(html) {
-  const editor = document.querySelector("#noticeEditor .ql-editor");
-  if (editor) editor.innerHTML = String(html || "");
-}
-
-function openLocalNoticeEditor() {
-  const notice = currentLocalSnapshot?.notice || {};
-  const titleInput = document.getElementById("noticeFormTitle");
-  const dateInput = document.getElementById("noticeFormDate");
-  const modal = document.getElementById("noticeModal");
-  if (!titleInput || !dateInput || !modal) return;
-
-  titleInput.value = String(notice.title || "");
-  dateInput.value = String(notice.date || "");
-  setNoticeEditorHtml(notice.html || "");
-  modal.classList.add("show");
-}
-
-async function saveLocalNotice() {
-  const payload = {
-    title: document.getElementById("noticeFormTitle")?.value?.trim() || "공지 제목",
-    date: document.getElementById("noticeFormDate")?.value || "",
-    html: noticeEditorHtml()
-  };
-  const snapshot = await api("/shared-pages/notice", {
-    method: "PUT",
-    body: JSON.stringify(payload)
-  });
-  currentLocalSnapshot = snapshot;
-  applySnapshot(snapshot);
-  document.getElementById("noticeModal")?.classList.remove("show");
-}
-
-function contentEditorElement() {
-  return document.querySelector("#contentEditor .ql-editor");
-}
-
-function contentBodyHtml(config) {
-  if (typeof config?.bodyHtml === "string" && config.bodyHtml.trim()) return config.bodyHtml;
-  const wrap = document.createElement("div");
-  wrap.innerHTML = String(config?.html || "");
-  wrap.querySelectorAll(".content-table-preview").forEach(table => table.remove());
-  return wrap.innerHTML;
-}
-
-function preservedTableHtml(config) {
-  const wrap = document.createElement("div");
-  wrap.innerHTML = String(config?.html || "");
-  return wrap.querySelector(".content-table-preview")?.outerHTML || "";
-}
-
-function setLocalContentModalMode(enabled) {
-  const modal = document.getElementById("contentModal");
-  if (!modal) return;
-  modal.classList.toggle("local-shared-edit-mode", enabled);
-
-  const tableWrap = document.getElementById("contentTableWrap");
-  const tableRow = tableWrap?.closest(".form-row");
-  if (tableRow) tableRow.style.display = enabled ? "none" : "";
-}
-
-function openLocalContentEditor(refOrPanelIndex) {
-  if (currentLocalUser?.role !== "ADMIN") return alert("관리자만 수정할 수 있습니다.");
-
-  const ref = typeof refOrPanelIndex === "object"
-    ? refOrPanelIndex
-    : contentRefForPanel(Number(refOrPanelIndex));
-  const config = currentLocalSnapshot?.page_contents?.[ref.key] || {
-    majorTitle: ref.title,
-    bodyHtml: "<p>내용을 입력하세요.</p>",
-    tableData: { enabled: false, rows: [] },
-    html: "<p>내용을 입력하세요.</p>"
-  };
-  const modal = document.getElementById("contentModal");
-  const title = document.getElementById("contentModalTitle");
-  const majorTitle = document.getElementById("contentMajorTitle");
-  const editor = contentEditorElement();
-  if (!modal || !title || !majorTitle || !editor) {
-    return alert("게시판 편집기를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
-  }
-
-  currentLocalContentKey = ref.key;
-  currentLocalContentConfig = structuredClone(config);
-  title.textContent = `${ref.title || config.majorTitle || "게시판"} 내용 수정`;
-  majorTitle.value = String(config.majorTitle || ref.title || "");
-  editor.innerHTML = contentBodyHtml(config);
-  setLocalContentModalMode(true);
-  modal.classList.add("show");
-}
-
-function closeLocalContentEditor() {
-  document.getElementById("contentModal")?.classList.remove("show");
-  setLocalContentModalMode(false);
-  currentLocalContentKey = "";
-  currentLocalContentConfig = null;
-}
-
-async function saveLocalContent() {
-  if (!currentLocalContentKey || !currentLocalContentConfig) return;
-  const editor = contentEditorElement();
-  if (!editor) throw new Error("게시판 편집기를 찾을 수 없습니다.");
-
-  const majorTitle = document.getElementById("contentMajorTitle")?.value?.trim() || "게시판";
-  const bodyHtml = editor.innerHTML;
-  const tableHtml = preservedTableHtml(currentLocalContentConfig);
-  const content = {
-    ...currentLocalContentConfig,
-    majorTitle,
-    bodyHtml,
-    html: bodyHtml + tableHtml
-  };
-
-  const result = await api(`/shared-pages/contents/${encodeURIComponent(currentLocalContentKey)}`, {
-    method: "PUT",
-    body: JSON.stringify({ content })
-  });
-
-  currentLocalSnapshot = {
-    ...(currentLocalSnapshot || {}),
-    page_contents: {
-      ...(currentLocalSnapshot?.page_contents || {}),
-      [currentLocalContentKey]: result.content
-    }
-  };
-  applySnapshot(currentLocalSnapshot);
-  closeLocalContentEditor();
-}
-
-function ensureLocalAdminControls() {
-  const admin = currentLocalUser?.role === "ADMIN";
-  const editButton = document.getElementById("noticeEditBtn");
-  const saveButton = document.querySelector("#noticeModal .primary-btn");
-
-  if (editButton) {
-    editButton.classList.toggle("local-admin-visible", admin);
-    if (admin && !editButton.dataset.localNoticeBound) {
-      editButton.dataset.localNoticeBound = "1";
-      editButton.removeAttribute("onclick");
-      editButton.addEventListener("click", openLocalNoticeEditor);
+      setText(panel.querySelector(".major-title"), config.majorTitle || menu.title || "");
+      setHtml(panel.querySelector(".rich-preview"), config.html || config.bodyHtml || "");
     }
   }
+}
 
-  if (saveButton && admin && !saveButton.dataset.localNoticeBound) {
-    saveButton.dataset.localNoticeBound = "1";
-    saveButton.removeAttribute("onclick");
-    saveButton.addEventListener("click", () => {
-      void saveLocalNotice().catch(error => alert(`공지 저장 실패: ${error.message}`));
-    });
-  }
-
-  document.querySelectorAll(".local-shared-edit-btn").forEach(button => {
-    button.classList.toggle("local-admin-visible", admin);
-  });
-
-  if (!document.getElementById("local-shared-page-styles")) {
-    const style = document.createElement("style");
-    style.id = "local-shared-page-styles";
-    style.textContent = `
-      body.limited-deployment-mode #noticeEditBtn.local-admin-visible,
-      body.limited-deployment-mode .local-shared-edit-btn.local-admin-visible{display:inline-flex!important}
-      body.limited-deployment-mode .panel-edit-btn:not(.local-shared-edit-btn){display:none!important}
-    `;
-    document.head.appendChild(style);
-  }
+function ensureStyles() {
+  if (document.getElementById("local-shared-page-styles")) return;
+  const style = document.createElement("style");
+  style.id = "local-shared-page-styles";
+  style.textContent = `
+    body.limited-deployment-mode .local-shared-edit-btn.local-admin-visible{display:inline-flex!important}
+    body.limited-deployment-mode .panel-edit-btn:not(.local-shared-edit-btn){display:none!important}
+  `;
+  document.head.appendChild(style);
 }
 
 function applySnapshot(snapshot) {
   if (!snapshot) return;
-  currentLocalSnapshot = snapshot;
-  ensureLocalNoticeMenu();
-  ensureLocalFixedUi(snapshot);
-  ensureLocalDynamicUi(snapshot);
+  currentSnapshot = snapshot;
+  observerSuppressUntil = Date.now() + 150;
+  ensureNoticeMenu();
   renderNotice(snapshot.notice || {});
-  renderFixedContents(snapshot);
-  renderDynamicContents(snapshot);
-  ensureLocalAdminControls();
+  renderFixed(snapshot);
+  renderDynamic(snapshot);
+  ensureStyles();
+  document.querySelectorAll(".local-shared-edit-btn").forEach(button => {
+    button.classList.toggle("local-admin-visible", currentUser?.role === "ADMIN");
+  });
   window.dispatchEvent(new CustomEvent("local-shared-pages-loaded", { detail: snapshot }));
 }
 
@@ -468,9 +278,9 @@ function isUninitialized(snapshot) {
 }
 
 async function readLegacyFirebaseSettings() {
-  if (legacyFirebaseSettingsPromise) return legacyFirebaseSettingsPromise;
+  if (legacySettingsPromise) return legacySettingsPromise;
 
-  legacyFirebaseSettingsPromise = (async () => {
+  legacySettingsPromise = (async () => {
     try {
       const [{ getApps }, { getFirestore, doc, getDoc }] = await Promise.all([
         import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
@@ -486,7 +296,9 @@ async function readLegacyFirebaseSettings() {
     }
   })();
 
-  return legacyFirebaseSettingsPromise;
+  const result = await legacySettingsPromise;
+  if (!result) legacySettingsPromise = null;
+  return result;
 }
 
 function normalizeImportedContent(raw, title) {
@@ -499,12 +311,9 @@ function normalizeImportedContent(raw, title) {
     };
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-
   const bodyHtml = typeof raw.bodyHtml === "string" && raw.bodyHtml.trim()
     ? raw.bodyHtml
-    : typeof raw.html === "string"
-      ? raw.html
-      : "";
+    : typeof raw.html === "string" ? raw.html : "";
   return {
     ...raw,
     majorTitle: raw.majorTitle || title,
@@ -514,26 +323,21 @@ function normalizeImportedContent(raw, title) {
   };
 }
 
-async function bootstrapFromLegacyIfNeeded(snapshot, user) {
+async function bootstrapFromLegacy(snapshot, user) {
   if (!isUninitialized(snapshot) || user?.role !== "ADMIN") return snapshot;
-
   const legacy = await readLegacyFirebaseSettings();
   if (!legacy) return snapshot;
 
   const menus = Array.isArray(legacy.menus) ? legacy.menus : [];
   const notice = legacy.notice || {};
-  const rawContents = legacy.pageContents && typeof legacy.pageContents === "object"
-    ? legacy.pageContents
-    : {};
+  const source = legacy.pageContents && typeof legacy.pageContents === "object" ? legacy.pageContents : {};
   const pageContents = {};
-  Object.entries(rawContents).forEach(([key, raw]) => {
+  for (const [key, raw] of Object.entries(source)) {
     const fixed = FIXED_CONTENTS.find(item => item.key === key);
     pageContents[key] = normalizeImportedContent(raw, fixed?.title || key) || raw;
-  });
+  }
 
-  const hasUsefulData = menus.length || Object.keys(pageContents).length || Object.keys(notice).length;
-  if (!hasUsefulData) return snapshot;
-
+  if (!menus.length && !Object.keys(notice).length && !Object.keys(pageContents).length) return snapshot;
   try {
     return await api("/shared-pages/bootstrap", {
       method: "POST",
@@ -545,9 +349,8 @@ async function bootstrapFromLegacyIfNeeded(snapshot, user) {
   }
 }
 
-async function importMissingFixedContents(snapshot, user) {
+async function importMissingFixed(snapshot, user) {
   if (user?.role !== "ADMIN") return snapshot;
-
   const missing = FIXED_CONTENTS.filter(ref => !snapshot?.page_contents?.[ref.key]);
   if (!missing.length) return snapshot;
 
@@ -555,11 +358,7 @@ async function importMissingFixedContents(snapshot, user) {
   const source = legacy?.pageContents;
   if (!source || typeof source !== "object") return snapshot;
 
-  let nextSnapshot = {
-    ...snapshot,
-    page_contents: { ...(snapshot.page_contents || {}) }
-  };
-
+  const next = { ...snapshot, page_contents: { ...(snapshot.page_contents || {}) } };
   for (const ref of missing) {
     const content = normalizeImportedContent(source[ref.key], ref.title);
     if (!content) continue;
@@ -567,63 +366,149 @@ async function importMissingFixedContents(snapshot, user) {
       method: "PUT",
       body: JSON.stringify({ content })
     });
-    nextSnapshot.page_contents[ref.key] = result.content;
+    next.page_contents[ref.key] = result.content;
   }
-
-  return nextSnapshot;
+  return next;
 }
 
-async function loadLocalSharedPages() {
+async function loadSharedPages() {
   let user;
   try {
     user = await api("/auth/me");
   } catch (error) {
     if (error.status === 401) {
-      currentLocalUser = null;
-      ensureLocalAdminControls();
+      currentUser = null;
+      document.querySelectorAll(".local-shared-edit-btn").forEach(button => button.classList.remove("local-admin-visible"));
       return null;
     }
     throw error;
   }
 
-  currentLocalUser = user;
+  currentUser = user;
   let snapshot = await api("/shared-pages");
-  snapshot = await bootstrapFromLegacyIfNeeded(snapshot, user);
-  snapshot = await importMissingFixedContents(snapshot, user);
+  snapshot = await bootstrapFromLegacy(snapshot, user);
+  snapshot = await importMissingFixed(snapshot, user);
   applySnapshot(snapshot);
   return snapshot;
 }
 
-function bindLocalModalActions() {
+function contentEditor() {
+  return document.querySelector("#contentEditor .ql-editor");
+}
+
+function bodyHtmlFrom(config) {
+  if (typeof config?.bodyHtml === "string" && config.bodyHtml.trim()) return config.bodyHtml;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = String(config?.html || "");
+  wrap.querySelectorAll(".content-table-preview").forEach(node => node.remove());
+  return wrap.innerHTML;
+}
+
+function tableHtmlFrom(config) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = String(config?.html || "");
+  return wrap.querySelector(".content-table-preview")?.outerHTML || "";
+}
+
+function setContentModalMode(enabled) {
+  const modal = document.getElementById("contentModal");
+  if (!modal) return;
+  modal.classList.toggle("local-shared-edit-mode", enabled);
+  const tableRow = document.getElementById("contentTableWrap")?.closest(".form-row");
+  if (tableRow) tableRow.style.display = enabled ? "none" : "";
+}
+
+function openContentEditor(refOrIndex) {
+  if (currentUser?.role !== "ADMIN") return alert("관리자만 수정할 수 있습니다.");
+  const ref = typeof refOrIndex === "object" ? refOrIndex : refForPanel(Number(refOrIndex));
+  const config = currentSnapshot?.page_contents?.[ref.key] || {
+    majorTitle: ref.title,
+    bodyHtml: "<p>내용을 입력하세요.</p>",
+    tableData: { enabled: false, rows: [] },
+    html: "<p>내용을 입력하세요.</p>"
+  };
+  const modal = document.getElementById("contentModal");
+  const title = document.getElementById("contentModalTitle");
+  const majorTitle = document.getElementById("contentMajorTitle");
+  const editor = contentEditor();
+  if (!modal || !title || !majorTitle || !editor) return alert("게시판 편집기를 불러오지 못했습니다.");
+
+  editingKey = ref.key;
+  editingConfig = structuredClone(config);
+  setText(title, `${ref.title || config.majorTitle || "게시판"} 내용 수정`);
+  majorTitle.value = String(config.majorTitle || ref.title || "");
+  editor.innerHTML = bodyHtmlFrom(config);
+  setContentModalMode(true);
+  modal.classList.add("show");
+}
+
+function closeContentEditor() {
+  document.getElementById("contentModal")?.classList.remove("show");
+  setContentModalMode(false);
+  editingKey = "";
+  editingConfig = null;
+}
+
+async function saveContentEditor() {
+  if (!editingKey || !editingConfig) return;
+  const editor = contentEditor();
+  if (!editor) throw new Error("게시판 편집기를 찾을 수 없습니다.");
+
+  const bodyHtml = editor.innerHTML;
+  const content = {
+    ...editingConfig,
+    majorTitle: document.getElementById("contentMajorTitle")?.value?.trim() || "게시판",
+    bodyHtml,
+    html: bodyHtml + tableHtmlFrom(editingConfig)
+  };
+  const result = await api(`/shared-pages/contents/${encodeURIComponent(editingKey)}`, {
+    method: "PUT",
+    body: JSON.stringify({ content })
+  });
+  currentSnapshot = {
+    ...(currentSnapshot || {}),
+    page_contents: {
+      ...(currentSnapshot?.page_contents || {}),
+      [editingKey]: result.content
+    }
+  };
+  applySnapshot(currentSnapshot);
+  closeContentEditor();
+}
+
+function bindModalActions() {
   document.addEventListener("click", event => {
     const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
+    const modal = document.getElementById("contentModal");
+    if (!target || !modal?.classList.contains("local-shared-edit-mode")) return;
 
-    const contentModal = document.getElementById("contentModal");
-    if (contentModal?.classList.contains("local-shared-edit-mode")) {
-      if (target.closest("#contentModal .primary-btn")) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        void saveLocalContent().catch(error => alert(`게시판 저장 실패: ${error.message}`));
-        return;
-      }
-      if (target.closest("#contentModal .secondary-btn")) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        closeLocalContentEditor();
-      }
+    if (target.closest("#contentModal .primary-btn")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void saveContentEditor().catch(error => alert(`게시판 저장 실패: ${error.message}`));
+    } else if (target.closest("#contentModal .secondary-btn")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeContentEditor();
     }
   }, true);
 }
 
-function installLocalUiObserver() {
-  let timer = null;
+function installObserver() {
   const observer = new MutationObserver(mutations => {
-    if (!currentLocalSnapshot) return;
-    const relevant = mutations.some(mutation => mutation.type === "childList");
+    if (!currentSnapshot || Date.now() < observerSuppressUntil) return;
+    const relevant = mutations.some(mutation => {
+      if (mutation.type !== "childList") return false;
+      const target = mutation.target instanceof Element ? mutation.target : mutation.target?.parentElement;
+      return Boolean(target?.closest?.("#topNav,.main"));
+    });
     if (!relevant) return;
-    clearTimeout(timer);
-    timer = setTimeout(() => applySnapshot(currentLocalSnapshot), 40);
+
+    clearTimeout(observerTimer);
+    observerTimer = setTimeout(() => {
+      if (!currentSnapshot) return;
+      applySnapshot(currentSnapshot);
+    }, 80);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 }
@@ -636,15 +521,13 @@ export function installLocalSharedPages() {
   const refresh = (delay = 0) => {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => {
-      void loadLocalSharedPages().catch(error => {
-        console.error("로컬 공지/게시판 불러오기 실패:", error);
-      });
+      void loadSharedPages().catch(error => console.error("로컬 공지/게시판 불러오기 실패:", error));
     }, delay);
   };
 
   window.localSharedPagesApi = {
     refresh: () => refresh(0),
-    get: loadLocalSharedPages,
+    get: loadSharedPages,
     updateNotice: async notice => {
       const snapshot = await api("/shared-pages/notice", {
         method: "PUT",
@@ -663,22 +546,29 @@ export function installLocalSharedPages() {
     }
   };
 
-  bindLocalModalActions();
-  installLocalUiObserver();
+  bindModalActions();
+  installObserver();
 
   document.addEventListener("submit", event => {
     if (event.target?.matches?.("#grv2LoginForm,#allocationLoginForm")) {
+      legacySettingsPromise = null;
       refresh(300);
-      refresh(900);
+      setTimeout(() => refresh(0), 900);
     }
   }, true);
 
   document.addEventListener("click", event => {
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest("#grv2Logout")) refresh(300);
+    if (target?.closest("#grv2Logout")) {
+      currentUser = null;
+      refresh(300);
+    }
   }, true);
 
-  [0, 250, 800, 1600].forEach(delay => refresh(delay));
+  refresh(0);
+  setTimeout(() => refresh(0), 250);
+  setTimeout(() => refresh(0), 800);
+  setTimeout(() => refresh(0), 1600);
 }
 
 installLocalSharedPages();
