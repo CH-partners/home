@@ -11,6 +11,7 @@ on:
 permissions:
   contents: write
 
+# This workflow vendors pinned runtime libraries so LAN tools do not depend on public CDNs.
 jobs:
   vendor:
     runs-on: ubuntu-latest
