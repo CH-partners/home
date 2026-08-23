@@ -40,8 +40,15 @@ export function installGroupReviewKeyboardV2() {
   function tabTarget(cell, backwards) {
     const cells = navigableCells();
     const index = cells.indexOf(cell);
-    if (index < 0) return null;
-    return cells[index + (backwards ? -1 : 1)] || null;
+    if (index < 0 || !cells.length) return null;
+
+    const nextIndex = index + (backwards ? -1 : 1);
+    if (nextIndex >= 0 && nextIndex < cells.length) return cells[nextIndex];
+
+    // Keep Tab movement inside the review grid. Moving past the final editable
+    // cell wraps to the first one, which also guarantees blur/save of the final
+    // cell. Shift+Tab from the first cell wraps to the final cell symmetrically.
+    return backwards ? cells[cells.length - 1] : cells[0];
   }
 
   function dispatchCellSelection(cell) {
