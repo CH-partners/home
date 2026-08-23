@@ -136,7 +136,12 @@ def get_shared_pages(
     _user: AppUser = Depends(require_worker_or_admin),
 ) -> SharedPagesResponse:
     settings = _get_or_create(db)
-    if _ensure_general_board(settings):
+
+    # A pristine local DB must remain pristine until an ADMIN has had a chance
+    # to import the legacy Firebase notice/menu/page contents. Creating the
+    # general board here would make the record look initialized and block that
+    # one-time bootstrap.
+    if not _is_uninitialized(settings) and _ensure_general_board(settings):
         settings.updated_at = datetime.now(timezone.utc)
         db.add(settings)
         db.commit()
