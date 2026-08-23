@@ -1,7 +1,7 @@
 import "./sharedPagesLocal.js";
 
-const ALLOWED_PANEL_INDEXES = new Set([0, 11, 13]);
-const ALLOWED_LABELS = new Set(["청현공지사항", "공지사항", "일반게시판", "분배표", "그룹리뷰"]);
+const ALLOWED_PANEL_INDEXES = new Set([0, 10, 11, 13]);
+const ALLOWED_LABELS = new Set(["청현공지사항", "공지사항", "일반게시판", "소액조회", "분배표", "그룹리뷰"]);
 const WORKER_ALLOCATION_NOTICE = "조회 전용입니다. 분배표 수정은 관리자만 가능합니다.";
 
 function normalizeLabel(value) {
