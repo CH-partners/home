@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.routers.allocation_v2 import router as allocation_v2_router
@@ -36,6 +36,28 @@ app.mount("/vendor", StaticFiles(directory=vendor_dir), name="vendor")
 @app.get("/", include_in_schema=False)
 def home() -> FileResponse:
     return FileResponse(repo_root / "index.html")
+
+
+@app.get("/tools/mortgage-extract", include_in_schema=False, response_class=HTMLResponse)
+def mortgage_extract_tool() -> HTMLResponse:
+    source = (repo_root / "근저당추출.html").read_text(encoding="utf-8")
+    source = source.replace(
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+        "/vendor/pdf.min.js",
+    )
+    source = source.replace(
+        "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js",
+        "/vendor/exceljs.min.js",
+    )
+    source = source.replace(
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+        "/vendor/pdf.worker.min.js",
+    )
+    source = source.replace(
+        "이 페이지는 로컬 파일에서 직접 열어 사용하는 도구입니다. 최초 로드 시 pdf.js / ExcelJS 라이브러리를 인터넷에서 불러오므로 인터넷 연결이 필요합니다.<br>",
+        "이 도구는 사내 로컬 서버에서 동작하며 pdf.js / ExcelJS도 서버의 고정 버전을 사용하므로 인터넷 연결이 필요하지 않습니다.<br>",
+    )
+    return HTMLResponse(source)
 
 
 @app.get("/{filename}", include_in_schema=False)
