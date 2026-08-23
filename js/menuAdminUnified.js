@@ -6,11 +6,19 @@ const GROUPS = {
   reference: { title: "공유자료", icon: "📚" }
 };
 const GROUP_OPTIONS = Object.entries(GROUPS);
+const DEFAULT_VISIBLE_MENU_KEYS = new Set([
+  "panel:0",
+  "panel:11",
+  "panel:13",
+  "tool:small-deposit",
+  "tool:rent-trades",
+  "tool:priority-wage"
+]);
 const TOOL_DEFAULTS = [
-  { title: "소액조회", panelIndex: 1000, kind: "tool", toolKey: "small-deposit", color: "#1f4e79", hidden: false },
-  { title: "전월세실거래가조회", panelIndex: 1003, kind: "tool", toolKey: "rent-trades", color: "#1f4e79", hidden: false },
-  { title: "최우선임금 계산기", panelIndex: 1001, kind: "tool", toolKey: "priority-wage", color: "#1f4e79", hidden: false },
-  { title: "근저당추출", panelIndex: 1002, kind: "tool", toolKey: "mortgage-extract", color: "#1f4e79", hidden: false }
+  { title: "소액조회", panelIndex: 1000, kind: "tool", toolKey: "small-deposit", color: "#1f4e79", hidden: false, visibilityInitialized: true },
+  { title: "전월세실거래가조회", panelIndex: 1003, kind: "tool", toolKey: "rent-trades", color: "#1f4e79", hidden: false, visibilityInitialized: true },
+  { title: "최우선임금 계산기", panelIndex: 1001, kind: "tool", toolKey: "priority-wage", color: "#1f4e79", hidden: false, visibilityInitialized: true },
+  { title: "근저당추출", panelIndex: 1002, kind: "tool", toolKey: "mortgage-extract", color: "#1f4e79", hidden: true, visibilityInitialized: true }
 ];
 const LEGACY_SMALL_DEPOSIT_PANEL = 10;
 const FIXED_LABELS = {
@@ -59,11 +67,26 @@ function inferGroup(menu) {
   return "reference";
 }
 
+function visibilityKey(menu) {
+  if (menu?.toolKey) return `tool:${menu.toolKey}`;
+  const panelIndex = Number(menu?.panelIndex);
+  return Number.isFinite(panelIndex) ? `panel:${panelIndex}` : "";
+}
+
+function applyInitialVisibility(menu) {
+  if (menu?.visibilityInitialized === true) return menu;
+  return {
+    ...menu,
+    hidden: !DEFAULT_VISIBLE_MENU_KEYS.has(visibilityKey(menu)),
+    visibilityInitialized: true
+  };
+}
+
 function normalizeMenus(snapshot) {
   const source = Array.isArray(snapshot?.menus) ? snapshot.menus : [];
   const menus = source
     .filter(menu => Number(menu?.panelIndex) !== LEGACY_SMALL_DEPOSIT_PANEL || Boolean(menu?.toolKey))
-    .map(menu => ({ ...menu }));
+    .map(menu => applyInitialVisibility({ ...menu }));
   const byTool = new Map(menus.filter(menu => menu.toolKey).map(menu => [menu.toolKey, menu]));
   for (const tool of TOOL_DEFAULTS) {
     if (!byTool.has(tool.toolKey)) menus.push({ ...tool });
@@ -292,7 +315,7 @@ function addBoard() {
     block = { type: "group", groupKey: "reference", items: [], color: "#334155" };
     workingBlocks.push(block);
   }
-  block.items.push({ title: "새 게시판", panelIndex: null, kind: "panel", group: "reference", color: "#1f4e79", hidden: false });
+  block.items.push({ title: "새 게시판", panelIndex: null, kind: "panel", group: "reference", color: "#1f4e79", hidden: false, visibilityInitialized: true });
   renderTable();
 }
 
@@ -388,7 +411,7 @@ function ensureGroupShell(groupKey, color) {
 }
 
 function presentationKey(menus) {
-  return JSON.stringify(menus.map(menu => [menu.title, menu.panelIndex, menu.kind, menu.toolKey, menu.group, menu.color, menu.groupColor, Boolean(menu.hidden)]));
+  return JSON.stringify(menus.map(menu => [menu.title, menu.panelIndex, menu.kind, menu.toolKey, menu.group, menu.color, menu.groupColor, Boolean(menu.hidden), Boolean(menu.visibilityInitialized)]));
 }
 
 function presentationHealthy(menus) {
