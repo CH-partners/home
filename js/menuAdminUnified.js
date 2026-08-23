@@ -13,6 +13,12 @@ const TOOL_DEFAULTS = [
   { title: "근저당추출", panelIndex: 1002, kind: "tool", toolKey: "mortgage-extract", color: "#1f4e79", hidden: false }
 ];
 const LEGACY_SMALL_DEPOSIT_PANEL = 10;
+const FIXED_LABELS = {
+  0: ["청현공지사항", "공지사항"],
+  11: ["분배표"],
+  12: ["스케줄"],
+  13: ["그룹리뷰"]
+};
 let currentUser = null;
 let workingBlocks = [];
 let saving = false;
@@ -54,21 +60,21 @@ function inferGroup(menu) {
 }
 
 function normalizeMenus(snapshot) {
-  const menus = (Array.isArray(snapshot?.menus) ? snapshot.menus : []).map(menu => ({ ...menu }));
+  const source = Array.isArray(snapshot?.menus) ? snapshot.menus : [];
+  const menus = source
+    .filter(menu => Number(menu?.panelIndex) !== LEGACY_SMALL_DEPOSIT_PANEL || Boolean(menu?.toolKey))
+    .map(menu => ({ ...menu }));
   const byTool = new Map(menus.filter(menu => menu.toolKey).map(menu => [menu.toolKey, menu]));
-
   for (const tool of TOOL_DEFAULTS) {
     if (!byTool.has(tool.toolKey)) menus.push({ ...tool });
   }
-
-  const legacySmall = menus.find(menu => Number(menu.panelIndex) === LEGACY_SMALL_DEPOSIT_PANEL);
-  if (legacySmall) legacySmall.hidden = true;
   return menus;
 }
 
 function isGroupable(menu) {
-  return String(menu?.kind || "panel") === "panel" && Number(menu?.panelIndex) >= 1 && Number(menu?.panelIndex) <= 9 ||
-    (String(menu?.kind || "panel") === "panel" && Number(menu?.panelIndex) >= 14);
+  const kind = String(menu?.kind || "panel");
+  const panelIndex = Number(menu?.panelIndex);
+  return kind === "panel" && ((panelIndex >= 1 && panelIndex <= 9) || panelIndex >= 14);
 }
 
 function buildBlocks(menus) {
@@ -84,7 +90,7 @@ function buildBlocks(menus) {
     menu.group = groupKey;
     let block = groups.get(groupKey);
     if (!block) {
-      block = { type: "group", groupKey, items: [], color: validColor(menu.groupColor || menu.color, "#334155"), hidden: false };
+      block = { type: "group", groupKey, items: [], color: validColor(menu.groupColor || menu.color, "#334155") };
       groups.set(groupKey, block);
       blocks.push(block);
     }
@@ -315,13 +321,22 @@ async function saveMenus() {
   }
 }
 
+function fixedButtonForPanel(panelIndex) {
+  if (panelIndex === 0) return document.querySelector('.nav-item[data-local-shared-menu="notice"], .nav-item-notice');
+  const labels = FIXED_LABELS[panelIndex] || [];
+  return Array.from(document.querySelectorAll("#topNav > .nav-item, #bottomNav > .nav-item"))
+    .find(button => labels.includes(compact(button.textContent))) || null;
+}
+
 function buttonForMenu(menu) {
   if (menu.toolKey) return document.querySelector(`.nav-item[data-local-tool="${menu.toolKey}"]`);
   const panelIndex = Number(menu.panelIndex);
   const byPanel = document.querySelector(`.nav-item[data-local-shared-panel-index="${panelIndex}"]`);
   if (byPanel) return byPanel;
-  const candidates = Array.from(document.querySelectorAll("#topNav > .nav-item"));
-  return candidates.find(button => compact(button.textContent) === compact(menu.title)) || null;
+  const fixed = fixedButtonForPanel(panelIndex);
+  if (fixed) return fixed;
+  return Array.from(document.querySelectorAll("#topNav > .nav-item, #bottomNav > .nav-item"))
+    .find(button => compact(button.textContent) === compact(menu.title)) || null;
 }
 
 function panelForMenu(menu) {
@@ -425,11 +440,10 @@ function applyPresentation(snapshot) {
     topNav.appendChild(shell.wrap);
   }
 
-  const legacyPanel = document.querySelector('.sheet-panel[data-index="10"]');
-  const legacyButton = Array.from(document.querySelectorAll("#topNav > .nav-item"))
-    .find(button => !button.dataset.localTool && compact(button.textContent) === "소액조회");
-  legacyPanel?.classList.add("local-menu-hidden");
-  legacyButton?.classList.add("local-menu-hidden");
+  document.querySelector('.sheet-panel[data-index="10"]')?.classList.add("local-menu-hidden");
+  Array.from(document.querySelectorAll("#topNav > .nav-item"))
+    .filter(button => !button.dataset.localTool && compact(button.textContent) === "소액조회")
+    .forEach(button => button.classList.add("local-menu-hidden"));
 }
 
 async function syncUser() {
