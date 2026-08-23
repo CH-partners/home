@@ -2,6 +2,8 @@ const API_ROOT = "/api/v1";
 const DEFAULT_NOTICE_HTML = "<li>공지 내용이 없습니다.</li>";
 let currentLocalUser = null;
 let currentLocalSnapshot = null;
+let currentLocalContentKey = "";
+let currentLocalContentConfig = null;
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -44,6 +46,35 @@ function ensureLocalNoticeMenu() {
   topNav.prepend(button);
 }
 
+function menuForPanel(panelIndex) {
+  return (currentLocalSnapshot?.menus || []).find(menu => Number(menu?.panelIndex) === Number(panelIndex));
+}
+
+function ensureDynamicEditButton(panel, panelIndex) {
+  const header = panel?.querySelector(".sheet-header");
+  if (!header) return;
+
+  let tools = header.querySelector(".sheet-tools");
+  if (!tools) {
+    tools = document.createElement("div");
+    tools.className = "sheet-tools";
+    header.appendChild(tools);
+  }
+
+  let button = tools.querySelector(".local-shared-edit-btn");
+  if (!button) {
+    button = document.createElement("button");
+    button.type = "button";
+    button.className = "action-btn hidden local-shared-edit-btn";
+    button.textContent = "내용 수정";
+    button.addEventListener("click", () => openLocalContentEditor(panelIndex));
+    tools.appendChild(button);
+  }
+
+  button.dataset.localSharedPanelIndex = String(panelIndex);
+  button.classList.toggle("local-admin-visible", currentLocalUser?.role === "ADMIN");
+}
+
 function ensureLocalDynamicUi(snapshot) {
   const main = document.querySelector(".main");
   const topNav = document.getElementById("topNav");
@@ -63,7 +94,7 @@ function ensureLocalDynamicUi(snapshot) {
       panel.dataset.index = String(panelIndex);
       panel.dataset.localSharedPanel = "1";
       panel.innerHTML = `
-        <header class="sheet-header"><h1></h1></header>
+        <header class="sheet-header"><h1></h1><div class="sheet-tools"></div></header>
         <section class="major-card">
           <div class="major-title"></div>
           <div class="rich-preview"></div>
@@ -72,6 +103,7 @@ function ensureLocalDynamicUi(snapshot) {
       main.appendChild(panel);
     }
     panel.querySelector(".sheet-header h1").textContent = String(menu.title || `게시판 ${panelIndex}`);
+    ensureDynamicEditButton(panel, panelIndex);
 
     const existingButton = Array.from(topNav.querySelectorAll(".nav-item"))
       .find(item => Number(item.dataset.localSharedPanelIndex) === panelIndex);
@@ -135,6 +167,7 @@ function renderDynamicContents(snapshot) {
     }
     majorTitle.textContent = String(config.majorTitle || menu.title || "");
     preview.innerHTML = String(config.html || config.bodyHtml || "");
+    ensureDynamicEditButton(panel, panelIndex);
   });
 }
 
@@ -175,6 +208,100 @@ async function saveLocalNotice() {
   document.getElementById("noticeModal")?.classList.remove("show");
 }
 
+function contentEditorElement() {
+  return document.querySelector("#contentEditor .ql-editor");
+}
+
+function contentBodyHtml(config) {
+  if (typeof config?.bodyHtml === "string" && config.bodyHtml.trim()) return config.bodyHtml;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = String(config?.html || "");
+  wrap.querySelectorAll(".content-table-preview").forEach(table => table.remove());
+  return wrap.innerHTML;
+}
+
+function preservedTableHtml(config) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = String(config?.html || "");
+  return wrap.querySelector(".content-table-preview")?.outerHTML || "";
+}
+
+function setLocalContentModalMode(enabled) {
+  const modal = document.getElementById("contentModal");
+  if (!modal) return;
+  modal.classList.toggle("local-shared-edit-mode", enabled);
+
+  const tableWrap = document.getElementById("contentTableWrap");
+  const tableRow = tableWrap?.closest(".form-row");
+  if (tableRow) tableRow.style.display = enabled ? "none" : "";
+}
+
+function openLocalContentEditor(panelIndex) {
+  if (currentLocalUser?.role !== "ADMIN") return alert("관리자만 수정할 수 있습니다.");
+
+  const key = `panel_${Number(panelIndex)}`;
+  const menu = menuForPanel(panelIndex);
+  const config = currentLocalSnapshot?.page_contents?.[key] || {
+    majorTitle: menu?.title || `게시판 ${panelIndex}`,
+    bodyHtml: "<p>내용을 입력하세요.</p>",
+    tableData: { enabled: false, rows: [] },
+    html: "<p>내용을 입력하세요.</p>"
+  };
+  const modal = document.getElementById("contentModal");
+  const title = document.getElementById("contentModalTitle");
+  const majorTitle = document.getElementById("contentMajorTitle");
+  const editor = contentEditorElement();
+  if (!modal || !title || !majorTitle || !editor) {
+    return alert("게시판 편집기를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
+  }
+
+  currentLocalContentKey = key;
+  currentLocalContentConfig = structuredClone(config);
+  title.textContent = `${menu?.title || config.majorTitle || "게시판"} 내용 수정`;
+  majorTitle.value = String(config.majorTitle || menu?.title || "");
+  editor.innerHTML = contentBodyHtml(config);
+  setLocalContentModalMode(true);
+  modal.classList.add("show");
+}
+
+function closeLocalContentEditor() {
+  document.getElementById("contentModal")?.classList.remove("show");
+  setLocalContentModalMode(false);
+  currentLocalContentKey = "";
+  currentLocalContentConfig = null;
+}
+
+async function saveLocalContent() {
+  if (!currentLocalContentKey || !currentLocalContentConfig) return;
+  const editor = contentEditorElement();
+  if (!editor) throw new Error("게시판 편집기를 찾을 수 없습니다.");
+
+  const majorTitle = document.getElementById("contentMajorTitle")?.value?.trim() || "게시판";
+  const bodyHtml = editor.innerHTML;
+  const tableHtml = preservedTableHtml(currentLocalContentConfig);
+  const content = {
+    ...currentLocalContentConfig,
+    majorTitle,
+    bodyHtml,
+    html: bodyHtml + tableHtml
+  };
+
+  const result = await api(`/shared-pages/contents/${encodeURIComponent(currentLocalContentKey)}`, {
+    method: "PUT",
+    body: JSON.stringify({ content })
+  });
+
+  currentLocalSnapshot = {
+    ...(currentLocalSnapshot || {}),
+    page_contents: {
+      ...(currentLocalSnapshot?.page_contents || {}),
+      [currentLocalContentKey]: result.content
+    }
+  };
+  applySnapshot(currentLocalSnapshot);
+  closeLocalContentEditor();
+}
+
 function ensureLocalAdminControls() {
   const admin = currentLocalUser?.role === "ADMIN";
   const editButton = document.getElementById("noticeEditBtn");
@@ -197,11 +324,17 @@ function ensureLocalAdminControls() {
     });
   }
 
+  document.querySelectorAll(".local-shared-edit-btn").forEach(button => {
+    button.classList.toggle("local-admin-visible", admin);
+  });
+
   if (!document.getElementById("local-shared-page-styles")) {
     const style = document.createElement("style");
     style.id = "local-shared-page-styles";
     style.textContent = `
-      body.limited-deployment-mode #noticeEditBtn.local-admin-visible{display:inline-flex!important}
+      body.limited-deployment-mode #noticeEditBtn.local-admin-visible,
+      body.limited-deployment-mode .local-shared-edit-btn.local-admin-visible{display:inline-flex!important}
+      body.limited-deployment-mode .dynamic-panel-edit-btn:not(.local-shared-edit-btn){display:none!important}
     `;
     document.head.appendChild(style);
   }
@@ -335,6 +468,28 @@ async function loadLocalSharedPages() {
   return snapshot;
 }
 
+function bindLocalModalActions() {
+  document.addEventListener("click", event => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+
+    const contentModal = document.getElementById("contentModal");
+    if (contentModal?.classList.contains("local-shared-edit-mode")) {
+      if (target.closest("#contentModal .primary-btn")) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        void saveLocalContent().catch(error => alert(`게시판 저장 실패: ${error.message}`));
+        return;
+      }
+      if (target.closest("#contentModal .secondary-btn")) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        closeLocalContentEditor();
+      }
+    }
+  }, true);
+}
+
 export function installLocalSharedPages() {
   if (window.__localSharedPagesInstalled) return;
   window.__localSharedPagesInstalled = true;
@@ -369,6 +524,8 @@ export function installLocalSharedPages() {
       return result;
     }
   };
+
+  bindLocalModalActions();
 
   document.addEventListener("submit", event => {
     if (event.target?.matches?.("#grv2LoginForm,#allocationLoginForm")) {
