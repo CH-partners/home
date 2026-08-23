@@ -1,11 +1,21 @@
 import "./sharedPagesLocal.js";
 
-const ALLOWED_PANEL_INDEXES = new Set([11, 13]);
-const ALLOWED_LABELS = new Set(["분배표", "그룹리뷰"]);
+const ALLOWED_PANEL_INDEXES = new Set([0, 11, 13]);
+const ALLOWED_LABELS = new Set(["청현공지사항", "공지사항", "일반게시판", "분배표", "그룹리뷰"]);
 const WORKER_ALLOCATION_NOTICE = "조회 전용입니다. 분배표 수정은 관리자만 가능합니다.";
 
 function normalizeLabel(value) {
-  return String(value || "").replace(/\s+/g, "").replace(/[📊📝]/g, "").trim();
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .replace(/[📊📝📢]/g, "")
+    .trim();
+}
+
+function isAllowedPanel(panel) {
+  const index = Number(panel?.dataset?.index);
+  if (ALLOWED_PANEL_INDEXES.has(index)) return true;
+  const title = normalizeLabel(panel?.querySelector?.(".sheet-header h1")?.textContent || "");
+  return title === "일반게시판";
 }
 
 export function installLimitedDeploymentMode() {
@@ -255,11 +265,10 @@ export function installLimitedDeploymentMode() {
     if (adminBox) adminBox.style.display = "none";
 
     document.querySelectorAll(".sheet-panel").forEach(panel => {
-      const index = Number(panel.dataset.index);
-      if (Number.isFinite(index) && !ALLOWED_PANEL_INDEXES.has(index)) {
+      if (!isAllowedPanel(panel)) {
         panel.style.display = "none";
         panel.classList.remove("active");
-      } else if (ALLOWED_PANEL_INDEXES.has(index)) {
+      } else {
         panel.style.display = "";
       }
     });
@@ -282,8 +291,7 @@ export function installLimitedDeploymentMode() {
     });
 
     const active = document.querySelector(".sheet-panel.active");
-    const activeIndex = Number(active?.dataset?.index);
-    if (!ALLOWED_PANEL_INDEXES.has(activeIndex)) {
+    if (!isAllowedPanel(active)) {
       const allocationButton = Array.from(document.querySelectorAll(".nav-item"))
         .find(button => normalizeLabel(button.textContent) === "분배표");
       if (allocationButton) allocationButton.click();
