@@ -45,6 +45,16 @@ def home() -> FileResponse:
     return FileResponse(repo_root / "index.html")
 
 
+@app.get("/tools/small-deposit", include_in_schema=False)
+def small_deposit_tool() -> FileResponse:
+    return FileResponse(repo_root / "주택상가 소액.html")
+
+
+@app.get("/tools/priority-wage", include_in_schema=False)
+def priority_wage_tool() -> FileResponse:
+    return FileResponse(repo_root / "최우선임금.html")
+
+
 @app.get("/tools/mortgage-extract", include_in_schema=False, response_class=HTMLResponse)
 def mortgage_extract_tool() -> HTMLResponse:
     source = (repo_root / "근저당추출.html").read_text(encoding="utf-8")
