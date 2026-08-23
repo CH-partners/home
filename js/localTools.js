@@ -10,6 +10,12 @@ const LOCAL_TOOLS = [
     title: "근저당추출",
     panelIndex: 1002,
     src: "/tools/mortgage-extract"
+  },
+  {
+    key: "rent-trades",
+    title: "전월세조회",
+    panelIndex: 1003,
+    src: "/tools/rent-trades"
   }
 ];
 
