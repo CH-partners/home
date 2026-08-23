@@ -26,6 +26,18 @@ DEFAULT_NOTICE = {
     "html": "<li>공지 내용이 없습니다.</li>",
 }
 GENERAL_BOARD_TITLE = "일반 게시판"
+NON_BOARD_PANEL_INDEXES = {0, 10, 11, 12, 13}
+FIXED_CONTENT_KEYS = {
+    1: "rent",
+    2: "wage",
+    3: "tax",
+    4: "tenantqa",
+    5: "guaranteeqa",
+    6: "securedqa",
+    7: "saleqa",
+    8: "browseqa",
+    9: "machineqa",
+}
 
 
 def _get_or_create(db: Session) -> AppSettings:
@@ -63,6 +75,46 @@ def _is_uninitialized(settings: AppSettings) -> bool:
 
 def _compact_label(value: object) -> str:
     return "".join(str(value or "").split())
+
+
+def _menu_title_key(value: object) -> str:
+    return "".join(
+        ch
+        for ch in str(value or "").casefold()
+        if ch.isalnum() or ch == "&"
+    )
+
+
+def _menu_panel_index(menu: object) -> int | None:
+    if not isinstance(menu, dict):
+        return None
+    try:
+        return int(menu.get("panelIndex"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _used_panel_indexes(menus: list[object], contents: dict[str, object]) -> set[int]:
+    used = set(NON_BOARD_PANEL_INDEXES)
+    for menu in menus:
+        panel_index = _menu_panel_index(menu)
+        if panel_index is not None:
+            used.add(panel_index)
+    for key in contents:
+        if not key.startswith("panel_"):
+            continue
+        try:
+            used.add(int(key.removeprefix("panel_")))
+        except ValueError:
+            pass
+    return used
+
+
+def _next_dynamic_panel_index(used: set[int]) -> int:
+    panel_index = 14
+    while panel_index in used:
+        panel_index += 1
+    return panel_index
 
 
 def _ensure_general_board(settings: AppSettings) -> bool:
@@ -170,6 +222,98 @@ def bootstrap_shared_pages(
     db.add(settings)
     db.commit()
     db.refresh(settings)
+    return _response(settings)
+
+
+@router.post("/import-missing", response_model=SharedPagesResponse)
+def import_missing_shared_pages(
+    payload: SharedPagesUpdatePayload,
+    db: Session = Depends(get_db),
+    _admin: AppUser = Depends(require_admin),
+) -> SharedPagesResponse:
+    settings = _get_or_create(db)
+    menus = list(settings.menus or [])
+    contents = dict(settings.page_contents or {})
+    source_contents = dict(payload.page_contents or {})
+
+    existing_by_title = {
+        _menu_title_key(menu.get("title")): menu
+        for menu in menus
+        if isinstance(menu, dict) and _menu_title_key(menu.get("title"))
+    }
+    used_indexes = _used_panel_indexes(menus, contents)
+    changed = False
+
+    for source_menu in payload.menus:
+        if not isinstance(source_menu, dict):
+            continue
+
+        title = str(source_menu.get("title") or "").strip()
+        title_key = _menu_title_key(title)
+        source_index = _menu_panel_index(source_menu)
+        group = str(source_menu.get("group") or "").strip().lower()
+        kind = str(source_menu.get("kind") or "panel").strip().lower()
+
+        # Existing local tools stay exactly as they are. This repair endpoint
+        # only restores legacy board pages that are absent from the local DB.
+        if (
+            not title_key
+            or source_index is None
+            or source_index in NON_BOARD_PANEL_INDEXES
+            or kind == "iframe"
+            or group == "tool"
+        ):
+            continue
+
+        source_key = FIXED_CONTENT_KEYS.get(source_index, f"panel_{source_index}")
+        source_content = source_contents.get(source_key)
+        existing_menu = existing_by_title.get(title_key)
+        if existing_menu is not None:
+            existing_index = _menu_panel_index(existing_menu)
+            if existing_index is not None:
+                if existing_index in FIXED_CONTENT_KEYS:
+                    target_key = FIXED_CONTENT_KEYS[existing_index]
+                else:
+                    target_key = f"panel_{existing_index}"
+                if (
+                    isinstance(source_content, dict)
+                    and source_content
+                    and target_key not in contents
+                ):
+                    contents[target_key] = dict(source_content)
+                    changed = True
+            continue
+
+        target_index = source_index
+        if target_index in used_indexes:
+            target_index = _next_dynamic_panel_index(used_indexes)
+
+        imported_menu = dict(source_menu)
+        imported_menu["panelIndex"] = target_index
+        imported_menu["location"] = imported_menu.get("location") or "top"
+        imported_menu["kind"] = "panel"
+        menus.append(imported_menu)
+
+        existing_by_title[title_key] = imported_menu
+        used_indexes.add(target_index)
+        changed = True
+
+        if source_index in FIXED_CONTENT_KEYS and target_index == source_index:
+            target_key = source_key
+        else:
+            target_key = f"panel_{target_index}"
+
+        if isinstance(source_content, dict) and source_content and target_key not in contents:
+            contents[target_key] = dict(source_content)
+
+    if changed:
+        settings.menus = menus
+        settings.page_contents = contents
+        settings.updated_at = datetime.now(timezone.utc)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+
     return _response(settings)
 
 
