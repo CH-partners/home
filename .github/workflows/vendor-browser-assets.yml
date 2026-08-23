@@ -59,6 +59,22 @@ jobs:
             vendor/bootstrap.bundle.min.js \
             data/bjd_code.json > vendor/SHA256SUMS
 
+      - name: Sanitize legacy rent tool source
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+
+          path = Path("lease_api.html")
+          source = path.read_text(encoding="utf-8")
+          source = re.sub(
+              r'const\s+SERVICE_KEY\s*=\s*["\'][^"\']*["\'];',
+              'const SERVICE_KEY = "";',
+              source,
+              count=1,
+          )
+          path.write_text(source, encoding="utf-8")
+
       - name: Commit runtime assets
         shell: bash
         run: |
@@ -73,7 +89,8 @@ jobs:
             vendor/bootstrap.bundle.min.js \
             vendor/THIRD_PARTY_NOTICES.md \
             vendor/SHA256SUMS \
-            data/bjd_code.json
+            data/bjd_code.json \
+            lease_api.html
           if git diff --cached --quiet; then
             echo "Runtime assets already current."
             exit 0
