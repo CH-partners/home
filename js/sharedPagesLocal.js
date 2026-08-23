@@ -1,4 +1,5 @@
 const API_ROOT = "/api/v1";
+const DEFAULT_NOTICE_HTML = "<li>공지 내용이 없습니다.</li>";
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -28,7 +29,7 @@ function renderNotice(notice) {
 
   const html = String(notice?.html || "").trim();
   if (!html) {
-    items.innerHTML = "<li>공지 내용이 없습니다.</li>";
+    items.innerHTML = DEFAULT_NOTICE_HTML;
     return;
   }
 
@@ -67,15 +68,114 @@ function applySnapshot(snapshot) {
   window.dispatchEvent(new CustomEvent("local-shared-pages-loaded", { detail: snapshot }));
 }
 
-async function loadLocalSharedPages() {
+function isUninitialized(snapshot) {
+  if (!snapshot) return true;
+  const menusEmpty = !Array.isArray(snapshot.menus) || snapshot.menus.length === 0;
+  const contentsEmpty = !snapshot.page_contents || Object.keys(snapshot.page_contents).length === 0;
+  const notice = snapshot.notice || {};
+  const noticeEmpty = !Object.keys(notice).length || (
+    String(notice.title || "공지 제목") === "공지 제목" &&
+    !String(notice.date || "") &&
+    String(notice.html || DEFAULT_NOTICE_HTML).trim() === DEFAULT_NOTICE_HTML
+  );
+  return menusEmpty && contentsEmpty && noticeEmpty;
+}
+
+function legacyNoticeReady() {
+  const title = document.getElementById("noticeTitle")?.textContent?.trim() || "";
+  return Boolean(title && title !== "공지 불러오는 중...");
+}
+
+async function waitForLegacyRender(timeoutMs = 2400) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (legacyNoticeReady()) return true;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return legacyNoticeReady();
+}
+
+function stripDatePrefix(value) {
+  return String(value || "").replace(/^기준일:\s*/, "").trim();
+}
+
+function scrapeLegacySnapshot() {
+  const noticeTitle = document.getElementById("noticeTitle")?.textContent?.trim() || "공지 제목";
+  const noticeDate = stripDatePrefix(document.getElementById("noticeDate")?.textContent || "");
+  const noticeHtml = document.getElementById("noticeItems")?.innerHTML?.trim() || DEFAULT_NOTICE_HTML;
+
+  const menus = [];
+  const pageContents = {};
+
+  document.querySelectorAll(".sheet-panel[data-index]").forEach(panel => {
+    const panelIndex = Number(panel.dataset.index);
+    if (!Number.isFinite(panelIndex) || panelIndex <= 13) return;
+
+    const title = panel.querySelector(".sheet-header h1")?.textContent?.trim() || `게시판 ${panelIndex}`;
+    const section = panel.querySelector("section.major-card");
+    if (!section) return;
+
+    const majorTitle = section.querySelector(".major-title")?.textContent?.trim() || title;
+    const preview = section.querySelector(".rich-preview");
+    const html = preview?.innerHTML?.trim() || section.innerHTML.trim();
+
+    menus.push({
+      title,
+      panelIndex,
+      location: "top",
+      kind: "panel",
+      group: ""
+    });
+    pageContents[`panel_${panelIndex}`] = {
+      majorTitle,
+      bodyHtml: html,
+      tableData: { enabled: false, rows: [] },
+      html
+    };
+  });
+
+  return {
+    menus,
+    notice: {
+      title: noticeTitle,
+      date: noticeDate === "-" ? "" : noticeDate,
+      html: noticeHtml
+    },
+    page_contents: pageContents
+  };
+}
+
+async function bootstrapFromLegacyIfNeeded(snapshot, user) {
+  if (!isUninitialized(snapshot) || user?.role !== "ADMIN") return snapshot;
+
+  await waitForLegacyRender();
+  const legacy = scrapeLegacySnapshot();
+  const hasUsefulNotice = legacy.notice.title !== "공지 제목" || legacy.notice.date || legacy.notice.html !== DEFAULT_NOTICE_HTML;
+  const hasDynamicContents = legacy.menus.length > 0;
+  if (!hasUsefulNotice && !hasDynamicContents) return snapshot;
+
   try {
-    await api("/auth/me");
+    return await api("/shared-pages/bootstrap", {
+      method: "POST",
+      body: JSON.stringify(legacy)
+    });
+  } catch (error) {
+    if (error.status === 409) return api("/shared-pages");
+    throw error;
+  }
+}
+
+async function loadLocalSharedPages() {
+  let user;
+  try {
+    user = await api("/auth/me");
   } catch (error) {
     if (error.status === 401) return null;
     throw error;
   }
 
-  const snapshot = await api("/shared-pages");
+  let snapshot = await api("/shared-pages");
+  snapshot = await bootstrapFromLegacyIfNeeded(snapshot, user);
   applySnapshot(snapshot);
   return snapshot;
 }
