@@ -25,6 +25,19 @@ export function initSchedule(ctx = {}) {
     return data;
   }
 
+  function publishStatus(status) {
+    const detail = {
+      count: Number(status?.count || 0),
+      migration_complete: status?.migration_complete === true
+    };
+    window.dispatchEvent(new CustomEvent("local-schedule-status", { detail }));
+    return detail;
+  }
+
+  async function getScheduleStatus() {
+    return publishStatus(await api("/schedules/status"));
+  }
+
   function initCalendar() {
     const calendarEl = document.getElementById("calendar");
     if (!calendarEl || calendar) return;
@@ -161,37 +174,43 @@ export function initSchedule(ctx = {}) {
     }
   }
 
-  async function maybeImportLegacySchedules(localRows) {
-    if (legacyImportChecked || localRows.length) return false;
+  async function maybeImportLegacySchedules(localRows, status) {
+    if (status?.migration_complete || legacyImportChecked || localRows.length) return false;
 
     const user = await currentLocalUser();
     if (user?.role !== "ADMIN") return false;
 
     legacyImportChecked = true;
     const legacyItems = await readLegacySchedules();
-    if (!legacyItems.length) return false;
 
     try {
       const result = await api("/schedules/bootstrap", {
         method: "POST",
         body: JSON.stringify({ items: legacyItems })
       });
-      console.info(`기존 일정 ${Number(result?.imported || 0)}건을 로컬 DB로 이관했습니다.`);
-      return Number(result?.imported || 0) > 0;
+      console.info(`기존 일정 확인 완료: ${Number(result?.imported || 0)}건을 로컬 DB로 이관했습니다.`);
+      return result?.migration_complete === true;
     } catch (error) {
-      if (error.status === 409) return true;
+      if (error.status === 409) {
+        console.warn("스케줄 이관 확인 필요:", error.message);
+        return false;
+      }
       throw error;
     }
   }
 
   async function loadSchedules() {
+    let status = await getScheduleStatus();
     let rows = await api("/schedules");
     rows = Array.isArray(rows) ? rows : [];
 
-    const imported = await maybeImportLegacySchedules(rows);
-    if (imported) {
+    const completedNow = await maybeImportLegacySchedules(rows, status);
+    if (completedNow) {
+      status = await getScheduleStatus();
       rows = await api("/schedules");
       rows = Array.isArray(rows) ? rows : [];
+    } else {
+      publishStatus(status);
     }
 
     scheduleEvents = rows.map(mapScheduleToEvent);
