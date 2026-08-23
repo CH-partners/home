@@ -120,25 +120,6 @@ def legacy_rent_trade_tool() -> HTMLResponse:
     return HTMLResponse(_rent_trade_tool_html())
 
 
-def _small_deposit_tool_html() -> str:
-    source = (repo_root / "주택상가 소액.html").read_text(encoding="utf-8")
-    source = source.replace(
-        "https://raw.githubusercontent.com/CH-partners/housing-db/main/housing_rules_vba.csv",
-        "/data/housing_rules_vba.csv",
-    )
-    source = source.replace(
-        "https://raw.githubusercontent.com/CH-partners/housing-db/main/commercial_rules_vba.csv",
-        "/data/commercial_rules_vba.csv",
-    )
-    return source
-
-
-@app.get("/주택상가 소액.html", include_in_schema=False, response_class=HTMLResponse)
-def small_deposit_tool() -> HTMLResponse:
-    # Runtime lookup data always comes from the LAN server, never GitHub Raw.
-    return HTMLResponse(_small_deposit_tool_html())
-
-
 @app.get("/{filename}", include_in_schema=False)
 def root_html_file(filename: str) -> FileResponse:
     # Only root-level HTML tools are exposed. Backend files and secrets are never served.
