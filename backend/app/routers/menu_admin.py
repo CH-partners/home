@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,7 +15,6 @@ from app.schemas.shared_pages import SharedPagesResponse, SharedPagesUpdatePaylo
 
 router = APIRouter(prefix="/api/v1/shared-pages", tags=["shared-pages-menu-admin"])
 SETTINGS_ID = "main"
-CORE_PANEL_INDEXES = {0, 10, 11, 12, 13}
 FIXED_CONTENT_KEYS = {
     1: "rent",
     2: "wage",
@@ -27,7 +27,8 @@ FIXED_CONTENT_KEYS = {
     9: "machineqa",
 }
 ALLOWED_GROUPS = {"", "qna", "work", "search", "reference"}
-ALLOWED_THEMES = {"", "green", "purple", "pink", "blue"}
+ALLOWED_KINDS = {"panel", "tool", "iframe"}
+COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def _response(settings: AppSettings) -> SharedPagesResponse:
@@ -77,6 +78,11 @@ def _default_content(title: str) -> dict[str, object]:
     }
 
 
+def _clean_color(value: object) -> str:
+    color = str(value or "").strip()
+    return color.lower() if COLOR_RE.fullmatch(color) else ""
+
+
 @router.put("/menus", response_model=SharedPagesResponse)
 def update_shared_page_menus(
     payload: SharedPagesUpdatePayload,
@@ -90,14 +96,7 @@ def update_shared_page_menus(
             detail="Shared pages are not initialized.",
         )
 
-    current_menus = [menu for menu in list(settings.menus or []) if isinstance(menu, dict)]
-    current_core = {
-        panel_index: dict(menu)
-        for menu in current_menus
-        if (panel_index := _panel_index(menu)) in CORE_PANEL_INDEXES
-    }
     contents = dict(settings.page_contents or {})
-
     normalized: list[dict[str, object]] = []
     used_indexes: set[int] = set()
     seen_titles: set[str] = set()
@@ -107,23 +106,12 @@ def update_shared_page_menus(
             continue
 
         menu = dict(raw_menu)
-        panel_index = _panel_index(menu)
-
-        # Core service menus are intentionally immutable here. They remain in
-        # the position sent by the client, but their definition cannot be
-        # changed or deleted through board menu administration.
-        if panel_index in CORE_PANEL_INDEXES and panel_index in current_core:
-            core_menu = dict(current_core[panel_index])
-            normalized.append(core_menu)
-            used_indexes.add(panel_index)
-            continue
-
         title = str(menu.get("title") or "").strip()
         title_key = _title_key(title)
         hidden = bool(menu.get("hidden"))
-
         if not title_key:
             continue
+
         if not hidden and title_key in seen_titles:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -132,51 +120,35 @@ def update_shared_page_menus(
         if not hidden:
             seen_titles.add(title_key)
 
-        if (
-            panel_index is None
-            or panel_index <= 0
-            or panel_index in CORE_PANEL_INDEXES
-            or panel_index in used_indexes
-        ):
-            panel_index = _next_panel_index(used_indexes | CORE_PANEL_INDEXES)
-
+        panel_index = _panel_index(menu)
+        if panel_index is None or panel_index in used_indexes:
+            panel_index = _next_panel_index(used_indexes)
         used_indexes.add(panel_index)
 
         group = str(menu.get("group") or "").strip().lower()
         if group not in ALLOWED_GROUPS:
-            group = "reference"
+            group = ""
 
-        theme = str(menu.get("theme") or "").strip().lower()
-        if theme not in ALLOWED_THEMES:
-            theme = ""
+        kind = str(menu.get("kind") or "panel").strip().lower()
+        if kind not in ALLOWED_KINDS:
+            kind = "panel"
 
         menu["title"] = title
         menu["panelIndex"] = panel_index
         menu["location"] = "top"
-        menu["kind"] = "panel"
+        menu["kind"] = kind
         menu["group"] = group
-        menu["theme"] = theme
+        menu["color"] = _clean_color(menu.get("color"))
+        menu["groupColor"] = _clean_color(menu.get("groupColor"))
         menu["hidden"] = hidden
-        menu.pop("url", None)
         normalized.append(menu)
 
-        if not hidden:
+        # Menu deletion is non-destructive. Existing page contents are retained.
+        # Only a new editable board receives a default content record.
+        if kind == "panel" and panel_index not in {0, 10, 11, 12, 13} and not hidden:
             key = _content_key(panel_index)
             if key not in contents:
                 contents[key] = _default_content(title)
-
-    # If a core menu was somehow omitted by the client, retain it rather than
-    # allowing menu administration to remove an application tool.
-    included_core = {
-        _panel_index(menu)
-        for menu in normalized
-        if _panel_index(menu) in CORE_PANEL_INDEXES
-    }
-    for menu in current_menus:
-        panel_index = _panel_index(menu)
-        if panel_index in CORE_PANEL_INDEXES and panel_index not in included_core:
-            normalized.append(dict(menu))
-            included_core.add(panel_index)
 
     settings.menus = normalized
     settings.page_contents = contents
