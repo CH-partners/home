@@ -1,3 +1,5 @@
+import "./sharedPagesLocal.js";
+
 const ALLOWED_PANEL_INDEXES = new Set([11, 13]);
 const ALLOWED_LABELS = new Set(["분배표", "그룹리뷰"]);
 const WORKER_ALLOCATION_NOTICE = "조회 전용입니다. 분배표 수정은 관리자만 가능합니다.";
