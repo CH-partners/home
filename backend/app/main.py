@@ -10,6 +10,7 @@ from app.routers.auth import router as auth_router
 from app.routers.group_review_admin_v2 import router as group_review_admin_v2_router
 from app.routers.group_review_v2 import router as group_review_v2_router
 from app.routers.health import router as health_router
+from app.routers.menu_admin import router as menu_admin_router
 from app.routers.rent_trades import router as rent_trades_router
 from app.routers.schedule_v2 import router as schedule_v2_router
 from app.routers.shared_pages import router as shared_pages_router
@@ -23,6 +24,7 @@ app.include_router(group_review_v2_router)
 app.include_router(group_review_admin_v2_router)
 app.include_router(allocation_v2_router)
 app.include_router(shared_pages_router)
+app.include_router(menu_admin_router)
 app.include_router(schedule_v2_router)
 app.include_router(rent_trades_router)
 
