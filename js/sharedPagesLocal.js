@@ -1,5 +1,7 @@
 const API_ROOT = "/api/v1";
 const DEFAULT_NOTICE_HTML = "<li>공지 내용이 없습니다.</li>";
+let currentLocalUser = null;
+let currentLocalSnapshot = null;
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -136,12 +138,83 @@ function renderDynamicContents(snapshot) {
   });
 }
 
+function noticeEditorHtml() {
+  return document.querySelector("#noticeEditor .ql-editor")?.innerHTML ?? "";
+}
+
+function setNoticeEditorHtml(html) {
+  const editor = document.querySelector("#noticeEditor .ql-editor");
+  if (editor) editor.innerHTML = String(html || "");
+}
+
+function openLocalNoticeEditor() {
+  const notice = currentLocalSnapshot?.notice || {};
+  const titleInput = document.getElementById("noticeFormTitle");
+  const dateInput = document.getElementById("noticeFormDate");
+  const modal = document.getElementById("noticeModal");
+  if (!titleInput || !dateInput || !modal) return;
+
+  titleInput.value = String(notice.title || "");
+  dateInput.value = String(notice.date || "");
+  setNoticeEditorHtml(notice.html || "");
+  modal.classList.add("show");
+}
+
+async function saveLocalNotice() {
+  const payload = {
+    title: document.getElementById("noticeFormTitle")?.value?.trim() || "공지 제목",
+    date: document.getElementById("noticeFormDate")?.value || "",
+    html: noticeEditorHtml()
+  };
+  const snapshot = await api("/shared-pages/notice", {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+  currentLocalSnapshot = snapshot;
+  applySnapshot(snapshot);
+  document.getElementById("noticeModal")?.classList.remove("show");
+}
+
+function ensureLocalAdminControls() {
+  const admin = currentLocalUser?.role === "ADMIN";
+  const editButton = document.getElementById("noticeEditBtn");
+  const saveButton = document.querySelector("#noticeModal .primary-btn");
+
+  if (editButton) {
+    editButton.classList.toggle("local-admin-visible", admin);
+    if (admin && !editButton.dataset.localNoticeBound) {
+      editButton.dataset.localNoticeBound = "1";
+      editButton.removeAttribute("onclick");
+      editButton.addEventListener("click", openLocalNoticeEditor);
+    }
+  }
+
+  if (saveButton && admin && !saveButton.dataset.localNoticeBound) {
+    saveButton.dataset.localNoticeBound = "1";
+    saveButton.removeAttribute("onclick");
+    saveButton.addEventListener("click", () => {
+      void saveLocalNotice().catch(error => alert(`공지 저장 실패: ${error.message}`));
+    });
+  }
+
+  if (!document.getElementById("local-shared-page-styles")) {
+    const style = document.createElement("style");
+    style.id = "local-shared-page-styles";
+    style.textContent = `
+      body.limited-deployment-mode #noticeEditBtn.local-admin-visible{display:inline-flex!important}
+    `;
+    document.head.appendChild(style);
+  }
+}
+
 function applySnapshot(snapshot) {
   if (!snapshot) return;
+  currentLocalSnapshot = snapshot;
   ensureLocalNoticeMenu();
   ensureLocalDynamicUi(snapshot);
   renderNotice(snapshot.notice || {});
   renderDynamicContents(snapshot);
+  ensureLocalAdminControls();
   window.dispatchEvent(new CustomEvent("local-shared-pages-loaded", { detail: snapshot }));
 }
 
@@ -247,10 +320,15 @@ async function loadLocalSharedPages() {
   try {
     user = await api("/auth/me");
   } catch (error) {
-    if (error.status === 401) return null;
+    if (error.status === 401) {
+      currentLocalUser = null;
+      ensureLocalAdminControls();
+      return null;
+    }
     throw error;
   }
 
+  currentLocalUser = user;
   let snapshot = await api("/shared-pages");
   snapshot = await bootstrapFromLegacyIfNeeded(snapshot, user);
   applySnapshot(snapshot);
