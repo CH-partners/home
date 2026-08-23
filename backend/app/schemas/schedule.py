@@ -31,6 +31,12 @@ class ScheduleBootstrapPayload(BaseModel):
 
 class ScheduleBootstrapResponse(BaseModel):
     imported: int
+    migration_complete: bool = True
+
+
+class ScheduleStatusResponse(BaseModel):
+    count: int
+    migration_complete: bool
 
 
 class ScheduleResponse(BaseModel):
