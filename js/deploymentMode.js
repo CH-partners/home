@@ -1,6 +1,7 @@
 import "./sharedPagesLocal.js";
 import "./noticeLocalAdmin.js";
 import "./legacyBoardsLocal.js";
+import "./fixedBoardMenuCompat.js";
 import "./menuAdminUnified.js";
 
 const ALLOWED_PANEL_INDEXES = new Set([0, 10, 11, 13]);
@@ -263,7 +264,6 @@ export function installLimitedDeploymentMode() {
       if (!response.ok) return;
       renderLoginBox(await response.json());
     } catch (_) {
-      // 사이드바 로그인 표시는 부가 UI이므로 본문 동작은 유지한다.
     } finally {
       sidebarUserSyncing = false;
     }
