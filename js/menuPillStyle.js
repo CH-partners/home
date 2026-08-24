@@ -30,7 +30,7 @@ function installMenuTextStyle() {
         border:0!important;
         box-shadow:none!important;
         color:#ffffff!important;
-        font-size:14.333px!important;
+        font-size:17px!important;
         font-weight:800!important;
         transform:none!important;
       }
@@ -52,7 +52,7 @@ function installMenuTextStyle() {
 
       body.limited-deployment-mode #topNav .nav-item.active:hover,
       body.limited-deployment-mode #bottomNav .nav-item.active:hover {
-        font-size:14.333px!important;
+        font-size:17px!important;
         font-weight:800!important;
       }
 
@@ -71,7 +71,7 @@ function installMenuTextStyle() {
       }
 
       body.limited-deployment-mode #topNav .local-board-subgroup > .nav-item.local-board-sub-item:hover {
-        font-size:13.333px!important;
+        font-size:16px!important;
         font-weight:800!important;
       }
     `;
