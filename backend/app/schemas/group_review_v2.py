@@ -61,6 +61,8 @@ class GroupReviewCellImage(BaseModel):
     id: str = Field(min_length=1, max_length=64, pattern=r"^[0-9A-Fa-f]+$")
     mimeType: Literal["image/png", "image/jpeg", "image/webp"]
     width: int = Field(default=320, ge=80, le=1600)
+    x: int = Field(default=0, ge=0, le=1600)
+    y: int = Field(default=0, ge=0, le=1200)
     size: int = Field(ge=1, le=10 * 1024 * 1024)
 
 
