@@ -3,6 +3,8 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MIN_WIDTH = 80;
 const MAX_WIDTH = 1600;
+const MAX_Y = 1200;
+const DRAG_THRESHOLD = 4;
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -57,22 +59,28 @@ function ensureStyles() {
   style.id = "grv2-cell-image-styles";
   style.textContent = `
     #groupReviewBody .grv2-cell-image-host{
-      padding:0 8px 8px;
+      position:relative;
+      width:100%;
+      min-height:40px;
+      padding:0;
       line-height:0;
-      text-align:left;
+      overflow:hidden;
+      box-sizing:border-box;
     }
     #groupReviewBody .grv2-cell-image-box{
-      position:relative;
-      display:inline-block;
-      max-width:100%;
+      position:absolute;
+      display:block;
       min-width:40px;
+      max-width:calc(100% - 2px);
       border:1px solid #cbd5e1;
       border-radius:4px;
       background:#fff;
       box-sizing:border-box;
       overflow:hidden;
-      vertical-align:top;
+      touch-action:none;
     }
+    #groupReviewBody .grv2-cell-image-box.editable{cursor:move}
+    #groupReviewBody .grv2-cell-image-box.dragging{opacity:.94;box-shadow:0 4px 16px rgba(15,23,42,.24)}
     #groupReviewBody .grv2-cell-image-box img{
       display:block;
       width:100%;
@@ -82,12 +90,14 @@ function ensureStyles() {
       user-select:none;
       -webkit-user-drag:none;
       cursor:zoom-in;
+      pointer-events:none;
     }
+    #groupReviewBody .grv2-cell-image-box.editable img{cursor:move}
     #groupReviewBody .grv2-cell-image-delete{
       position:absolute;
       top:4px;
       right:4px;
-      z-index:2;
+      z-index:3;
       width:24px;
       height:24px;
       padding:0;
@@ -103,7 +113,7 @@ function ensureStyles() {
       position:absolute;
       right:0;
       bottom:0;
-      z-index:2;
+      z-index:3;
       width:18px;
       height:18px;
       cursor:nwse-resize;
@@ -122,25 +132,10 @@ function ensureStyles() {
       box-sizing:border-box;
     }
     #grv2ImageLightbox.open{display:flex}
-    #grv2ImageLightbox img{
-      max-width:94vw;
-      max-height:92vh;
-      object-fit:contain;
-      background:#fff;
-      box-shadow:0 10px 40px rgba(0,0,0,.35);
-    }
+    #grv2ImageLightbox img{max-width:94vw;max-height:92vh;object-fit:contain;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.35)}
     #grv2ImageLightbox button{
-      position:absolute;
-      top:16px;
-      right:18px;
-      width:38px;
-      height:38px;
-      border:1px solid rgba(255,255,255,.65);
-      border-radius:50%;
-      background:rgba(0,0,0,.38);
-      color:#fff;
-      font-size:24px;
-      cursor:pointer;
+      position:absolute;top:16px;right:18px;width:38px;height:38px;border:1px solid rgba(255,255,255,.65);
+      border-radius:50%;background:rgba(0,0,0,.38);color:#fff;font-size:24px;cursor:pointer
     }
   `;
   document.head.appendChild(style);
@@ -154,8 +149,7 @@ function ensureLightbox() {
   lightbox.innerHTML = '<button type="button" aria-label="닫기">×</button><img alt="그룹리뷰 첨부 이미지">';
   const close = () => {
     lightbox.classList.remove("open");
-    const image = lightbox.querySelector("img");
-    if (image) image.removeAttribute("src");
+    lightbox.querySelector("img")?.removeAttribute("src");
   };
   lightbox.addEventListener("click", event => {
     if (event.target === lightbox || event.target.closest("button")) close();
@@ -169,6 +163,13 @@ function openLightbox(src) {
   const image = lightbox.querySelector("img");
   if (image) image.src = src;
   lightbox.classList.add("open");
+}
+
+function layoutHost(host, box, x, y) {
+  const height = Math.ceil(y + box.getBoundingClientRect().height + 8);
+  host.style.height = `${Math.max(40, height)}px`;
+  box.style.left = `${Math.round(x)}px`;
+  box.style.top = `${Math.round(y)}px`;
 }
 
 export function installGroupReviewCellImagesV2(baseApi) {
@@ -194,6 +195,13 @@ export function installGroupReviewCellImagesV2(baseApi) {
     });
   }
 
+  async function savePosition(rowId, styleKey, x, y) {
+    return api(`/group-review/rows/${rowId}/cells/${encodeURIComponent(styleKey)}/image-position`, {
+      method: "PATCH",
+      body: JSON.stringify({ x: Math.round(x), y: Math.round(y) })
+    });
+  }
+
   function bindImageControls(host, cell, row, meta) {
     const rowId = Number(row.id);
     const styleKey = cell.dataset.styleKey;
@@ -202,14 +210,25 @@ export function installGroupReviewCellImagesV2(baseApi) {
     const editable = cell.classList.contains("editable");
     if (!box || !image || !styleKey) return;
 
-    image.onclick = event => {
-      event.preventDefault();
-      event.stopPropagation();
-      openLightbox(image.src);
+    image.onload = () => {
+      const maxX = Math.max(0, host.clientWidth - box.getBoundingClientRect().width);
+      const x = clamp(Number(meta.x || 0), 0, maxX);
+      const y = clamp(Number(meta.y || 0), 0, MAX_Y);
+      layoutHost(host, box, x, y);
     };
 
+    if (!editable) {
+      box.onclick = event => {
+        if (event.target instanceof Element && event.target.closest("button,.grv2-cell-image-resize")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openLightbox(image.src);
+      };
+      return;
+    }
+
     const deleteButton = host.querySelector(".grv2-cell-image-delete");
-    if (deleteButton && editable) {
+    if (deleteButton) {
       deleteButton.onclick = async event => {
         event.preventDefault();
         event.stopPropagation();
@@ -230,8 +249,75 @@ export function installGroupReviewCellImagesV2(baseApi) {
       };
     }
 
+    box.onpointerdown = event => {
+      if (operationInFlight) return;
+      if (event.target instanceof Element && event.target.closest("button,.grv2-cell-image-resize")) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const pointerId = event.pointerId;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const startLeft = parseFloat(box.style.left || "0") || 0;
+      const startTop = parseFloat(box.style.top || "0") || 0;
+      let nextX = startLeft;
+      let nextY = startTop;
+      let moved = false;
+
+      try { box.setPointerCapture(pointerId); } catch (_) {}
+
+      const onMove = moveEvent => {
+        if (moveEvent.pointerId !== pointerId) return;
+        const dx = moveEvent.clientX - startX;
+        const dy = moveEvent.clientY - startY;
+        if (!moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        moved = true;
+        box.classList.add("dragging");
+        const maxX = Math.max(0, host.clientWidth - box.getBoundingClientRect().width);
+        nextX = clamp(startLeft + dx, 0, maxX);
+        nextY = clamp(startTop + dy, 0, MAX_Y);
+        layoutHost(host, box, nextX, nextY);
+      };
+
+      const finish = async upEvent => {
+        if (upEvent.pointerId !== pointerId) return;
+        box.removeEventListener("pointermove", onMove);
+        box.removeEventListener("pointerup", finish);
+        box.removeEventListener("pointercancel", finish);
+        box.classList.remove("dragging");
+        try { box.releasePointerCapture(pointerId); } catch (_) {}
+
+        if (!moved) {
+          openLightbox(image.src);
+          return;
+        }
+
+        const savedX = Math.round(nextX);
+        const savedY = Math.round(nextY);
+        if (savedX === Number(meta.x || 0) && savedY === Number(meta.y || 0)) return;
+        operationInFlight = true;
+        try {
+          setStatus("이미지 위치 저장 중...");
+          await savePosition(rowId, styleKey, savedX, savedY);
+          await baseApi?.refresh?.();
+          scheduleDecorate(0);
+          setStatus("이미지 위치 저장됨");
+        } catch (error) {
+          alert(`이미지 위치 저장 실패: ${error.message}`);
+          scheduleDecorate(0);
+          setStatus("이미지 위치 저장 실패");
+        } finally {
+          operationInFlight = false;
+        }
+      };
+
+      box.addEventListener("pointermove", onMove);
+      box.addEventListener("pointerup", finish);
+      box.addEventListener("pointercancel", finish);
+    };
+
     const handle = host.querySelector(".grv2-cell-image-resize");
-    if (!handle || !editable) return;
+    if (!handle) return;
     handle.onpointerdown = event => {
       event.preventDefault();
       event.stopPropagation();
@@ -240,8 +326,7 @@ export function installGroupReviewCellImagesV2(baseApi) {
       const pointerId = event.pointerId;
       const startX = event.clientX;
       const startWidth = box.getBoundingClientRect().width;
-      const td = cell.closest("td");
-      const visualMax = Math.max(MIN_WIDTH, (td?.clientWidth || MAX_WIDTH) - 16);
+      const visualMax = Math.max(MIN_WIDTH, host.clientWidth);
       let nextWidth = clamp(startWidth, MIN_WIDTH, Math.min(MAX_WIDTH, visualMax));
 
       try { handle.setPointerCapture(pointerId); } catch (_) {}
@@ -250,6 +335,10 @@ export function installGroupReviewCellImagesV2(baseApi) {
         if (moveEvent.pointerId !== pointerId) return;
         nextWidth = clamp(startWidth + (moveEvent.clientX - startX), MIN_WIDTH, Math.min(MAX_WIDTH, visualMax));
         box.style.width = `${Math.round(nextWidth)}px`;
+        const maxX = Math.max(0, host.clientWidth - nextWidth);
+        const currentX = clamp(parseFloat(box.style.left || "0") || 0, 0, maxX);
+        const currentY = parseFloat(box.style.top || "0") || 0;
+        layoutHost(host, box, currentX, currentY);
       };
 
       const finish = async upEvent => {
@@ -260,14 +349,23 @@ export function installGroupReviewCellImagesV2(baseApi) {
         try { handle.releasePointerCapture(pointerId); } catch (_) {}
 
         const savedWidth = Math.round(nextWidth);
-        if (savedWidth === Number(meta.width || 320)) return;
+        const maxX = Math.max(0, host.clientWidth - savedWidth);
+        const savedX = Math.round(clamp(parseFloat(box.style.left || "0") || 0, 0, maxX));
+        const savedY = Math.round(clamp(parseFloat(box.style.top || "0") || 0, 0, MAX_Y));
+        const widthChanged = savedWidth !== Number(meta.width || 320);
+        const positionChanged = savedX !== Number(meta.x || 0) || savedY !== Number(meta.y || 0);
+        if (!widthChanged && !positionChanged) return;
+
         operationInFlight = true;
         try {
           setStatus("이미지 크기 저장 중...");
-          await api(`/group-review/rows/${rowId}/cells/${encodeURIComponent(styleKey)}/image-size`, {
-            method: "PATCH",
-            body: JSON.stringify({ width: savedWidth })
-          });
+          if (widthChanged) {
+            await api(`/group-review/rows/${rowId}/cells/${encodeURIComponent(styleKey)}/image-size`, {
+              method: "PATCH",
+              body: JSON.stringify({ width: savedWidth })
+            });
+          }
+          if (positionChanged) await savePosition(rowId, styleKey, savedX, savedY);
           await baseApi?.refresh?.();
           scheduleDecorate(0);
           setStatus("이미지 크기 저장됨");
@@ -313,10 +411,16 @@ export function installGroupReviewCellImagesV2(baseApi) {
         validKeys.add(key);
 
         const editable = cell.classList.contains("editable");
-        const width = clamp(Number(meta.width || 320), MIN_WIDTH, MAX_WIDTH);
+        const visualMax = Math.max(MIN_WIDTH, (td.clientWidth || MAX_WIDTH) - 2);
+        const width = clamp(Number(meta.width || 320), MIN_WIDTH, Math.min(MAX_WIDTH, visualMax));
+        const maxX = Math.max(0, visualMax - width);
+        const x = clamp(Number(meta.x || 0), 0, maxX);
+        const y = clamp(Number(meta.y || 0), 0, MAX_Y);
         const needsRender = !host
           || host.dataset.imageId !== String(meta.id)
           || host.dataset.imageWidth !== String(width)
+          || host.dataset.imageX !== String(x)
+          || host.dataset.imageY !== String(y)
           || host.dataset.imageEditable !== String(editable);
 
         if (!needsRender) return;
@@ -328,9 +432,11 @@ export function installGroupReviewCellImagesV2(baseApi) {
         }
         host.dataset.imageId = String(meta.id);
         host.dataset.imageWidth = String(width);
+        host.dataset.imageX = String(x);
+        host.dataset.imageY = String(y);
         host.dataset.imageEditable = String(editable);
         const src = imageUrl(Number(row.id), styleKey, meta.id);
-        host.innerHTML = `<div class="grv2-cell-image-box" style="width:${width}px"><img src="${src}" alt="셀 첨부 이미지" draggable="false">${editable ? '<button type="button" class="grv2-cell-image-delete" aria-label="이미지 삭제">×</button><span class="grv2-cell-image-resize" title="드래그하여 크기 조절"></span>' : ""}</div>`;
+        host.innerHTML = `<div class="grv2-cell-image-box ${editable ? "editable" : ""}" style="width:${width}px;left:${x}px;top:${y}px"><img src="${src}" alt="셀 첨부 이미지" draggable="false">${editable ? '<button type="button" class="grv2-cell-image-delete" aria-label="이미지 삭제">×</button><span class="grv2-cell-image-resize" title="드래그하여 크기 조절"></span>' : ""}</div>`;
         bindImageControls(host, cell, row, meta);
       });
 
@@ -442,6 +548,7 @@ export function installGroupReviewCellImagesV2(baseApi) {
     observer.observe(body, { childList: true, subtree: true });
   }
 
+  window.addEventListener("resize", () => scheduleDecorate(80));
   window.addEventListener("local-shared-pages-loaded", () => scheduleDecorate(100));
   [0, 200, 600, 1200].forEach(delay => setTimeout(() => scheduleDecorate(0), delay));
 }
