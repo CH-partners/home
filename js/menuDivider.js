@@ -6,61 +6,33 @@ function compact(value) {
     .trim();
 }
 
-function ensureStyles() {
-  if (document.getElementById("fixed-notice-menu-divider-style")) return;
-  const style = document.createElement("style");
-  style.id = "fixed-notice-menu-divider-style";
-  style.textContent = `
-    #topNav .fixed-notice-menu-divider {
-      display:block!important;
-      width:calc(100% - 36px)!important;
-      min-width:0!important;
-      max-width:calc(100% - 36px)!important;
-      height:1px!important;
-      min-height:1px!important;
-      margin:7px 18px 8px!important;
-      padding:0!important;
-      border:0!important;
-      border-radius:0!important;
-      background:rgba(255,255,255,.28)!important;
-      box-shadow:none!important;
-      pointer-events:none!important;
-      flex:none!important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
 function findNoticeButton(topNav) {
   return Array.from(topNav.querySelectorAll(".nav-item"))
     .find(button => compact(button.textContent).includes("공지사항")) || null;
 }
 
-function ensureNoticeDivider() {
-  ensureStyles();
+function applyNoticeDivider() {
   const topNav = document.getElementById("topNav");
   if (!topNav) return;
 
+  // Remove the previous standalone divider. Its DOM position could be changed
+  // by the authoritative menu renderer, which made the line appear above notice.
+  topNav.querySelectorAll(":scope > .fixed-notice-menu-divider").forEach(node => node.remove());
+
   const noticeButton = findNoticeButton(topNav);
-  let divider = topNav.querySelector(":scope > .fixed-notice-menu-divider");
+  if (!noticeButton) return;
 
-  if (!noticeButton) {
-    divider?.remove();
-    return;
-  }
-
-  if (!divider) {
-    divider = document.createElement("div");
-    divider.className = "fixed-notice-menu-divider";
-    divider.dataset.fixedNoticeDivider = "1";
-    divider.setAttribute("aria-hidden", "true");
-  }
-
-  if (noticeButton.nextElementSibling !== divider) {
-    noticeButton.insertAdjacentElement("afterend", divider);
-  }
+  // Attach the separator to the notice button itself. It therefore follows the
+  // notice item even when another renderer reorders menu DOM nodes.
+  noticeButton.style.setProperty("border-bottom", "1px solid rgba(255,255,255,.30)", "important");
+  noticeButton.style.setProperty("margin-bottom", "8px", "important");
 }
 
-window.addEventListener("local-shared-pages-loaded", ensureNoticeDivider);
-window.addEventListener("load", ensureNoticeDivider, { once: true });
-[0, 100, 300, 800].forEach(delay => setTimeout(ensureNoticeDivider, delay));
+function scheduleNoticeDivider() {
+  applyNoticeDivider();
+  [0, 30, 120, 350, 900, 1800].forEach(delay => setTimeout(applyNoticeDivider, delay));
+}
+
+window.addEventListener("local-shared-pages-loaded", scheduleNoticeDivider);
+window.addEventListener("load", scheduleNoticeDivider, { once: true });
+scheduleNoticeDivider();
