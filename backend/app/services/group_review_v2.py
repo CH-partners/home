@@ -450,65 +450,23 @@ def complete_project(
         return project, list_project_sheets(db, project_id)
 
     sheets = list_project_sheets(db, project_id)
-    rows = list(
-        db.scalars(
-            select(GroupReviewRow)
-            .join(GroupReviewSheet, GroupReviewRow.sheet_id == GroupReviewSheet.id)
-            .where(GroupReviewSheet.project_id == project_id)
-            .order_by(GroupReviewRow.sheet_id.asc(), GroupReviewRow.position.asc())
-        ).all()
-    )
-    rows_by_sheet: dict[int, list[GroupReviewRow]] = {sheet.id: [] for sheet in sheets}
-    for row in rows:
-        rows_by_sheet.setdefault(row.sheet_id, []).append(row)
-
-    relevant: list[GroupReviewSheet] = []
-    incomplete_names: list[str] = []
-    reuse_pending_names: list[str] = []
-    unapproved: list[tuple[str, int]] = []
-    for sheet in sheets:
-        meaningful = [row for row in rows_by_sheet.get(sheet.id, []) if _row_has_worker_value(row)]
-        is_relevant = sheet.completed or sheet.review_completed or bool(meaningful)
-        if not is_relevant:
-            continue
-        relevant.append(sheet)
-        if not sheet.completed:
-            incomplete_names.append(sheet.member_name)
-        if sheet.reuse_requested:
-            reuse_pending_names.append(sheet.member_name)
-        pending_count = sum(1 for row in meaningful if row.review_status != "approved")
-        if pending_count:
-            unapproved.append((sheet.member_name, pending_count))
-
-    if not relevant:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="완료할 리뷰 데이터가 없습니다.")
-    if reuse_pending_names:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="재사용 요청 대기 중인 작업자: " + ", ".join(reuse_pending_names),
-        )
-    if incomplete_names:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="입력 완료되지 않은 작업자: " + ", ".join(incomplete_names),
-        )
-    if unapproved:
-        detail = ", ".join(f"{name} {count}건" for name, count in unapproved)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="관리자 확인이 남아 있습니다: " + detail,
-        )
-
     now = datetime.now(timezone.utc)
-    for sheet in relevant:
+
+    for sheet in sheets:
+        sheet.completed = True
         sheet.review_completed = True
         sheet.review_completed_at = now
         sheet.review_completed_by_email = current_user.login_id
-        sheet.updated_at = now
-        sheet.updated_by = current_user.display_name
+        sheet.reuse_requested = False
+        sheet.reuse_requested_at = None
+        sheet.reuse_requested_by = None
+        sheet.reuse_requested_by_email = None
         sheet.lock_session_id = None
         sheet.locked_by = None
         sheet.locked_at = None
+        sheet.updated_at = now
+        sheet.updated_by = current_user.display_name
+        sheet.updated_by_email = current_user.login_id
 
     project.completed = True
     project.completed_at = now
