@@ -6,10 +6,10 @@ function compact(value) {
     .trim();
 }
 
-function ensureHoverSizeOverride() {
-  if (document.getElementById("sidebar-hover-size-override")) return;
+function ensureSidebarPresentationOverrides() {
+  if (document.getElementById("sidebar-presentation-overrides")) return;
   const style = document.createElement("style");
-  style.id = "sidebar-hover-size-override";
+  style.id = "sidebar-presentation-overrides";
   style.textContent = `
     html body.limited-deployment-mode #topNav .nav-item:hover,
     html body.limited-deployment-mode #bottomNav .nav-item:hover,
@@ -23,6 +23,27 @@ function ensureHoverSizeOverride() {
     html body.limited-deployment-mode #topNav .local-board-subgroup > .nav-item.local-board-sub-item:hover,
     html body.limited-deployment-mode #topNav .nav-sub-group > .nav-item:hover {
       font-size:calc(12px + 1pt)!important;
+    }
+
+    html body.limited-deployment-mode .sidebar {
+      overflow-x:hidden!important;
+      overflow-y:auto!important;
+    }
+
+    html body.limited-deployment-mode .sidebar-content {
+      flex:0 0 auto!important;
+      min-height:0!important;
+      overflow-x:hidden!important;
+      overflow-y:visible!important;
+    }
+
+    html body.limited-deployment-mode #topNav,
+    html body.limited-deployment-mode #bottomNav,
+    html body.limited-deployment-mode #topNav .local-board-subgroup,
+    html body.limited-deployment-mode #topNav .nav-sub-group,
+    html body.limited-deployment-mode #topNav [data-authoritative-group-wrap] {
+      max-height:none!important;
+      overflow-y:visible!important;
     }
   `;
   document.head.appendChild(style);
@@ -51,10 +72,10 @@ function applyNoticeDivider() {
 }
 
 function scheduleNoticeDivider() {
-  ensureHoverSizeOverride();
+  ensureSidebarPresentationOverrides();
   applyNoticeDivider();
   [0, 30, 120, 350, 900, 1800].forEach(delay => setTimeout(() => {
-    ensureHoverSizeOverride();
+    ensureSidebarPresentationOverrides();
     applyNoticeDivider();
   }, delay));
 }
