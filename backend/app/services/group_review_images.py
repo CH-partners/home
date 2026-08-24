@@ -24,6 +24,10 @@ def project_image_dir(project_id: str) -> Path:
     return image_storage_root() / _project_folder_name(project_id)
 
 
+def row_image_dir(project_id: str, sheet_id: int, row_id: int) -> Path:
+    return project_image_dir(project_id) / str(int(sheet_id)) / str(int(row_id))
+
+
 def image_file_path(
     *,
     project_id: str,
@@ -36,13 +40,7 @@ def image_file_path(
     extension = IMAGE_MIME_EXTENSIONS.get(mime_type)
     if extension is None:
         raise ValueError("Unsupported image type")
-    return (
-        project_image_dir(project_id)
-        / str(int(sheet_id))
-        / str(int(row_id))
-        / style_key
-        / f"{image_id}{extension}"
-    )
+    return row_image_dir(project_id, sheet_id, row_id) / style_key / f"{image_id}{extension}"
 
 
 def write_image_atomic(
@@ -107,6 +105,10 @@ def delete_image_file(
         except OSError:
             break
         parent = parent.parent
+
+
+def delete_row_image_tree(project_id: str, sheet_id: int, row_id: int) -> None:
+    shutil.rmtree(row_image_dir(project_id, sheet_id, row_id), ignore_errors=True)
 
 
 def delete_project_image_tree(project_id: str) -> None:
