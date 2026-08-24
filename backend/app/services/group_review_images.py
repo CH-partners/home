@@ -111,6 +111,16 @@ def delete_row_image_tree(project_id: str, sheet_id: int, row_id: int) -> None:
     shutil.rmtree(row_image_dir(project_id, sheet_id, row_id), ignore_errors=True)
 
 
+def delete_row_image_tree_any_project(sheet_id: int, row_id: int) -> None:
+    root = image_storage_root()
+    if not root.is_dir():
+        return
+    for project_dir in root.iterdir():
+        if not project_dir.is_dir():
+            continue
+        shutil.rmtree(project_dir / str(int(sheet_id)) / str(int(row_id)), ignore_errors=True)
+
+
 def delete_project_image_tree(project_id: str) -> None:
     shutil.rmtree(project_image_dir(project_id), ignore_errors=True)
 
