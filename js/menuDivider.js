@@ -28,6 +28,7 @@ function ensureSidebarPresentationOverrides() {
     html body.limited-deployment-mode .sidebar {
       overflow-x:hidden!important;
       overflow-y:auto!important;
+      overflow-anchor:none!important;
     }
 
     html body.limited-deployment-mode .sidebar-content {
@@ -35,6 +36,7 @@ function ensureSidebarPresentationOverrides() {
       min-height:0!important;
       overflow-x:hidden!important;
       overflow-y:visible!important;
+      overflow-anchor:none!important;
     }
 
     html body.limited-deployment-mode #topNav,
@@ -44,6 +46,18 @@ function ensureSidebarPresentationOverrides() {
     html body.limited-deployment-mode #topNav [data-authoritative-group-wrap] {
       max-height:none!important;
       overflow-y:visible!important;
+      overflow-anchor:none!important;
+    }
+
+    html body.limited-deployment-mode #limitedLoginBox.visible {
+      position:sticky!important;
+      bottom:10px!important;
+      z-index:30!important;
+      flex:0 0 auto!important;
+      margin-top:auto!important;
+      margin-bottom:10px!important;
+      background:#ece2a1!important;
+      overflow-anchor:none!important;
     }
   `;
   document.head.appendChild(style);
