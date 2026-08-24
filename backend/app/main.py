@@ -16,6 +16,7 @@ from app.routers.menu_admin import router as menu_admin_router
 from app.routers.rent_trades import router as rent_trades_router
 from app.routers.schedule_v2 import router as schedule_v2_router
 from app.routers.shared_pages import router as shared_pages_router
+from app.services import group_review_image_events as _group_review_image_events
 
 
 app = FastAPI(title="CH PARTNERS Home Backend")
