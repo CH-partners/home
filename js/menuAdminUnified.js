@@ -76,11 +76,14 @@ function buildBlocks(menus) {
       block = {
         type: "group",
         groupKey,
+        title: String(menu.groupTitle || GROUPS[groupKey].title).trim() || GROUPS[groupKey].title,
         items: [],
         color: validColor(menu.groupColor || menu.color, "#334155")
       };
       groups.set(groupKey, block);
       blocks.push(block);
+    } else if (!block.title && menu.groupTitle) {
+      block.title = String(menu.groupTitle).trim();
     }
     block.items.push(menu);
   }
@@ -95,8 +98,10 @@ function flattenBlocks() {
       menus.push(block.menu);
       continue;
     }
+    const groupTitle = String(block.title || GROUPS[block.groupKey]?.title || block.groupKey).trim();
     for (const item of block.items) {
       item.group = block.groupKey;
+      item.groupTitle = groupTitle;
       item.groupColor = block.color;
       menus.push(item);
     }
@@ -116,6 +121,7 @@ function ensureStyles() {
     #menuModal.menu-admin-unified .menu-color-input{width:48px!important;height:32px;padding:2px;border:1px solid #cbd5e1;border-radius:6px;background:#fff}
     #menuModal.menu-admin-unified .order-actions{display:flex;gap:4px;justify-content:center}
     #menuModal.menu-admin-unified .group-row td{background:#e9eef7;font-weight:900;border-top:2px solid #cbd5e1}
+    #menuModal.menu-admin-unified .group-title-input{font-weight:900;background:#fff}
     #menuModal.menu-admin-unified .child-row td:nth-child(2){padding-left:24px}
     #menuModal.menu-admin-unified .deleted-row{opacity:.45}
     #menuModal.menu-admin-unified .menu-status{font-size:11px;color:#64748b;white-space:nowrap}
@@ -146,7 +152,7 @@ function configureModal() {
   modal.classList.add("menu-admin-unified");
   modal.querySelector(".modal-title").textContent = "메뉴 수정";
   const help = modal.querySelector(".help-text");
-  if (help) help.textContent = "모든 메뉴는 동일한 DB 메뉴 설정을 사용합니다. 순서·제목·그룹·표시 여부를 자유롭게 변경할 수 있습니다.";
+  if (help) help.textContent = "모든 메뉴와 펼침메뉴 이름을 직접 수정할 수 있습니다. 저장된 이름·순서·그룹·표시 여부는 모든 로그인 상태에 동일하게 적용됩니다.";
   const labels = ["순서", "제목", "패널", "색상", "펼침그룹", "상태", "삭제"];
   modal.querySelectorAll(".menu-table thead th").forEach((th, index) => {
     if (labels[index]) th.textContent = labels[index];
@@ -197,19 +203,18 @@ function renderMenuRow(tbody, block, blockIndex) {
 }
 
 function renderGroupRow(tbody, block, blockIndex) {
-  const meta = GROUPS[block.groupKey];
   const tr = document.createElement("tr");
   tr.className = "group-row";
   const hidden = block.items.every(item => item.hidden);
-  const groupLabel = `${meta.icon ? `${meta.icon} ` : ""}${meta.title}`;
   tr.innerHTML = `
     <td>${orderHtml(blockIndex === 0, blockIndex === workingBlocks.length - 1, "block")}</td>
-    <td>${groupLabel}</td>
+    <td><input class="group-title-input" data-field="group-title" value="${escapeHtml(block.title || GROUPS[block.groupKey].title)}"></td>
     <td></td>
     <td><input class="menu-color-input" data-field="group-color" type="color" value="${validColor(block.color, "#334155")}"></td>
     <td><span class="menu-status">펼침메뉴</span></td>
     <td><span class="menu-status">${hidden ? "숨김" : "표시"}</span></td>
     <td><button type="button" class="small-btn ${hidden ? "" : "danger"}" data-action="group-toggle">${hidden ? "복원" : "전체 숨김"}</button></td>`;
+  tr.querySelector('[data-field="group-title"]')?.addEventListener("input", e => { block.title = e.target.value; });
   tr.querySelector('[data-field="group-color"]')?.addEventListener("input", e => { block.color = e.target.value; });
   tr.querySelector('[data-action="block-up"]')?.addEventListener("click", () => moveBlock(blockIndex, -1));
   tr.querySelector('[data-action="block-down"]')?.addEventListener("click", () => moveBlock(blockIndex, 1));
@@ -274,7 +279,7 @@ function changeStandaloneGroup(blockIndex, nextGroup) {
   menu.group = nextGroup;
   let target = workingBlocks.find(item => item.type === "group" && item.groupKey === nextGroup);
   if (!target) {
-    target = { type: "group", groupKey: nextGroup, items: [], color: "#334155" };
+    target = { type: "group", groupKey: nextGroup, title: GROUPS[nextGroup].title, items: [], color: "#334155" };
     workingBlocks.splice(blockIndex, 0, target);
   }
   target.items.push(menu);
@@ -291,13 +296,14 @@ function changeGroup(blockIndex, itemIndex, nextGroup) {
 
   if (!nextGroup) {
     menu.group = "";
+    delete menu.groupTitle;
     const insertIndex = Math.min(blockIndex + 1, workingBlocks.length);
     workingBlocks.splice(insertIndex, 0, { type: "menu", menu });
   } else if (GROUPS[nextGroup]) {
     menu.group = nextGroup;
     let target = workingBlocks.find(block => block.type === "group" && block.groupKey === nextGroup);
     if (!target) {
-      target = { type: "group", groupKey: nextGroup, items: [], color: "#334155" };
+      target = { type: "group", groupKey: nextGroup, title: GROUPS[nextGroup].title, items: [], color: "#334155" };
       workingBlocks.splice(Math.min(blockIndex + 1, workingBlocks.length), 0, target);
     }
     target.items.push(menu);
@@ -330,6 +336,7 @@ async function openEditor() {
 async function saveMenus() {
   if (saving) return;
   const menus = flattenBlocks();
+  if (workingBlocks.some(block => block.type === "group" && !String(block.title || "").trim())) return alert("펼침메뉴 이름을 입력해주세요.");
   if (menus.some(menu => !menu.hidden && !String(menu.title || "").trim())) return alert("메뉴 제목을 입력해주세요.");
   saving = true;
   try {
@@ -415,7 +422,7 @@ function applyButtonState(button, menu) {
   button.style.setProperty("color", "#ffffff", "important");
 }
 
-function ensureGroupShell(groupKey) {
+function ensureGroupShell(groupKey, groupTitle) {
   const topNav = document.getElementById("topNav");
   if (!topNav) return null;
   const meta = GROUPS[groupKey];
@@ -439,7 +446,8 @@ function ensureGroupShell(groupKey) {
     topNav.appendChild(toggle);
   }
 
-  const label = `${meta.icon ? `${meta.icon} ` : ""}${meta.title}`;
+  const displayTitle = String(groupTitle || meta.title).trim() || meta.title;
+  const label = `${meta.icon ? `${meta.icon} ` : ""}${displayTitle}`;
   toggle.innerHTML = `<span>${escapeHtml(label)}</span><span class="group-arrow">${toggle.classList.contains("expanded") ? "▼" : "▶"}</span>`;
 
   if (!wrap) {
@@ -511,7 +519,7 @@ function applyPresentation(snapshot) {
         continue;
       }
 
-      const shell = ensureGroupShell(block.groupKey);
+      const shell = ensureGroupShell(block.groupKey, block.title);
       if (!shell) continue;
       let visible = false;
       for (const item of block.items) {
