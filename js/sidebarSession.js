@@ -25,15 +25,95 @@ function ensureStyles() {
   const style = document.createElement("style");
   style.id = "sidebar-session-styles";
   style.textContent = `
-    #limitedLoginBox{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:7px!important}
-    #limitedLoginBox .limited-login-line{display:flex!important;align-items:center!important;gap:7px!important}
-    #limitedLoginBox .sidebar-session-actions{display:flex;gap:6px;width:100%}
-    #limitedLoginBox .sidebar-session-btn{height:28px;padding:0 10px;border:1px solid rgba(0,0,0,.22);border-radius:999px;background:rgba(255,255,255,.44);color:#111;font-size:10px;font-weight:900;cursor:pointer}
-    #limitedLoginBox .sidebar-session-btn.primary{background:#1f4e79;color:#fff;border-color:#1f4e79}
-    #limitedLoginBox .sidebar-session-form{display:grid;grid-template-columns:1fr;gap:6px;width:100%}
+    #limitedLoginBox{
+      display:flex!important;
+      flex-direction:column!important;
+      align-items:stretch!important;
+      gap:4px!important;
+      min-height:34px!important;
+      margin:5px 16px 10px!important;
+      padding:4px 8px!important;
+      overflow:hidden!important;
+    }
+    #limitedLoginBox .limited-login-line{
+      display:flex!important;
+      align-items:center!important;
+      gap:6px!important;
+      min-height:26px!important;
+      width:100%!important;
+      min-width:0!important;
+    }
+    #limitedLoginBox .limited-login-caption,
+    #limitedLoginBox .limited-login-icon{display:none!important}
+    #limitedLoginBox .limited-login-name{
+      flex:1 1 auto!important;
+      min-width:0!important;
+      overflow:hidden!important;
+      text-overflow:ellipsis!important;
+      white-space:nowrap!important;
+      font-size:11px!important;
+      font-weight:800!important;
+    }
+    #limitedLoginBox .limited-login-role{
+      flex:0 0 auto!important;
+      margin:0!important;
+      padding:0!important;
+      border:0!important;
+      border-radius:0!important;
+      background:transparent!important;
+      font-size:9px!important;
+      font-weight:700!important;
+    }
+    #limitedLoginBox .sidebar-session-actions{
+      display:flex!important;
+      flex:0 0 auto!important;
+      gap:4px!important;
+      width:auto!important;
+      margin-left:auto!important;
+    }
+    #limitedLoginBox .sidebar-session-btn{
+      height:24px!important;
+      padding:0 8px!important;
+      border:1px solid rgba(0,0,0,.20)!important;
+      border-radius:6px!important;
+      background:rgba(255,255,255,.48)!important;
+      color:#111!important;
+      font-size:9px!important;
+      font-weight:900!important;
+      cursor:pointer!important;
+      white-space:nowrap!important;
+    }
+    #limitedLoginBox .sidebar-session-btn.primary{
+      background:#1f4e79!important;
+      color:#fff!important;
+      border-color:#1f4e79!important;
+    }
+    #limitedLoginBox .sidebar-session-form{
+      display:grid!important;
+      grid-template-columns:1fr!important;
+      gap:4px!important;
+      width:100%!important;
+      margin-top:2px!important;
+    }
     #limitedLoginBox .sidebar-session-form[hidden]{display:none!important}
-    #limitedLoginBox .sidebar-session-input{width:100%;height:30px;box-sizing:border-box;padding:0 9px;border:1px solid rgba(0,0,0,.24);border-radius:8px;background:#fff;color:#111;font-size:11px}
-    #limitedLoginBox .sidebar-session-error{min-height:0;color:#b91c1c;font-size:10px;font-weight:700;white-space:normal}
+    #limitedLoginBox .sidebar-session-input{
+      width:100%!important;
+      height:27px!important;
+      box-sizing:border-box!important;
+      padding:0 8px!important;
+      border:1px solid rgba(0,0,0,.22)!important;
+      border-radius:6px!important;
+      background:#fff!important;
+      color:#111!important;
+      font-size:10px!important;
+    }
+    #limitedLoginBox .sidebar-session-error{
+      min-height:0!important;
+      color:#b91c1c!important;
+      font-size:9px!important;
+      font-weight:700!important;
+      white-space:normal!important;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -54,18 +134,17 @@ function render() {
   ensureStyles();
   const box = ensureBox();
   if (!box) return;
+  box.classList.add("visible");
 
   if (currentUser) {
     const role = currentUser.role === "ADMIN" ? "관리자" : currentUser.role === "WORKER" ? "작업자" : String(currentUser.role || "");
     box.innerHTML = `
       <div class="limited-login-line">
-        <span class="limited-login-caption">LOGIN</span>
-        <span class="limited-login-icon">👤</span>
         <span class="limited-login-name"></span>
         <span class="limited-login-role"></span>
-      </div>
-      <div class="sidebar-session-actions">
-        <button type="button" class="sidebar-session-btn" id="sidebarLogoutBtn">로그아웃</button>
+        <div class="sidebar-session-actions">
+          <button type="button" class="sidebar-session-btn" id="sidebarLogoutBtn">로그아웃</button>
+        </div>
       </div>`;
     box.querySelector(".limited-login-name").textContent = currentUser.display_name || currentUser.login_id || "";
     box.querySelector(".limited-login-role").textContent = role;
@@ -75,13 +154,10 @@ function render() {
 
   box.innerHTML = `
     <div class="limited-login-line">
-      <span class="limited-login-caption">LOGIN</span>
-      <span class="limited-login-icon">👤</span>
       <span class="limited-login-name">로그인 전</span>
-      <span class="limited-login-role">GUEST</span>
-    </div>
-    <div class="sidebar-session-actions">
-      <button type="button" class="sidebar-session-btn primary" id="sidebarLoginOpenBtn">로그인</button>
+      <div class="sidebar-session-actions">
+        <button type="button" class="sidebar-session-btn primary" id="sidebarLoginOpenBtn">로그인</button>
+      </div>
     </div>
     <form class="sidebar-session-form" id="sidebarLoginForm" hidden>
       <input class="sidebar-session-input" id="sidebarLoginId" autocomplete="username" placeholder="아이디" required>
