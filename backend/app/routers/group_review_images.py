@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.dependencies.auth import require_worker_or_admin
 from app.models.group_review import GroupReviewProject, GroupReviewRow, GroupReviewSheet
 from app.models.user import AppUser
+from app.realtime.group_review_v2 import manager
 from app.services.group_review_images import (
     detect_image_mime,
     delete_image_file,
@@ -39,6 +40,22 @@ def _image_meta(row: GroupReviewRow, style_key: str) -> dict | None:
     return dict(image) if isinstance(image, dict) else None
 
 
+def _row_payload(row: GroupReviewRow) -> dict:
+    return {
+        "id": row.id,
+        "sheet_id": row.sheet_id,
+        "position": row.position,
+        "collateral_no": row.collateral_no,
+        "sheet_label": row.sheet_label,
+        "field_no": row.field_no,
+        "change_before_text": row.change_before_text,
+        "change_after_text": row.change_after_text,
+        "cell_styles": dict(row.cell_styles or {}),
+        "review_status": row.review_status,
+        "revision_no": row.revision_no,
+    }
+
+
 def _require_row_read_access(
     db: Session,
     *,
@@ -62,8 +79,17 @@ def _require_row_read_access(
     return row, sheet, project
 
 
+async def _broadcast_row(project_id: str, row: GroupReviewRow, current_user: AppUser) -> None:
+    await manager.broadcast(project_id, {
+        "type": "row_upserted",
+        "sheet_id": row.sheet_id,
+        "row": _row_payload(row),
+        "actor_login_id": current_user.login_id,
+    })
+
+
 @router.put("/rows/{row_id}/cells/{style_key}/image")
-def put_group_review_cell_image(
+async def put_group_review_cell_image(
     row_id: int,
     style_key: str,
     body: bytes = Body(media_type="application/octet-stream"),
@@ -122,6 +148,7 @@ def put_group_review_cell_image(
             mime_type=str(old_meta.get("mimeType") or ""),
         )
 
+    await _broadcast_row(project.id, updated, current_user)
     return {
         "row_id": updated.id,
         "style_key": style_key,
@@ -161,7 +188,7 @@ def get_group_review_cell_image(
 
 
 @router.patch("/rows/{row_id}/cells/{style_key}/image-size")
-def patch_group_review_cell_image_size(
+async def patch_group_review_cell_image_size(
     row_id: int,
     style_key: str,
     width: int = Body(embed=True),
@@ -172,7 +199,7 @@ def patch_group_review_cell_image_size(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell not found")
     width = max(MIN_IMAGE_WIDTH, min(MAX_IMAGE_WIDTH, int(width)))
 
-    row, _, _ = _require_row_read_access(db, row_id=row_id, current_user=current_user)
+    row, _, project = _require_row_read_access(db, row_id=row_id, current_user=current_user)
     styles = {key: dict(value or {}) for key, value in dict(row.cell_styles or {}).items()}
     cell_style = styles.setdefault(style_key, {})
     image = dict(cell_style.get("image") or {})
@@ -182,6 +209,7 @@ def patch_group_review_cell_image_size(
     cell_style["image"] = image
 
     updated = update_row(db, row_id=row.id, current_user=current_user, values={"cell_styles": styles})
+    await _broadcast_row(project.id, updated, current_user)
     return {
         "row_id": updated.id,
         "style_key": style_key,
@@ -190,7 +218,7 @@ def patch_group_review_cell_image_size(
 
 
 @router.delete("/rows/{row_id}/cells/{style_key}/image", status_code=status.HTTP_204_NO_CONTENT)
-def delete_group_review_cell_image(
+async def delete_group_review_cell_image(
     row_id: int,
     style_key: str,
     db: Session = Depends(get_db),
@@ -207,7 +235,7 @@ def delete_group_review_cell_image(
     styles = {key: dict(value or {}) for key, value in dict(row.cell_styles or {}).items()}
     cell_style = styles.setdefault(style_key, {})
     cell_style.pop("image", None)
-    update_row(db, row_id=row.id, current_user=current_user, values={"cell_styles": styles})
+    updated = update_row(db, row_id=row.id, current_user=current_user, values={"cell_styles": styles})
 
     delete_image_file(
         project_id=project.id,
@@ -217,4 +245,5 @@ def delete_group_review_cell_image(
         image_id=str(old_meta.get("id") or ""),
         mime_type=str(old_meta.get("mimeType") or ""),
     )
+    await _broadcast_row(project.id, updated, current_user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
