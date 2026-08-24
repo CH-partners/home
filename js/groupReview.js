@@ -10,6 +10,7 @@ import { installGroupReviewKeyboardV2 } from "./groupReviewV2Keyboard.js";
 import { installGroupReviewTheme } from "./groupReviewTheme.js";
 import { installGroupReviewDefaultRowsV2 } from "./groupReviewDefaultRows.js";
 import { installGroupReviewPartialBoldV2 } from "./groupReviewPartialBold.js";
+import { installGroupReviewCellImagesV2 } from "./groupReviewCellImages.js";
 
 export function initGroupReview() {
   installLimitedDeploymentMode();
@@ -24,5 +25,6 @@ export function initGroupReview() {
   installGroupReviewKeyboardV2();
   installGroupReviewDefaultRowsV2(api);
   installGroupReviewPartialBoldV2();
+  installGroupReviewCellImagesV2(api);
   return api;
 }
