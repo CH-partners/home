@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.dependencies.auth import require_admin
 from app.models.group_review import GroupReviewProject
 from app.models.user import AppUser
+from app.services.group_review_images import delete_project_image_tree
 
 
 router = APIRouter(prefix="/api/v1/group-review", tags=["group-review-admin-v2"])
@@ -27,4 +28,5 @@ def delete_group_review_project(
 
     db.delete(project)
     db.commit()
+    delete_project_image_tree(project_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
