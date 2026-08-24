@@ -27,7 +27,8 @@ FIXED_CONTENT_KEYS = {
     9: "machineqa",
 }
 ALLOWED_GROUPS = {"", "qna", "work", "search", "reference"}
-ALLOWED_KINDS = {"panel", "tool", "iframe"}
+ALLOWED_KINDS = {"panel", "tool", "iframe", "divider"}
+DIVIDER_TITLE_PREFIX = "__MENU_DIVIDER__"
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -83,6 +84,12 @@ def _clean_color(value: object) -> str:
     return color.lower() if COLOR_RE.fullmatch(color) else ""
 
 
+def _is_divider(menu: dict[str, object]) -> bool:
+    kind = str(menu.get("kind") or "").strip().lower()
+    title = str(menu.get("title") or "")
+    return kind == "divider" or title.startswith(DIVIDER_TITLE_PREFIX)
+
+
 @router.get("/public-menu")
 def get_public_menu(db: Session = Depends(get_db)) -> dict[str, object]:
     settings = db.get(AppSettings, SETTINGS_ID)
@@ -117,9 +124,27 @@ def update_shared_page_menus(
             continue
 
         menu = dict(raw_menu)
+        hidden = bool(menu.get("hidden"))
+
+        if _is_divider(menu):
+            title = str(menu.get("title") or "").strip()
+            if not title.startswith(DIVIDER_TITLE_PREFIX):
+                title = f"{DIVIDER_TITLE_PREFIX}{len(normalized) + 1}"
+            menu["title"] = title
+            menu.pop("panelIndex", None)
+            menu.pop("toolKey", None)
+            menu.pop("src", None)
+            menu["location"] = "top"
+            menu["kind"] = "divider"
+            menu["group"] = ""
+            menu["color"] = ""
+            menu["groupColor"] = ""
+            menu["hidden"] = hidden
+            normalized.append(menu)
+            continue
+
         title = str(menu.get("title") or "").strip()
         title_key = _title_key(title)
-        hidden = bool(menu.get("hidden"))
         if not title_key:
             continue
 
@@ -141,7 +166,7 @@ def update_shared_page_menus(
             group = ""
 
         kind = str(menu.get("kind") or "panel").strip().lower()
-        if kind not in ALLOWED_KINDS:
+        if kind not in ALLOWED_KINDS or kind == "divider":
             kind = "panel"
 
         menu["title"] = title
