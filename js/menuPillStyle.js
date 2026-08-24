@@ -81,12 +81,23 @@ function installMenuTextStyle() {
   applyMenuTextPresentation();
 }
 
+function stripGroupEmoji(text) {
+  return String(text || "")
+    .replace(/^\s*[❓📝📚⚖]\s*/u, "")
+    .trim();
+}
+
 function applyMenuTextPresentation() {
   document.querySelectorAll("#topNav .nav-item, #bottomNav .nav-item").forEach(button => {
     button.style.setProperty("background", "transparent", "important");
     button.style.setProperty("border-color", "transparent", "important");
     button.style.setProperty("box-shadow", "none", "important");
     button.style.setProperty("color", "#ffffff", "important");
+  });
+
+  document.querySelectorAll("#topNav [data-authoritative-group] > span:first-child").forEach(label => {
+    const next = stripGroupEmoji(label.textContent);
+    if (label.textContent !== next) label.textContent = next;
   });
 }
 
