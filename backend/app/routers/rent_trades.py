@@ -4,12 +4,10 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
 
 from app.core.config import get_settings
-from app.dependencies.auth import require_worker_or_admin
-from app.models.user import AppUser
 
 
 router = APIRouter(prefix="/api/v1/rent-trades", tags=["rent-trades"])
@@ -23,12 +21,17 @@ _ENDPOINTS = {
 _BASE_URL = "https://apis.data.go.kr/1613000"
 
 
+@router.get("/status")
+def rent_trade_status() -> dict[str, bool]:
+    settings = get_settings()
+    return {"service_key_configured": bool(settings.rent_api_service_key.strip())}
+
+
 @router.get("/query", response_class=Response)
 def query_rent_trades(
     property_type: str = Query(pattern="^(apt|rh|sh|offi)$"),
     lawd_cd: str = Query(pattern="^[0-9]{5}$"),
     deal_ymd: str = Query(pattern="^[0-9]{6}$"),
-    _user: AppUser = Depends(require_worker_or_admin),
 ) -> Response:
     settings = get_settings()
     service_key = settings.rent_api_service_key.strip()
