@@ -55,6 +55,15 @@ class GroupReviewSheetResponse(BaseModel):
     reuse_requested: bool
 
 
+class GroupReviewCellImage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=64, pattern=r"^[0-9A-Fa-f]+$")
+    mimeType: Literal["image/png", "image/jpeg", "image/webp"]
+    width: int = Field(default=320, ge=80, le=1600)
+    size: int = Field(ge=1, le=10 * 1024 * 1024)
+
+
 class GroupReviewCellStyle(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -66,6 +75,7 @@ class GroupReviewCellStyle(BaseModel):
         default=None,
         pattern=r"^(|#[0-9A-Fa-f]{6})$",
     )
+    image: GroupReviewCellImage | None = None
 
     @field_validator("boldRanges")
     @classmethod
