@@ -1,5 +1,6 @@
-import re
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
@@ -39,6 +40,8 @@ app.mount("/js", StaticFiles(directory=js_dir), name="js")
 app.mount("/vendor", StaticFiles(directory=vendor_dir), name="vendor")
 app.mount("/data", StaticFiles(directory=data_dir), name="data")
 
+_LEGACY_RENT_TRADE_URL = "https://raw.githubusercontent.com/CH-partners/home/main/lease_api.html"
+
 
 @app.get("/", include_in_schema=False)
 def home() -> FileResponse:
@@ -77,78 +80,29 @@ def mortgage_extract_tool() -> HTMLResponse:
     return HTMLResponse(source)
 
 
-def _rent_trade_tool_html() -> str:
-    source = (repo_root / "lease_api.html").read_text(encoding="utf-8")
-
-    source = source.replace(
-        "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css",
-        "/vendor/bootstrap.min.css",
+def _legacy_rent_trade_html() -> str:
+    request = Request(
+        _LEGACY_RENT_TRADE_URL,
+        headers={"User-Agent": "CH-Partners-Home/1.0"},
+        method="GET",
     )
-    source = source.replace(
-        "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js",
-        "/vendor/bootstrap.bundle.min.js",
-    )
-    source = re.sub(
-        r'const\s+SERVICE_KEY\s*=\s*["\'][^"\']*["\'];',
-        'const SERVICE_KEY = "";',
-        source,
-        count=1,
-    )
-    source = re.sub(
-        r'const\s+BJD_URL\s*=\s*["\'][^"\']*["\'];',
-        'const BJD_URL = "/data/bjd_code.json";',
-        source,
-        count=1,
-    )
-
-    legacy_url_block = """const url =
-                `https://apis.data.go.kr/1613000/${endpoints[type]}` +
-                `?serviceKey=${SERVICE_KEY}` +
-                `&LAWD_CD=${bjd.lawd_cd}` +
-                `&DEAL_YMD=${ym}` +
-                `&numOfRows=100` +
-                `&pageNo=1`;"""
-    local_url_block = """const url =
-                `/api/v1/rent-trades/query` +
-                `?property_type=${encodeURIComponent(type)}` +
-                `&lawd_cd=${encodeURIComponent(bjd.lawd_cd)}` +
-                `&deal_ymd=${encodeURIComponent(ym)}`;"""
-    source = source.replace(legacy_url_block, local_url_block)
-
-    legacy_fetch_block = """            const res = await fetch(url);
-            const text = await res.text();
-
-            console.log(ym, text);"""
-    local_fetch_block = """            const res = await fetch(url, { credentials: \"include\" });
-            const text = await res.text();
-
-            if (!res.ok) {
-                let detail = `HTTP ${res.status}`;
-                try {
-                    const payload = JSON.parse(text);
-                    if (payload?.detail) detail = payload.detail;
-                } catch (_) {}
-                throw new Error(detail);
-            }
-
-            console.log(ym, text);"""
-    source = source.replace(legacy_fetch_block, local_fetch_block)
-
-    source = source.replace(
-        'alert("API 호출 실패: " + err.message + "\\n브라우저 CORS 문제일 수 있습니다.");',
-        'document.getElementById("matchInfo").innerHTML = `<span class="text-danger fw-bold">API 조회 실패: ${err.message}</span>`;\n        alert("API 호출 실패: " + err.message);',
-    )
-    return source
+    try:
+        with urlopen(request, timeout=15) as response:
+            return response.read().decode("utf-8")
+    except HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"기존 전월세 조회 파일을 불러오지 못했습니다. HTTP {exc.code}") from exc
+    except (URLError, TimeoutError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=502, detail="기존 전월세 조회 파일을 불러오지 못했습니다.") from exc
 
 
 @app.get("/tools/rent-trades", include_in_schema=False, response_class=HTMLResponse)
 def rent_trade_tool() -> HTMLResponse:
-    return HTMLResponse(_rent_trade_tool_html())
+    return HTMLResponse(_legacy_rent_trade_html())
 
 
 @app.get("/lease_api.html", include_in_schema=False, response_class=HTMLResponse)
 def legacy_rent_trade_tool() -> HTMLResponse:
-    return HTMLResponse(_rent_trade_tool_html())
+    return HTMLResponse(_legacy_rent_trade_html())
 
 
 @app.get("/{filename}", include_in_schema=False)
