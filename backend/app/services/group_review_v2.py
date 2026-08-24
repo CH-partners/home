@@ -286,8 +286,6 @@ def complete_worker_sheet(
         ).all()
     )
     meaningful = [row for row in rows if _row_has_worker_value(row)]
-    if not meaningful:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="입력된 리뷰 행이 없습니다.")
 
     unresolved = [row for row in meaningful if row.review_status == "revision_requested"]
     if unresolved:
