@@ -6,6 +6,28 @@ function compact(value) {
     .trim();
 }
 
+function ensureHoverSizeOverride() {
+  if (document.getElementById("sidebar-hover-size-override")) return;
+  const style = document.createElement("style");
+  style.id = "sidebar-hover-size-override";
+  style.textContent = `
+    html body.limited-deployment-mode #topNav .nav-item:hover,
+    html body.limited-deployment-mode #bottomNav .nav-item:hover,
+    html body.limited-deployment-mode #topNav .nav-group-toggle:hover,
+    html body.limited-deployment-mode #topNav [data-authoritative-group]:hover,
+    html body.limited-deployment-mode #topNav .nav-item.active:hover,
+    html body.limited-deployment-mode #bottomNav .nav-item.active:hover {
+      font-size:calc(13px + 1pt)!important;
+    }
+
+    html body.limited-deployment-mode #topNav .local-board-subgroup > .nav-item.local-board-sub-item:hover,
+    html body.limited-deployment-mode #topNav .nav-sub-group > .nav-item:hover {
+      font-size:calc(12px + 1pt)!important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function findNoticeButton(topNav) {
   return Array.from(topNav.querySelectorAll(".nav-item"))
     .find(button => compact(button.textContent).includes("공지사항")) || null;
@@ -29,8 +51,12 @@ function applyNoticeDivider() {
 }
 
 function scheduleNoticeDivider() {
+  ensureHoverSizeOverride();
   applyNoticeDivider();
-  [0, 30, 120, 350, 900, 1800].forEach(delay => setTimeout(applyNoticeDivider, delay));
+  [0, 30, 120, 350, 900, 1800].forEach(delay => setTimeout(() => {
+    ensureHoverSizeOverride();
+    applyNoticeDivider();
+  }, delay));
 }
 
 window.addEventListener("local-shared-pages-loaded", scheduleNoticeDivider);
