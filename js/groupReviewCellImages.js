@@ -6,7 +6,7 @@ const MAX_WIDTH = 1600;
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
-  if (options.body && !(options.body instanceof Blob) && typeof options.body !== "string") {
+  if (options.body && !(options.body instanceof Blob)) {
     headers["Content-Type"] = headers["Content-Type"] || "application/json; charset=utf-8";
   }
   const response = await fetch(`${API_ROOT}${path}`, { ...options, headers, credentials: "include" });
@@ -408,16 +408,11 @@ export function installGroupReviewCellImagesV2(baseApi) {
       try {
         const rows = await fetchRows();
         const row = rows.find(item => Number(item.id) === rowId);
-        const image = row?.cell_styles?.[styleKey]?.image;
-        if (!image) {
-          const styles = { ...(row?.cell_styles || {}) };
-          styles[styleKey] = {};
-          await api(`/group-review/rows/${rowId}`, { method: "PATCH", body: JSON.stringify({ cell_styles: styles }) });
-        } else {
-          const styles = { ...(row.cell_styles || {}) };
-          styles[styleKey] = { image };
-          await api(`/group-review/rows/${rowId}`, { method: "PATCH", body: JSON.stringify({ cell_styles: styles }) });
-        }
+        if (!row) return;
+        const image = row.cell_styles?.[styleKey]?.image;
+        const styles = { ...(row.cell_styles || {}) };
+        styles[styleKey] = image ? { image } : {};
+        await api(`/group-review/rows/${rowId}`, { method: "PATCH", body: JSON.stringify({ cell_styles: styles }) });
         await baseApi?.refresh?.();
         scheduleDecorate(0);
         setStatus("서식 지움");
@@ -429,7 +424,10 @@ export function installGroupReviewCellImagesV2(baseApi) {
 
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
-    document.getElementById("grv2ImageLightbox")?.classList.remove("open");
+    const lightbox = document.getElementById("grv2ImageLightbox");
+    if (!lightbox?.classList.contains("open")) return;
+    lightbox.classList.remove("open");
+    lightbox.querySelector("img")?.removeAttribute("src");
   }, true);
 
   const body = document.getElementById("groupReviewBody");
