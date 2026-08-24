@@ -32,6 +32,8 @@ STYLE_KEY_TO_FIELD = {
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 MIN_IMAGE_WIDTH = 80
 MAX_IMAGE_WIDTH = 1600
+MAX_IMAGE_X = 1600
+MAX_IMAGE_Y = 1200
 
 
 def _image_meta(row: GroupReviewRow, style_key: str) -> dict | None:
@@ -129,6 +131,8 @@ async def put_group_review_cell_image(
         "id": image_id,
         "mimeType": mime_type,
         "width": 320,
+        "x": 0,
+        "y": 0,
         "size": len(body),
     }
 
@@ -206,8 +210,43 @@ async def patch_group_review_cell_image_size(
     if not image.get("id"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
     image["width"] = width
+    image.setdefault("x", 0)
+    image.setdefault("y", 0)
     cell_style["image"] = image
 
+    updated = update_row(db, row_id=row.id, current_user=current_user, values={"cell_styles": styles})
+    await _broadcast_row(project.id, updated, current_user)
+    return {
+        "row_id": updated.id,
+        "style_key": style_key,
+        "image": dict((updated.cell_styles or {}).get(style_key, {}).get("image") or {}),
+    }
+
+
+@router.patch("/rows/{row_id}/cells/{style_key}/image-position")
+async def patch_group_review_cell_image_position(
+    row_id: int,
+    style_key: str,
+    x: int = Body(embed=True),
+    y: int = Body(embed=True),
+    db: Session = Depends(get_db),
+    current_user: AppUser = Depends(require_worker_or_admin),
+) -> dict:
+    if style_key not in STYLE_KEY_TO_FIELD:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cell not found")
+
+    x = max(0, min(MAX_IMAGE_X, int(x)))
+    y = max(0, min(MAX_IMAGE_Y, int(y)))
+    row, _, project = _require_row_read_access(db, row_id=row_id, current_user=current_user)
+    styles = {key: dict(value or {}) for key, value in dict(row.cell_styles or {}).items()}
+    cell_style = styles.setdefault(style_key, {})
+    image = dict(cell_style.get("image") or {})
+    if not image.get("id"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+    image["x"] = x
+    image["y"] = y
+    cell_style["image"] = image
     updated = update_row(db, row_id=row.id, current_user=current_user, values={"cell_styles": styles})
     await _broadcast_row(project.id, updated, current_user)
     return {
