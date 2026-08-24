@@ -63,6 +63,32 @@ function ensureSidebarPresentationOverrides() {
   document.head.appendChild(style);
 }
 
+function applyMenuStateColors() {
+  document.querySelectorAll("#topNav .nav-item, #bottomNav .nav-item").forEach(button => {
+    const isGroupToggle = button.matches("[data-authoritative-group], .nav-group-toggle, .local-board-group-toggle");
+    const isSelected = !isGroupToggle && button.classList.contains("active");
+    button.style.setProperty("color", isSelected ? "#facc15" : "#ffffff", "important");
+  });
+
+  document.querySelectorAll("#topNav [data-authoritative-group], #topNav .nav-group-toggle").forEach(toggle => {
+    toggle.style.setProperty("color", "#ffffff", "important");
+  });
+}
+
+function installMenuStateObserver() {
+  const topNav = document.getElementById("topNav");
+  if (!topNav || topNav.dataset.menuStateColorObserver === "1") return;
+  topNav.dataset.menuStateColorObserver = "1";
+
+  const observer = new MutationObserver(() => applyMenuStateColors());
+  observer.observe(topNav, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["class"]
+  });
+}
+
 function findNoticeButton(topNav) {
   return Array.from(topNav.querySelectorAll(".nav-item"))
     .find(button => compact(button.textContent).includes("공지사항")) || null;
@@ -85,15 +111,19 @@ function applyNoticeDivider() {
   noticeButton.style.setProperty("margin-bottom", "8px", "important");
 }
 
-function scheduleNoticeDivider() {
+function applySidebarPresentation() {
   ensureSidebarPresentationOverrides();
+  installMenuStateObserver();
+  applyMenuStateColors();
   applyNoticeDivider();
-  [0, 30, 120, 350, 900, 1800].forEach(delay => setTimeout(() => {
-    ensureSidebarPresentationOverrides();
-    applyNoticeDivider();
-  }, delay));
 }
 
-window.addEventListener("local-shared-pages-loaded", scheduleNoticeDivider);
-window.addEventListener("load", scheduleNoticeDivider, { once: true });
-scheduleNoticeDivider();
+function scheduleSidebarPresentation() {
+  applySidebarPresentation();
+  [0, 30, 120, 350, 900, 1800].forEach(delay => setTimeout(applySidebarPresentation, delay));
+}
+
+window.addEventListener("local-shared-pages-loaded", scheduleSidebarPresentation);
+window.addEventListener("load", scheduleSidebarPresentation, { once: true });
+document.addEventListener("click", () => queueMicrotask(applyMenuStateColors), true);
+scheduleSidebarPresentation();
