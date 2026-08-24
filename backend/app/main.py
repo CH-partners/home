@@ -114,9 +114,29 @@ def _rent_trade_tool_html() -> str:
                 `&lawd_cd=${encodeURIComponent(bjd.lawd_cd)}` +
                 `&deal_ymd=${encodeURIComponent(ym)}`;"""
     source = source.replace(legacy_url_block, local_url_block)
+
+    legacy_fetch_block = """            const res = await fetch(url);
+            const text = await res.text();
+
+            console.log(ym, text);"""
+    local_fetch_block = """            const res = await fetch(url, { credentials: \"include\" });
+            const text = await res.text();
+
+            if (!res.ok) {
+                let detail = `HTTP ${res.status}`;
+                try {
+                    const payload = JSON.parse(text);
+                    if (payload?.detail) detail = payload.detail;
+                } catch (_) {}
+                throw new Error(detail);
+            }
+
+            console.log(ym, text);"""
+    source = source.replace(legacy_fetch_block, local_fetch_block)
+
     source = source.replace(
         'alert("API 호출 실패: " + err.message + "\\n브라우저 CORS 문제일 수 있습니다.");',
-        'alert("API 호출 실패: " + err.message);',
+        'document.getElementById("matchInfo").innerHTML = `<span class="text-danger fw-bold">API 조회 실패: ${err.message}</span>`;\n        alert("API 호출 실패: " + err.message);',
     )
     return source
 
@@ -128,13 +148,11 @@ def rent_trade_tool() -> HTMLResponse:
 
 @app.get("/lease_api.html", include_in_schema=False, response_class=HTMLResponse)
 def legacy_rent_trade_tool() -> HTMLResponse:
-    # Keep old bookmarks working without exposing the legacy browser-side API key.
     return HTMLResponse(_rent_trade_tool_html())
 
 
 @app.get("/{filename}", include_in_schema=False)
 def root_html_file(filename: str) -> FileResponse:
-    # Only root-level HTML tools are exposed. Backend files and secrets are never served.
     if "/" in filename or "\\" in filename or not filename.lower().endswith(".html"):
         raise HTTPException(status_code=404, detail="Not found")
 
