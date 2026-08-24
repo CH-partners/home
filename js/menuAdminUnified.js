@@ -1,9 +1,9 @@
 const API_ROOT = "/api/v1";
 const GROUPS = {
-  qna: { title: "Q&A", icon: "❓" },
+  qna: { title: "Q&A", icon: "" },
   work: { title: "법정선순위", icon: "" },
-  search: { title: "비고문구", icon: "📝" },
-  reference: { title: "공유자료", icon: "📚" }
+  search: { title: "비고문구", icon: "" },
+  reference: { title: "공유자료", icon: "" }
 };
 const GROUP_OPTIONS = Object.entries(GROUPS);
 const LEGACY_SMALL_DEPOSIT_PANEL = 10;
@@ -44,6 +44,12 @@ function compact(value) {
     .trim();
 }
 
+function stripGroupEmoji(value) {
+  return String(value || "")
+    .replace(/^\s*[❓📝📚⚖]\s*/u, "")
+    .trim();
+}
+
 function validColor(value, fallback = "#1f4e79") {
   return /^#[0-9a-f]{6}$/i.test(String(value || "")) ? String(value).toLowerCase() : fallback;
 }
@@ -76,14 +82,14 @@ function buildBlocks(menus) {
       block = {
         type: "group",
         groupKey,
-        title: String(menu.groupTitle || GROUPS[groupKey].title).trim() || GROUPS[groupKey].title,
+        title: stripGroupEmoji(menu.groupTitle || GROUPS[groupKey].title) || GROUPS[groupKey].title,
         items: [],
         color: validColor(menu.groupColor || menu.color, "#334155")
       };
       groups.set(groupKey, block);
       blocks.push(block);
     } else if (!block.title && menu.groupTitle) {
-      block.title = String(menu.groupTitle).trim();
+      block.title = stripGroupEmoji(menu.groupTitle);
     }
     block.items.push(menu);
   }
@@ -98,7 +104,7 @@ function flattenBlocks() {
       menus.push(block.menu);
       continue;
     }
-    const groupTitle = String(block.title || GROUPS[block.groupKey]?.title || block.groupKey).trim();
+    const groupTitle = stripGroupEmoji(block.title || GROUPS[block.groupKey]?.title || block.groupKey);
     for (const item of block.items) {
       item.group = block.groupKey;
       item.groupTitle = groupTitle;
@@ -208,13 +214,13 @@ function renderGroupRow(tbody, block, blockIndex) {
   const hidden = block.items.every(item => item.hidden);
   tr.innerHTML = `
     <td>${orderHtml(blockIndex === 0, blockIndex === workingBlocks.length - 1, "block")}</td>
-    <td><input class="group-title-input" data-field="group-title" value="${escapeHtml(block.title || GROUPS[block.groupKey].title)}"></td>
+    <td><input class="group-title-input" data-field="group-title" value="${escapeHtml(stripGroupEmoji(block.title || GROUPS[block.groupKey].title))}"></td>
     <td></td>
     <td><input class="menu-color-input" data-field="group-color" type="color" value="${validColor(block.color, "#334155")}"></td>
     <td><span class="menu-status">펼침메뉴</span></td>
     <td><span class="menu-status">${hidden ? "숨김" : "표시"}</span></td>
     <td><button type="button" class="small-btn ${hidden ? "" : "danger"}" data-action="group-toggle">${hidden ? "복원" : "전체 숨김"}</button></td>`;
-  tr.querySelector('[data-field="group-title"]')?.addEventListener("input", e => { block.title = e.target.value; });
+  tr.querySelector('[data-field="group-title"]')?.addEventListener("input", e => { block.title = stripGroupEmoji(e.target.value); });
   tr.querySelector('[data-field="group-color"]')?.addEventListener("input", e => { block.color = e.target.value; });
   tr.querySelector('[data-action="block-up"]')?.addEventListener("click", () => moveBlock(blockIndex, -1));
   tr.querySelector('[data-action="block-down"]')?.addEventListener("click", () => moveBlock(blockIndex, 1));
@@ -446,9 +452,8 @@ function ensureGroupShell(groupKey, groupTitle) {
     topNav.appendChild(toggle);
   }
 
-  const displayTitle = String(groupTitle || meta.title).trim() || meta.title;
-  const label = `${meta.icon ? `${meta.icon} ` : ""}${displayTitle}`;
-  toggle.innerHTML = `<span>${escapeHtml(label)}</span><span class="group-arrow">${toggle.classList.contains("expanded") ? "▼" : "▶"}</span>`;
+  const displayTitle = stripGroupEmoji(groupTitle || meta.title) || meta.title;
+  toggle.innerHTML = `<span>${escapeHtml(displayTitle)}</span><span class="group-arrow">${toggle.classList.contains("expanded") ? "▼" : "▶"}</span>`;
 
   if (!wrap) {
     wrap = document.createElement("div");
