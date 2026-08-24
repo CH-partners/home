@@ -3,6 +3,7 @@ import "./noticeLocalAdmin.js";
 import "./menuRollout.js";
 import "./menuAdminUnified.js";
 import "./menuPillStyle.js";
+import "./menuDivider.js";
 import "./sidebarSession.js";
 
 const ALLOWED_PANEL_INDEXES = new Set([0, 10, 11, 13]);
@@ -398,45 +399,34 @@ export function installLimitedDeploymentMode() {
     if (!isAllowedPanel(active)) {
       const allocationButton = Array.from(document.querySelectorAll(".nav-item"))
         .find(button => normalizeLabel(button.textContent) === "분배표");
-      if (allocationButton) allocationButton.click();
-      else {
-        document.querySelector('.sheet-panel[data-index="11"]')?.classList.add("active");
-        window.allocationApi?.refresh?.();
-      }
+      allocationButton?.click();
     }
   }
 
-  let timer = null;
-  const observer = new MutationObserver(() => {
-    clearTimeout(timer);
-    timer = setTimeout(applyDeploymentMode, 20);
-  });
-
-  window.addEventListener("local-schedule-status", event => {
-    scheduleReady = event?.detail?.migration_complete === true;
-    applyDeploymentMode();
-  });
-
-  document.addEventListener("submit", event => {
-    if (event.target?.matches?.("#grv2LoginForm,#allocationLoginForm")) {
-      setTimeout(() => void syncSidebarLogin(true), 250);
-      setTimeout(() => void syncSidebarLogin(true), 900);
-      setTimeout(() => void syncScheduleReadiness().then(applyDeploymentMode), 350);
-      setTimeout(() => void syncScheduleReadiness().then(applyDeploymentMode), 1000);
-    }
-  }, true);
+  void syncScheduleReadiness().finally(applyDeploymentMode);
+  setTimeout(() => void syncScheduleReadiness().finally(applyDeploymentMode), 500);
+  setTimeout(applyDeploymentMode, 1200);
 
   document.addEventListener("click", event => {
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest("#grv2Logout")) {
-      scheduleReady = false;
-      setTimeout(() => void syncSidebarLogin(true), 250);
-      setTimeout(applyDeploymentMode, 260);
+    if (!target) return;
+    if (target.closest("#sidebarLoginOpenBtn, #sidebarLoginSubmitBtn, #sidebarLogoutBtn")) {
+      setTimeout(() => {
+        void syncSidebarLogin(true);
+        applyDeploymentMode();
+      }, 150);
     }
   }, true);
 
-  applyDeploymentMode();
-  void syncScheduleReadiness().then(applyDeploymentMode);
-  observer.observe(document.body, { childList: true, subtree: true });
-  [100, 300, 700, 1200].forEach(delay => setTimeout(applyDeploymentMode, delay));
+  const observer = new MutationObserver(() => {
+    clearTimeout(observerTimer);
+    observerTimer = setTimeout(applyDeploymentMode, 30);
+  });
+  const sidebar = document.querySelector(".sidebar");
+  const main = document.querySelector(".main");
+  if (sidebar) observer.observe(sidebar, { childList: true, subtree: true });
+  if (main) observer.observe(main, { childList: true, subtree: true });
 }
+
+let observerTimer = null;
+installLimitedDeploymentMode();
