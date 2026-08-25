@@ -13,7 +13,7 @@ export function installGroupReviewTopShell() {
     style.textContent = `
       .sheet-panel[data-index="13"] .grv2-shell-projectbar {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 14px;
         min-height: 60px;
         padding: 10px 16px;
@@ -87,24 +87,25 @@ export function installGroupReviewTopShell() {
       }
 
       .sheet-panel[data-index="13"] #groupReviewProjectBadges {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
+        display: grid;
+        grid-template-columns: repeat(10, minmax(90px, 1fr));
         gap: 8px;
         flex: 1 1 auto;
+        width: 100%;
         min-width: 0;
         margin: 0;
         padding: 0;
         overflow-x: auto;
-        overflow-y: hidden;
+        overflow-y: visible;
         scrollbar-width: thin;
       }
 
       .sheet-panel[data-index="13"] #groupReviewProjectBadges .grv2-project-badge {
-        flex: 0 0 auto;
+        width: 100%;
+        min-width: 0;
         min-height: 34px;
         margin: 0 !important;
-        padding: 0 14px !important;
+        padding: 0 10px !important;
         color: #334155;
         background: #f4f7fb !important;
         border: 1px solid #dbe4ef !important;
@@ -112,6 +113,8 @@ export function installGroupReviewTopShell() {
         font-size: 13px;
         font-weight: 600;
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         box-shadow: none;
       }
 
@@ -222,10 +225,6 @@ export function installGroupReviewTopShell() {
           align-items: stretch;
           flex-direction: column;
           gap: 10px;
-        }
-
-        .sheet-panel[data-index="13"] #groupReviewProjectBadges {
-          justify-content: flex-start;
         }
 
         .sheet-panel[data-index="13"] .sheet-header .sheet-tools {
