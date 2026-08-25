@@ -40,39 +40,41 @@ export function installGroupReviewRefreshV2(groupReviewApi) {
   if (!groupReviewApi?.refresh) return;
 
   let refreshing = false;
-  let observer = null;
 
   function ensureStyles() {
-    if (document.getElementById("grv2-refresh-stable-style")) return;
+    if (document.getElementById("grv2-refresh-fixed-header-style")) return;
     const style = document.createElement("style");
-    style.id = "grv2-refresh-stable-style";
+    style.id = "grv2-refresh-fixed-header-style";
     style.textContent = `
-      #groupReviewBody .grv2-userbar > .grv2-user { order: 0; }
-      #groupReviewBody .grv2-userbar > #grv2Refresh {
-        order: 1;
-        margin-left: auto;
-      }
-      #groupReviewBody .grv2-userbar > #grv2Logout { order: 2; }
-
-      #groupReviewBody .grv2-userbar:not(:has(#grv2Refresh))::after {
-        content: "↻ 새로고침";
-        order: 1;
-        margin-left: auto;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        box-sizing: border-box;
-        min-height: 36px;
-        padding: 0 14px;
+      .sheet-panel[data-index="13"] .sheet-header .sheet-tools > #grv2Refresh {
+        order: 2;
+        flex: 0 0 auto;
+        min-height: 34px;
+        padding: 0 12px;
+        margin: 0;
         color: #334155;
         background: #ffffff;
         border: 1px solid #cbd8e7;
-        border-radius: 9px;
-        font-size: 13px;
+        border-radius: 8px;
+        font-size: 12px;
         font-weight: 700;
         line-height: normal;
         white-space: nowrap;
-        pointer-events: none;
+        box-shadow: none;
+        cursor: pointer;
+      }
+
+      .sheet-panel[data-index="13"] .sheet-header .sheet-tools > #grv2Refresh:hover {
+        background: #f8fafc;
+      }
+
+      .sheet-panel[data-index="13"] .sheet-header .sheet-tools > #grv2Refresh:disabled {
+        opacity: .6;
+        cursor: wait;
+      }
+
+      .sheet-panel[data-index="13"]:not(:has(#groupReviewBody .grv2-userbar)) .sheet-header #grv2Refresh {
+        display: none !important;
       }
     `;
     document.head.appendChild(style);
@@ -117,40 +119,37 @@ export function installGroupReviewRefreshV2(groupReviewApi) {
       alert("그룹리뷰 새로고침 실패: " + (error?.message || error));
     } finally {
       refreshing = false;
-      ensureButton();
+      const currentButton = document.getElementById("grv2Refresh");
+      if (currentButton) {
+        currentButton.disabled = false;
+        currentButton.textContent = "↻ 새로고침";
+      }
     }
   }
 
   function ensureButton() {
-    const userbar = document.querySelector("#groupReviewBody .grv2-userbar");
-    const logout = document.getElementById("grv2Logout");
-    if (!userbar || !logout || document.getElementById("grv2Refresh")) return;
+    const headerTools = document.querySelector('.sheet-panel[data-index="13"] .sheet-header .sheet-tools');
+    if (!headerTools) return null;
 
-    const button = document.createElement("button");
+    let button = document.getElementById("grv2Refresh");
+    if (button) return button;
+
+    button = document.createElement("button");
     button.id = "grv2Refresh";
     button.type = "button";
-    button.className = "grv2-btn";
-    button.textContent = refreshing ? "↻ 새로고침 중" : "↻ 새로고침";
-    button.disabled = refreshing;
+    button.className = "action-btn grv2-fixed-refresh";
+    button.textContent = "↻ 새로고침";
     button.title = "현재 프로젝트와 작업자 탭을 유지한 채 그룹리뷰 데이터만 다시 불러옵니다.";
     button.addEventListener("click", refreshInPlace);
-    logout.parentElement?.insertBefore(button, logout);
+    headerTools.appendChild(button);
+    return button;
   }
 
   ensureStyles();
-
-  const body = document.getElementById("groupReviewBody");
-  if (body) {
-    observer = new MutationObserver(() => ensureButton());
-    observer.observe(body, { childList: true, subtree: true });
-  }
-
   ensureButton();
 
   return {
     refreshInPlace,
-    disconnect() {
-      observer?.disconnect();
-    }
+    ensureButton
   };
 }
