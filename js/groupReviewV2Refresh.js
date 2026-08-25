@@ -46,6 +46,10 @@ export function installGroupReviewRefreshV2(groupReviewApi) {
     const style = document.createElement("style");
     style.id = "grv2-refresh-fixed-header-style";
     style.textContent = `
+      #groupReviewBody #grv2Logout {
+        display: none !important;
+      }
+
       .sheet-panel[data-index="13"] .sheet-header .sheet-tools > #grv2Refresh {
         order: 2;
         flex: 0 0 auto;
