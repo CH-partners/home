@@ -37,7 +37,8 @@ export function installGroupReviewAdminTabStatusV2() {
         color: #ffffff !important;
         font-weight: 800;
       }
-      .grv2-tab.grv2-admin-complete {
+      .grv2-tab.grv2-admin-complete,
+      .grv2-tab.grv2-worker-complete {
         background: #facc15 !important;
         border-color: #ca8a04 !important;
         color: #713f12 !important;
@@ -58,14 +59,19 @@ export function installGroupReviewAdminTabStatusV2() {
     return document.querySelector("#groupReviewProjectBadges .grv2-project-badge.active")?.dataset?.projectId || "";
   }
 
-  function clearAdminStatus() {
+  function clearStatusClasses() {
     document.querySelectorAll("#groupReviewBody .grv2-tab").forEach(tab => {
-      tab.classList.remove("grv2-admin-tab", "grv2-admin-complete", "grv2-admin-reuse");
+      tab.classList.remove(
+        "grv2-admin-tab",
+        "grv2-admin-complete",
+        "grv2-admin-reuse",
+        "grv2-worker-complete"
+      );
       tab.removeAttribute("title");
     });
   }
 
-  function applySheetStatus(tab, sheet) {
+  function applyAdminStatus(tab, sheet) {
     if (!tab || !sheet) return;
 
     // 관리자 화면에서는 상태 문구를 붙이지 않고 작업자 이름만 표시한다.
@@ -83,10 +89,25 @@ export function installGroupReviewAdminTabStatusV2() {
     else tab.removeAttribute("title");
   }
 
+  function applyWorkerStatus(tab, sheet, user) {
+    if (!tab || !sheet || !user) return;
+
+    const name = String(sheet.member_name || "");
+    const ownSuffix = sheet.member_name === user.display_name ? " · 나" : "";
+    const completed = Boolean(sheet.completed);
+    const completeSuffix = completed ? " · 완료" : "";
+    const text = `${name}${ownSuffix}${completeSuffix}`;
+    if (tab.textContent !== text) tab.textContent = text;
+
+    tab.classList.toggle("grv2-worker-complete", completed);
+    if (completed) tab.title = "완료";
+    else tab.removeAttribute("title");
+  }
+
   function applyRealtimeSheet(sheet) {
     if (currentRole !== "ADMIN" || !sheet?.id) return;
     const tab = document.querySelector(`#groupReviewBody .grv2-tab[data-sheet-id="${Number(sheet.id)}"]`);
-    if (tab) applySheetStatus(tab, sheet);
+    if (tab) applyAdminStatus(tab, sheet);
   }
 
   function closeSocket() {
@@ -119,7 +140,6 @@ export function installGroupReviewAdminTabStatusV2() {
         const message = JSON.parse(event.data);
         if (!["reuse_requested", "reuse_approved", "reuse_rejected", "sheet_completed"].includes(message.type)) return;
         if (message.sheet) applyRealtimeSheet(message.sheet);
-        // API 상태와 한 번 더 맞춰 두고, 재수정 버튼 모듈에도 즉시 갱신 신호를 준다.
         document.dispatchEvent(new CustomEvent("grv2:sheet-status-realtime", { detail: message }));
         scheduleApply(60);
       } catch (_) {}
@@ -133,7 +153,7 @@ export function installGroupReviewAdminTabStatusV2() {
     };
   }
 
-  async function applyAdminStatus() {
+  async function applyTabStatus() {
     if (applying) return;
     const projectId = activeProjectId();
     const tabs = Array.from(document.querySelectorAll("#groupReviewBody .grv2-tab[data-sheet-id]"));
@@ -147,20 +167,27 @@ export function installGroupReviewAdminTabStatusV2() {
     try {
       const user = await api("/auth/me");
       currentRole = user?.role || "";
-      if (currentRole !== "ADMIN") {
-        clearAdminStatus();
-        closeSocket();
-        return;
-      }
-
       const sheets = await api(`/group-review/projects/${encodeURIComponent(projectId)}/sheets`);
       const byId = new Map((Array.isArray(sheets) ? sheets : []).map(sheet => [Number(sheet.id), sheet]));
 
-      tabs.forEach(tab => {
-        const sheet = byId.get(Number(tab.dataset.sheetId));
-        if (sheet) applySheetStatus(tab, sheet);
-      });
-      ensureSocket();
+      clearStatusClasses();
+
+      if (currentRole === "ADMIN") {
+        tabs.forEach(tab => {
+          const sheet = byId.get(Number(tab.dataset.sheetId));
+          if (sheet) applyAdminStatus(tab, sheet);
+        });
+        ensureSocket();
+        return;
+      }
+
+      if (currentRole === "WORKER") {
+        tabs.forEach(tab => {
+          const sheet = byId.get(Number(tab.dataset.sheetId));
+          if (sheet) applyWorkerStatus(tab, sheet, user);
+        });
+      }
+      closeSocket();
     } catch (_) {
       // 기본 Group Review 화면은 그대로 유지한다.
     } finally {
@@ -172,7 +199,7 @@ export function installGroupReviewAdminTabStatusV2() {
     clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
-      void applyAdminStatus();
+      void applyTabStatus();
     }, delay);
   }
 
