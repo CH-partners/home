@@ -42,6 +42,42 @@ export function installGroupReviewRefreshV2(groupReviewApi) {
   let refreshing = false;
   let observer = null;
 
+  function ensureStyles() {
+    if (document.getElementById("grv2-refresh-stable-style")) return;
+    const style = document.createElement("style");
+    style.id = "grv2-refresh-stable-style";
+    style.textContent = `
+      #groupReviewBody .grv2-userbar > .grv2-user { order: 0; }
+      #groupReviewBody .grv2-userbar > #grv2Refresh {
+        order: 1;
+        margin-left: auto;
+      }
+      #groupReviewBody .grv2-userbar > #grv2Logout { order: 2; }
+
+      #groupReviewBody .grv2-userbar:not(:has(#grv2Refresh))::after {
+        content: "↻ 새로고침";
+        order: 1;
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        min-height: 36px;
+        padding: 0 14px;
+        color: #334155;
+        background: #ffffff;
+        border: 1px solid #cbd8e7;
+        border-radius: 9px;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: normal;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   async function refreshInPlace() {
     if (refreshing) return;
     refreshing = true;
@@ -58,7 +94,6 @@ export function installGroupReviewRefreshV2(groupReviewApi) {
     try {
       await groupReviewApi.refresh();
 
-      // V2 refresh는 현재 프로젝트를 유지한다. 작업자 탭도 기존 선택을 복원한다.
       if (projectId) {
         const currentProjectId = selectedProjectId();
         if (currentProjectId !== projectId) {
@@ -101,6 +136,8 @@ export function installGroupReviewRefreshV2(groupReviewApi) {
     button.addEventListener("click", refreshInPlace);
     logout.parentElement?.insertBefore(button, logout);
   }
+
+  ensureStyles();
 
   const body = document.getElementById("groupReviewBody");
   if (body) {
