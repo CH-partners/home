@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.group_review import GroupReviewProject, GroupReviewRow, GroupReviewSheet
@@ -191,12 +191,28 @@ def create_row(
     current_user: AppUser,
     values: dict,
 ) -> GroupReviewRow:
-    _ensure_worker_sheet_mutable(db, sheet_id=sheet_id, current_user=current_user)
-    existing = list_rows(db, sheet_id=sheet_id, current_user=current_user)
+    sheet = _ensure_worker_sheet_mutable(db, sheet_id=sheet_id, current_user=current_user)
+
+    # Serialize row appends for a sheet so rapid/double clicks cannot allocate
+    # the same position in concurrent requests.
+    db.execute(
+        select(GroupReviewSheet.id)
+        .where(GroupReviewSheet.id == sheet_id)
+        .with_for_update()
+    ).scalar_one()
+
+    # Existing/migrated sheets can contain position gaps. Using len(rows) can
+    # therefore collide with an already-used position. Always append after the
+    # current maximum instead.
+    last_position = db.scalar(
+        select(func.max(GroupReviewRow.position)).where(GroupReviewRow.sheet_id == sheet_id)
+    )
+    next_position = 0 if last_position is None else int(last_position) + 1
+
     row = GroupReviewRow(
         sheet_id=sheet_id,
         firestore_row_id=str(uuid4()),
-        position=len(existing),
+        position=next_position,
         collateral_no=values.get("collateral_no", ""),
         sheet_label=values.get("sheet_label", ""),
         field_no=values.get("field_no", ""),
@@ -206,8 +222,14 @@ def create_row(
         review_status="draft",
         revision_no=1,
     )
-    db.add(row)
-    db.commit()
+    sheet.updated_at = datetime.now(timezone.utc)
+    sheet.updated_by = current_user.display_name
+    try:
+        db.add(row)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(row)
     return row
 
