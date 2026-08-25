@@ -21,12 +21,48 @@ export function installGroupReviewProjectDeleteV2(groupReviewApi) {
   const projectButtons = () => Array.from(document.querySelectorAll('#groupReviewProjectBadges [data-project-id]'));
   const isAdmin = () => document.querySelector('#groupReviewBody .grv2-role')?.textContent?.trim() === 'ADMIN';
 
+  function ensureStyles() {
+    if (document.getElementById('grv2-project-header-visibility')) return;
+    const style = document.createElement('style');
+    style.id = 'grv2-project-header-visibility';
+    style.textContent = `
+      .sheet-panel[data-index="13"].grv2-admin-mode .grv2-header-toolbar button[onclick="createGroupReviewProjectPrompt()"],
+      .sheet-panel[data-index="13"].grv2-admin-mode .grv2-header-toolbar button[onclick="downloadGroupReviewExcel()"],
+      .sheet-panel[data-index="13"].grv2-admin-mode .grv2-header-toolbar button[onclick="deleteSelectedGroupReviewProject()"],
+      .sheet-panel[data-index="13"].grv2-admin-mode .grv2-header-toolbar button[onclick="deleteAllGroupReviewProjects()"] {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .sheet-panel[data-index="13"].grv2-worker-mode .grv2-header-toolbar button[onclick="createGroupReviewProjectPrompt()"],
+      .sheet-panel[data-index="13"].grv2-worker-mode .grv2-header-toolbar button[onclick="deleteSelectedGroupReviewProject()"],
+      .sheet-panel[data-index="13"].grv2-worker-mode .grv2-header-toolbar button[onclick="deleteAllGroupReviewProjects()"] {
+        display: none !important;
+      }
+
+      .sheet-panel[data-index="13"].grv2-worker-mode .grv2-header-toolbar button[onclick="downloadGroupReviewExcel()"] {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   function updateButtonVisibility() {
     if (destroyed) return;
-    const buttons = panel()?.querySelectorAll('.work-toolbar button') || [];
-    const visible = isAdmin() ? '' : 'none';
-    if (buttons[2]) buttons[2].style.display = visible;
-    if (buttons[3]) buttons[3].style.display = visible;
+    const host = panel();
+    if (!host) return;
+
+    const role = document.querySelector('#groupReviewBody .grv2-role')?.textContent?.trim() || '';
+    if (role === 'ADMIN') {
+      host.classList.add('grv2-admin-mode');
+      host.classList.remove('grv2-worker-mode');
+    } else if (role === 'WORKER') {
+      host.classList.add('grv2-worker-mode');
+      host.classList.remove('grv2-admin-mode');
+    }
   }
 
   function scheduleUpdate(delay = 30) {
@@ -76,10 +112,12 @@ export function installGroupReviewProjectDeleteV2(groupReviewApi) {
     }
   };
 
+  ensureStyles();
   const body = document.getElementById('groupReviewBody');
   const observer = body ? new MutationObserver(() => scheduleUpdate()) : null;
   observer?.observe(body, { childList: true, subtree: true });
-  [0, 100, 300, 700].forEach(delay => setTimeout(() => scheduleUpdate(0), delay));
+  updateButtonVisibility();
+  [100, 300].forEach(delay => setTimeout(() => scheduleUpdate(0), delay));
 
   return {
     refresh: () => scheduleUpdate(0),
