@@ -150,7 +150,7 @@ export function initGroupReviewV2() {
 
     const ownSheet = isOwnSheet();
     const sheetEditable = ownSheet && !state.sheet?.completed && !state.sheet?.review_completed && !state.project?.completed;
-    const tabs = state.sheets.map(sheet => `<button type="button" class="grv2-tab ${state.sheet?.id === sheet.id ? "active" : ""} ${isOwnSheet(sheet) ? "own" : ""} ${sheet.completed ? "done" : ""}" data-sheet-id="${sheet.id}">${escapeHtml(sheet.member_name)}${isOwnSheet(sheet) ? " · 나" : ""}${sheet.completed ? " · 입력완료" : ""}</button>`).join("");
+    const tabs = state.sheets.map(sheet => `<button type="button" class="grv2-tab ${state.sheet?.id === sheet.id ? "active" : ""} ${isOwnSheet(sheet) ? "own" : ""} ${sheet.completed ? "done" : ""}" data-sheet-id="${sheet.id}">${escapeHtml(sheet.member_name)}${isOwnSheet(sheet) ? " · 나" : ""}</button>`).join("");
     const rowHtml = state.rows.map((row, index) => renderRowHtml(row, index)).join("");
     const readonlyMessage = state.project?.completed
       ? "프로젝트 완료 · 읽기 전용"
