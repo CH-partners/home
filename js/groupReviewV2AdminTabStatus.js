@@ -19,43 +19,6 @@ export function installGroupReviewAdminTabStatusV2() {
   let socketProjectId = "";
   let reconnectTimer = null;
 
-  function ensureStyles() {
-    if (document.getElementById("grv2-admin-tab-status-styles")) return;
-    const style = document.createElement("style");
-    style.id = "grv2-admin-tab-status-styles";
-    style.textContent = `
-      .grv2-tab.grv2-admin-tab {
-        background: #ffffff !important;
-        border: 1px solid #6f8faa !important;
-        border-bottom-color: #6f8faa !important;
-        color: #334155 !important;
-        font-weight: 600;
-      }
-      .grv2-tab.grv2-admin-tab.active:not(.grv2-admin-complete):not(.grv2-admin-reuse) {
-        background: #1f4e79 !important;
-        border-color: #1f4e79 !important;
-        color: #ffffff !important;
-        font-weight: 800;
-      }
-      .grv2-tab.done,
-      .grv2-tab.grv2-admin-complete,
-      .grv2-tab.grv2-worker-complete {
-        background: #facc15 !important;
-        border-color: #ca8a04 !important;
-        color: #713f12 !important;
-        font-weight: 800;
-      }
-      .grv2-tab.grv2-admin-reuse {
-        background: #dc2626 !important;
-        border-color: #991b1b !important;
-        color: #ffffff !important;
-        font-weight: 900;
-        box-shadow: inset 0 0 0 1px #7f1d1d !important;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
   function activeProjectId() {
     return document.querySelector("#groupReviewProjectBadges .grv2-project-badge.active")?.dataset?.projectId || "";
   }
@@ -85,7 +48,6 @@ export function installGroupReviewAdminTabStatusV2() {
   function applyAdminStatus(tab, sheet) {
     if (!tab || !sheet) return;
 
-    // 관리자 화면에서는 상태 문구를 붙이지 않고 작업자 이름만 표시한다.
     const name = String(sheet.member_name || "");
     if (tab.textContent !== name) tab.textContent = name;
 
@@ -202,7 +164,6 @@ export function installGroupReviewAdminTabStatusV2() {
       }
       closeSocket();
     } catch (_) {
-      // 기본 Group Review 화면은 그대로 유지한다.
       normalizeBaseTabs();
     } finally {
       applying = false;
@@ -242,7 +203,6 @@ export function installGroupReviewAdminTabStatusV2() {
     [0, 200, 600].forEach(delay => setTimeout(() => scheduleApply(0), delay));
   }
 
-  ensureStyles();
   normalizeBaseTabs();
   startObserver();
 }
