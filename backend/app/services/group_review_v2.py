@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.group_review import GroupReviewProject, GroupReviewRow, GroupReviewSheet
@@ -191,47 +192,59 @@ def create_row(
     current_user: AppUser,
     values: dict,
 ) -> GroupReviewRow:
-    sheet = _ensure_worker_sheet_mutable(db, sheet_id=sheet_id, current_user=current_user)
+    _ensure_worker_sheet_mutable(db, sheet_id=sheet_id, current_user=current_user)
 
-    # Serialize row appends for a sheet so rapid/double clicks cannot allocate
-    # the same position in concurrent requests.
-    db.execute(
-        select(GroupReviewSheet.id)
-        .where(GroupReviewSheet.id == sheet_id)
-        .with_for_update()
-    ).scalar_one()
+    # Existing/migrated sheets can contain position gaps, so append after the
+    # current maximum rather than using len(rows). If two append requests race,
+    # retry on the unique (sheet_id, position) constraint instead of taking a
+    # blocking row lock that can stall the single Uvicorn event loop.
+    for attempt in range(3):
+        last_position = db.scalar(
+            select(func.max(GroupReviewRow.position)).where(GroupReviewRow.sheet_id == sheet_id)
+        )
+        next_position = 0 if last_position is None else int(last_position) + 1
 
-    # Existing/migrated sheets can contain position gaps. Using len(rows) can
-    # therefore collide with an already-used position. Always append after the
-    # current maximum instead.
-    last_position = db.scalar(
-        select(func.max(GroupReviewRow.position)).where(GroupReviewRow.sheet_id == sheet_id)
+        row = GroupReviewRow(
+            sheet_id=sheet_id,
+            firestore_row_id=str(uuid4()),
+            position=next_position,
+            collateral_no=values.get("collateral_no", ""),
+            sheet_label=values.get("sheet_label", ""),
+            field_no=values.get("field_no", ""),
+            change_before_text=values.get("change_before_text", ""),
+            change_after_text=values.get("change_after_text", ""),
+            cell_styles=values.get("cell_styles", {}),
+            review_status="draft",
+            revision_no=1,
+        )
+        sheet = db.get(GroupReviewSheet, sheet_id)
+        if sheet is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sheet not found")
+        sheet.updated_at = datetime.now(timezone.utc)
+        sheet.updated_by = current_user.display_name
+
+        try:
+            db.add(row)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            if attempt == 2:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="행 추가가 동시에 처리되어 충돌했습니다. 다시 시도해주세요.",
+                )
+            continue
+        except Exception:
+            db.rollback()
+            raise
+
+        db.refresh(row)
+        return row
+
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="행을 추가하지 못했습니다. 다시 시도해주세요.",
     )
-    next_position = 0 if last_position is None else int(last_position) + 1
-
-    row = GroupReviewRow(
-        sheet_id=sheet_id,
-        firestore_row_id=str(uuid4()),
-        position=next_position,
-        collateral_no=values.get("collateral_no", ""),
-        sheet_label=values.get("sheet_label", ""),
-        field_no=values.get("field_no", ""),
-        change_before_text=values.get("change_before_text", ""),
-        change_after_text=values.get("change_after_text", ""),
-        cell_styles=values.get("cell_styles", {}),
-        review_status="draft",
-        revision_no=1,
-    )
-    sheet.updated_at = datetime.now(timezone.utc)
-    sheet.updated_by = current_user.display_name
-    try:
-        db.add(row)
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    db.refresh(row)
-    return row
 
 
 def update_row(
