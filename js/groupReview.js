@@ -13,6 +13,7 @@ import { installGroupReviewPartialBoldV2 } from "./groupReviewPartialBold.js";
 import { installGroupReviewCellImagesV2 } from "./groupReviewCellImages.js";
 import { installGroupReviewTopShell } from "./groupReviewTopShell.js";
 import { installGroupReviewTabStateTheme } from "./groupReviewTabStateTheme.js";
+import { installGroupReviewSheetOrder } from "./groupReviewSheetOrder.js";
 
 export function initGroupReview() {
   installLimitedDeploymentMode();
@@ -30,5 +31,6 @@ export function initGroupReview() {
   installGroupReviewPartialBoldV2();
   installGroupReviewCellImagesV2(api);
   installGroupReviewTopShell();
+  installGroupReviewSheetOrder();
   return api;
 }
