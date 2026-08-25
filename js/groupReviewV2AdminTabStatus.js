@@ -37,6 +37,7 @@ export function installGroupReviewAdminTabStatusV2() {
         color: #ffffff !important;
         font-weight: 800;
       }
+      .grv2-tab.done,
       .grv2-tab.grv2-admin-complete,
       .grv2-tab.grv2-worker-complete {
         background: #facc15 !important;
@@ -57,6 +58,16 @@ export function installGroupReviewAdminTabStatusV2() {
 
   function activeProjectId() {
     return document.querySelector("#groupReviewProjectBadges .grv2-project-badge.active")?.dataset?.projectId || "";
+  }
+
+  function normalizeBaseTabs() {
+    document.querySelectorAll("#groupReviewBody .grv2-tab").forEach(tab => {
+      if (!tab.classList.contains("done")) return;
+      const normalized = String(tab.textContent || "")
+        .replace(/\s*·\s*입력완료\s*$/g, "")
+        .replace(/\s*·\s*완료\s*$/g, "");
+      if (tab.textContent !== normalized) tab.textContent = normalized;
+    });
   }
 
   function clearStatusClasses() {
@@ -85,7 +96,7 @@ export function installGroupReviewAdminTabStatusV2() {
     tab.classList.toggle("grv2-admin-complete", completed && !reuseRequested);
 
     if (reuseRequested) tab.title = "재수정 요청";
-    else if (completed) tab.title = "입력 완료";
+    else if (completed) tab.title = "완료";
     else tab.removeAttribute("title");
   }
 
@@ -94,11 +105,10 @@ export function installGroupReviewAdminTabStatusV2() {
 
     const name = String(sheet.member_name || "");
     const ownSuffix = sheet.member_name === user.display_name ? " · 나" : "";
-    const completed = Boolean(sheet.completed);
-    const completeSuffix = completed ? " · 완료" : "";
-    const text = `${name}${ownSuffix}${completeSuffix}`;
+    const text = `${name}${ownSuffix}`;
     if (tab.textContent !== text) tab.textContent = text;
 
+    const completed = Boolean(sheet.completed);
     tab.classList.toggle("grv2-worker-complete", completed);
     if (completed) tab.title = "완료";
     else tab.removeAttribute("title");
@@ -155,6 +165,8 @@ export function installGroupReviewAdminTabStatusV2() {
 
   async function applyTabStatus() {
     if (applying) return;
+    normalizeBaseTabs();
+
     const projectId = activeProjectId();
     const tabs = Array.from(document.querySelectorAll("#groupReviewBody .grv2-tab[data-sheet-id]"));
     if (!projectId || !tabs.length) {
@@ -171,6 +183,7 @@ export function installGroupReviewAdminTabStatusV2() {
       const byId = new Map((Array.isArray(sheets) ? sheets : []).map(sheet => [Number(sheet.id), sheet]));
 
       clearStatusClasses();
+      normalizeBaseTabs();
 
       if (currentRole === "ADMIN") {
         tabs.forEach(tab => {
@@ -190,6 +203,7 @@ export function installGroupReviewAdminTabStatusV2() {
       closeSocket();
     } catch (_) {
       // 기본 Group Review 화면은 그대로 유지한다.
+      normalizeBaseTabs();
     } finally {
       applying = false;
     }
@@ -210,8 +224,11 @@ export function installGroupReviewAdminTabStatusV2() {
       return;
     }
 
+    normalizeBaseTabs();
+
     const observer = new MutationObserver(mutations => {
       if (applying) return;
+      normalizeBaseTabs();
       const screenRebuilt = mutations.some(mutation => mutation.target === body || mutation.addedNodes.length);
       if (screenRebuilt) scheduleApply();
     });
@@ -226,5 +243,6 @@ export function installGroupReviewAdminTabStatusV2() {
   }
 
   ensureStyles();
+  normalizeBaseTabs();
   startObserver();
 }
