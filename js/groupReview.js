@@ -11,6 +11,7 @@ import { installGroupReviewTheme } from "./groupReviewTheme.js";
 import { installGroupReviewDefaultRowsV2 } from "./groupReviewDefaultRows.js";
 import { installGroupReviewPartialBoldV2 } from "./groupReviewPartialBold.js";
 import { installGroupReviewCellImagesV2 } from "./groupReviewCellImages.js";
+import { installGroupReviewTopShell } from "./groupReviewTopShell.js";
 
 export function initGroupReview() {
   installLimitedDeploymentMode();
@@ -26,5 +27,6 @@ export function initGroupReview() {
   installGroupReviewDefaultRowsV2(api);
   installGroupReviewPartialBoldV2();
   installGroupReviewCellImagesV2(api);
+  installGroupReviewTopShell();
   return api;
 }
