@@ -12,10 +12,12 @@ import { installGroupReviewDefaultRowsV2 } from "./groupReviewDefaultRows.js";
 import { installGroupReviewPartialBoldV2 } from "./groupReviewPartialBold.js";
 import { installGroupReviewCellImagesV2 } from "./groupReviewCellImages.js";
 import { installGroupReviewTopShell } from "./groupReviewTopShell.js";
+import { installGroupReviewTabStateTheme } from "./groupReviewTabStateTheme.js";
 
 export function initGroupReview() {
   installLimitedDeploymentMode();
   installGroupReviewTheme();
+  installGroupReviewTabStateTheme();
   const api = initGroupReviewV2();
   installGroupReviewReuseV2(api);
   installGroupReviewRefreshV2(api);
