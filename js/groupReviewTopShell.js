@@ -45,23 +45,45 @@ export function installGroupReviewTopShell() {
       }
 
       .sheet-panel[data-index="13"] .grv2-shell-projectbar > .work-toolbar button[onclick="downloadGroupReviewExcel()"] {
-        order: 0;
         color: #ffffff !important;
         background: linear-gradient(135deg, #5b45f5, #4936e8) !important;
         border-color: #5b45f5 !important;
         box-shadow: 0 3px 8px rgba(79, 62, 230, .18);
       }
 
-      .sheet-panel[data-index="13"] .grv2-shell-projectbar > .work-toolbar button[onclick="createGroupReviewProjectPrompt()"] {
-        order: 1;
+      .sheet-panel[data-index="13"] .sheet-header .sheet-tools {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        flex-wrap: wrap;
       }
 
-      .sheet-panel[data-index="13"] .grv2-shell-projectbar > .work-toolbar button[onclick="deleteSelectedGroupReviewProject()"] {
-        order: 2;
+      .sheet-panel[data-index="13"] .sheet-header .grv2-admin-header-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
       }
 
-      .sheet-panel[data-index="13"] .grv2-shell-projectbar > .work-toolbar button[onclick="deleteAllGroupReviewProjects()"] {
-        order: 3;
+      .sheet-panel[data-index="13"] .sheet-header .grv2-admin-header-toolbar button {
+        min-height: 34px;
+        padding: 0 10px;
+        margin: 0;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .sheet-panel[data-index="13"] .sheet-header .grv2-admin-header-toolbar button[onclick="downloadGroupReviewExcel()"] {
+        color: #ffffff !important;
+        background: linear-gradient(135deg, #5b45f5, #4936e8) !important;
+        border-color: #5b45f5 !important;
       }
 
       .sheet-panel[data-index="13"] #groupReviewProjectBadges {
@@ -185,6 +207,16 @@ export function installGroupReviewTopShell() {
         display: none !important;
       }
 
+      @media (max-width: 1180px) {
+        .sheet-panel[data-index="13"] .sheet-header {
+          align-items: flex-start;
+        }
+
+        .sheet-panel[data-index="13"] .sheet-header .sheet-tools {
+          max-width: 78%;
+        }
+      }
+
       @media (max-width: 980px) {
         .sheet-panel[data-index="13"] .grv2-shell-projectbar {
           align-items: stretch;
@@ -194,6 +226,10 @@ export function installGroupReviewTopShell() {
 
         .sheet-panel[data-index="13"] #groupReviewProjectBadges {
           justify-content: flex-start;
+        }
+
+        .sheet-panel[data-index="13"] .sheet-header .sheet-tools {
+          max-width: none;
         }
       }
 
@@ -215,10 +251,16 @@ export function installGroupReviewTopShell() {
     document.head.appendChild(style);
   }
 
+  function currentRole() {
+    return document.querySelector('#groupReviewBody .grv2-role')?.textContent?.trim() || '';
+  }
+
   function ensureShell() {
     const panel = document.querySelector('.sheet-panel[data-index="13"]');
     const card = panel?.querySelector('.major-card');
-    const toolbar = card?.querySelector(':scope > .work-toolbar') || panel?.querySelector('.work-toolbar');
+    const headerTools = panel?.querySelector('.sheet-header .sheet-tools');
+    const fullscreen = document.getElementById('workspaceFullscreenBtn');
+    const toolbar = panel?.querySelector('.work-toolbar');
     const badges = document.getElementById('groupReviewProjectBadges');
     if (!card || !toolbar || !badges) return false;
 
@@ -230,7 +272,18 @@ export function installGroupReviewTopShell() {
       card.insertBefore(shell, card.firstChild);
     }
 
-    if (toolbar.parentElement !== shell) shell.appendChild(toolbar);
+    const role = currentRole();
+    if (role === 'ADMIN' && headerTools) {
+      toolbar.classList.add('grv2-admin-header-toolbar');
+      if (toolbar.parentElement !== headerTools) {
+        if (fullscreen?.parentElement === headerTools) headerTools.insertBefore(toolbar, fullscreen);
+        else headerTools.appendChild(toolbar);
+      }
+    } else {
+      toolbar.classList.remove('grv2-admin-header-toolbar');
+      if (toolbar.parentElement !== shell) shell.insertBefore(toolbar, shell.firstChild);
+    }
+
     if (badges.parentElement !== shell) shell.appendChild(badges);
     return true;
   }
