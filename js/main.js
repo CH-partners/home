@@ -35,6 +35,11 @@ const fixedMembers = [
 // 다시 켜려면 이 값만 true로 바꾸면 된다. 저장된 메뉴 설정과 리뷰 데이터는 그대로 남는다.
 const GROUP_REVIEW_ENABLED = false;
 
+// 분배표 임시 중단 스위치. 그룹리뷰와 같은 방식이다.
+// false면 메뉴 버튼이 렌더되지 않고 실시간 구독도 시작하지 않는다.
+// 다시 켜려면 이 값만 true로 바꾸면 된다. 저장된 메뉴 설정과 분배표 데이터는 그대로 남는다.
+const WORK_ALLOCATION_ENABLED = false;
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -847,6 +852,12 @@ function renderMenus() {
   if (!GROUP_REVIEW_ENABLED) {
     menuData
       .filter(menu => Number(menu.panelIndex) === 13 || getFixedMenuKind(menu) === "review")
+      .forEach(menu => renderedMenus.add(menu));
+  }
+
+  if (!WORK_ALLOCATION_ENABLED) {
+    menuData
+      .filter(menu => Number(menu.panelIndex) === 11 || getFixedMenuKind(menu) === "work")
       .forEach(menu => renderedMenus.add(menu));
   }
 
@@ -1870,13 +1881,15 @@ async function ensureInitialData() {
     console.error("초기 데이터 생성 실패:", error);
   }
 
-  try {
-    const allocationSnap = await getDoc(allocationRef);
-    if (!allocationSnap.exists()) {
-      await setDoc(allocationRef, removeUndefinedDeep({ members: fixedMembers, projects: [] }));
+  if (WORK_ALLOCATION_ENABLED) {
+    try {
+      const allocationSnap = await getDoc(allocationRef);
+      if (!allocationSnap.exists()) {
+        await setDoc(allocationRef, removeUndefinedDeep({ members: fixedMembers, projects: [] }));
+      }
+    } catch (error) {
+      console.error("Project 분배표 초기 데이터 생성 실패:", error);
     }
-  } catch (error) {
-    console.error("Project 분배표 초기 데이터 생성 실패:", error);
   }
 }
 
@@ -1912,14 +1925,18 @@ onSnapshot(settingsRef, snap => {
 
 initEditors();
 
-window.allocationApi = initAllocation({
-  allocationRef,
-  fixedMembers,
-  isAdmin,
-  escapeHtml,
-  removeUndefinedDeep,
-  getCurrentUser: () => currentUser
-});
+// initAllocation은 호출 즉시 workAllocation 문서를 실시간 구독한다.
+// 메뉴만 숨기고 이걸 그대로 두면 읽기 사용량은 줄지 않으므로 함께 막는다.
+if (WORK_ALLOCATION_ENABLED) {
+  window.allocationApi = initAllocation({
+    allocationRef,
+    fixedMembers,
+    isAdmin,
+    escapeHtml,
+    removeUndefinedDeep,
+    getCurrentUser: () => currentUser
+  });
+}
 
 window.scheduleApi = initSchedule({
   db,
