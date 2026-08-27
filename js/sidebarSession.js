@@ -2,6 +2,8 @@ const API_ROOT = "/api/v1";
 
 let currentUser = null;
 let syncing = false;
+let groupReviewObserver = null;
+let groupReviewAuthHint = null;
 
 async function request(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -237,7 +239,37 @@ async function syncSession() {
   }
 }
 
+function syncSessionFromGroupReview() {
+  const body = document.getElementById("groupReviewBody");
+  if (!body) return;
+
+  const nextHint = body.querySelector(".grv2-userbar")
+    ? "signed-in"
+    : body.querySelector(".grv2-login")
+      ? "signed-out"
+      : null;
+
+  if (!nextHint || nextHint === groupReviewAuthHint) return;
+  groupReviewAuthHint = nextHint;
+
+  const sessionChanged =
+    (nextHint === "signed-in" && !currentUser) ||
+    (nextHint === "signed-out" && !!currentUser);
+
+  if (sessionChanged) void syncSession();
+}
+
+function watchGroupReviewSession() {
+  const body = document.getElementById("groupReviewBody");
+  if (!body || groupReviewObserver) return;
+
+  groupReviewObserver = new MutationObserver(syncSessionFromGroupReview);
+  groupReviewObserver.observe(body, { childList: true, subtree: true });
+  syncSessionFromGroupReview();
+}
+
 window.addEventListener("local-shared-pages-loaded", markSchedulePublic);
+watchGroupReviewSession();
 [0, 250, 800, 1600].forEach(delay => setTimeout(() => {
   markSchedulePublic();
   if (delay === 0) void syncSession();
