@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.middleware.session_websocket import ActiveSessionWebSocketMiddleware
 from app.routers.allocation_v2 import router as allocation_v2_router
 from app.routers.auth import router as auth_router
 from app.routers.group_review_admin_v2 import router as group_review_admin_v2_router
@@ -19,6 +20,7 @@ from app.routers.shared_pages import router as shared_pages_router
 
 
 app = FastAPI(title="CH PARTNERS Home Backend")
+app.add_middleware(ActiveSessionWebSocketMiddleware)
 
 app.include_router(health_router)
 app.include_router(auth_router)
