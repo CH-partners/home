@@ -84,7 +84,7 @@ def heartbeat(
     user: AppUser = Depends(get_current_user),
 ) -> Response:
     session = _request_session(request)
-    if session is None or session[0] != user.id or not touch_session(db, user=user, session_id=session[1]):
+    if session is None or session[0] != user.id or not touch_session(db, user_id=user.id, session_id=session[1]):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
