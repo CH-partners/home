@@ -67,8 +67,14 @@ def claim_session(db: Session, *, user_id: int) -> tuple[AppUser, str] | None:
     return user, session_id
 
 
-def touch_session(db: Session, *, user: AppUser, session_id: str) -> bool:
-    if not session_is_active(user, session_id=session_id):
+def touch_session(db: Session, *, user_id: int, session_id: str) -> bool:
+    user = db.scalar(
+        select(AppUser)
+        .where(AppUser.id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if user is None or not user.active or not session_is_active(user, session_id=session_id):
         return False
     user.session_last_seen_at = datetime.now(timezone.utc)
     db.commit()
