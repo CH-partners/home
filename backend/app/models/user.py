@@ -24,6 +24,8 @@ class AppUser(Base):
         nullable=False,
         server_default=text("true"),
     )
+    active_session_id: Mapped[str | None] = mapped_column(Text)
+    session_last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
