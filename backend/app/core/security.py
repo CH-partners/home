@@ -20,13 +20,14 @@ def verify_password(password: str, encoded: str) -> bool:
     return password_hash.verify(password, encoded)
 
 
-def create_session_token(*, user_id: int, login_id: str, role: str) -> str:
+def create_session_token(*, user_id: int, login_id: str, role: str, session_id: str) -> str:
     settings = get_settings()
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
         "sub": str(user_id),
         "login_id": login_id,
         "role": role,
+        "sid": session_id,
         "iat": now,
         "exp": now + timedelta(hours=settings.auth_session_hours),
     }
