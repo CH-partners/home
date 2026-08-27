@@ -37,7 +37,12 @@ def session_is_active(user: AppUser, *, session_id: str | None = None) -> bool:
 
 
 def claim_session(db: Session, *, user_id: int) -> tuple[AppUser, str] | None:
-    user = db.scalar(select(AppUser).where(AppUser.id == user_id).with_for_update())
+    user = db.scalar(
+        select(AppUser)
+        .where(AppUser.id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if user is None or not user.active:
         return None
     if session_is_active(user):
@@ -60,7 +65,12 @@ def touch_session(db: Session, *, user: AppUser, session_id: str) -> bool:
 
 
 def release_session(db: Session, *, user_id: int, session_id: str) -> None:
-    user = db.scalar(select(AppUser).where(AppUser.id == user_id).with_for_update())
+    user = db.scalar(
+        select(AppUser)
+        .where(AppUser.id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if user is None or user.active_session_id != session_id:
         return
     user.active_session_id = None
