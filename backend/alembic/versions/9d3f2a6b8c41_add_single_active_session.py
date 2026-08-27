@@ -23,8 +23,13 @@ def upgrade() -> None:
         "app_users",
         sa.Column("session_last_seen_at", sa.DateTime(timezone=True), nullable=True),
     )
+    op.add_column(
+        "app_users",
+        sa.Column("session_expires_at", sa.DateTime(timezone=True), nullable=True),
+    )
 
 
 def downgrade() -> None:
+    op.drop_column("app_users", "session_expires_at")
     op.drop_column("app_users", "session_last_seen_at")
     op.drop_column("app_users", "active_session_id")
