@@ -4,6 +4,7 @@ let currentUser = null;
 let syncing = false;
 let groupReviewObserver = null;
 let groupReviewAuthHint = null;
+let heartbeatTimer = null;
 
 async function request(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -201,6 +202,33 @@ async function logout() {
   location.reload();
 }
 
+function stopHeartbeat() {
+  if (heartbeatTimer !== null) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+async function sendHeartbeat() {
+  if (!currentUser) return;
+  try {
+    await request("/auth/heartbeat", { method: "POST" });
+  } catch (error) {
+    if (error.status === 401) {
+      stopHeartbeat();
+      currentUser = null;
+      render();
+      location.reload();
+    }
+  }
+}
+
+function syncHeartbeat() {
+  stopHeartbeat();
+  if (!currentUser) return;
+  heartbeatTimer = setInterval(() => void sendHeartbeat(), 60_000);
+}
+
 function markSchedulePublic() {
   const panel = document.querySelector('.sheet-panel[data-index="12"]');
   if (panel) panel.dataset.localSharedPublicReady = "1";
@@ -232,6 +260,7 @@ async function syncSession() {
     try { currentUser = await request("/auth/me"); }
     catch (error) { if (error.status === 401) currentUser = null; else throw error; }
     render();
+    syncHeartbeat();
     if (!currentUser) await syncPublicMenu();
     markSchedulePublic();
   } finally {
@@ -269,6 +298,7 @@ function watchGroupReviewSession() {
 }
 
 window.addEventListener("local-shared-pages-loaded", markSchedulePublic);
+window.addEventListener("beforeunload", stopHeartbeat);
 watchGroupReviewSession();
 [0, 250, 800, 1600].forEach(delay => setTimeout(() => {
   markSchedulePublic();
