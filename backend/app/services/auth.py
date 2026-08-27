@@ -21,15 +21,23 @@ def authenticate_user(db: Session, *, login_id: str, password: str) -> AppUser |
     return user
 
 
-def _session_cutoff() -> datetime:
+def _as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def _session_cutoff(now: datetime) -> datetime:
     settings = get_settings()
-    return datetime.now(timezone.utc) - timedelta(minutes=settings.auth_session_stale_minutes)
+    return now - timedelta(minutes=settings.auth_session_stale_minutes)
 
 
 def session_is_active(user: AppUser, *, session_id: str | None = None) -> bool:
-    if not user.active_session_id or not user.session_last_seen_at:
+    if not user.active_session_id or not user.session_last_seen_at or not user.session_expires_at:
         return False
-    if user.session_last_seen_at <= _session_cutoff():
+
+    now = datetime.now(timezone.utc)
+    if _as_utc(user.session_expires_at) <= now:
+        return False
+    if _as_utc(user.session_last_seen_at) <= _session_cutoff(now):
         return False
     if session_id is not None and user.active_session_id != session_id:
         return False
@@ -48,9 +56,12 @@ def claim_session(db: Session, *, user_id: int) -> tuple[AppUser, str] | None:
     if session_is_active(user):
         return None
 
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
     session_id = uuid4().hex
     user.active_session_id = session_id
-    user.session_last_seen_at = datetime.now(timezone.utc)
+    user.session_last_seen_at = now
+    user.session_expires_at = now + timedelta(hours=settings.auth_session_hours)
     db.commit()
     db.refresh(user)
     return user, session_id
@@ -75,4 +86,5 @@ def release_session(db: Session, *, user_id: int, session_id: str) -> None:
         return
     user.active_session_id = None
     user.session_last_seen_at = None
+    user.session_expires_at = None
     db.commit()
