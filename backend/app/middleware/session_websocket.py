@@ -2,11 +2,24 @@ from __future__ import annotations
 
 from http.cookies import SimpleCookie
 
+from anyio import to_thread
+
 from app.core.config import get_settings
 from app.core.security import decode_session_token
 from app.db.session import get_session_factory
 from app.models.user import AppUser
 from app.services.auth import session_is_active
+
+
+def _session_allowed(user_id: int, session_id: str) -> bool:
+    session_factory = get_session_factory()
+    with session_factory() as db:
+        user = db.get(AppUser, user_id)
+        return bool(
+            user
+            and user.active
+            and session_is_active(user, session_id=session_id)
+        )
 
 
 class ActiveSessionWebSocketMiddleware:
@@ -41,15 +54,7 @@ class ActiveSessionWebSocketMiddleware:
             await send({"type": "websocket.close", "code": 4401})
             return
 
-        session_factory = get_session_factory()
-        with session_factory() as db:
-            user = db.get(AppUser, user_id)
-            allowed = bool(
-                user
-                and user.active
-                and session_is_active(user, session_id=session_id)
-            )
-
+        allowed = await to_thread.run_sync(_session_allowed, user_id, session_id)
         if not allowed:
             await send({"type": "websocket.close", "code": 4401})
             return
