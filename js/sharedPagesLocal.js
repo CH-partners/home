@@ -16,7 +16,6 @@ let currentUser = null;
 let currentSnapshot = null;
 let editingKey = "";
 let editingConfig = null;
-let legacySettingsPromise = null;
 let observerTimer = null;
 let observerSuppressUntil = 0;
 
@@ -264,113 +263,6 @@ function applySnapshot(snapshot) {
   window.dispatchEvent(new CustomEvent("local-shared-pages-loaded", { detail: snapshot }));
 }
 
-function isUninitialized(snapshot) {
-  if (!snapshot) return true;
-  const menusEmpty = !Array.isArray(snapshot.menus) || snapshot.menus.length === 0;
-  const contentsEmpty = !snapshot.page_contents || Object.keys(snapshot.page_contents).length === 0;
-  const notice = snapshot.notice || {};
-  const noticeEmpty = !Object.keys(notice).length || (
-    String(notice.title || "공지 제목") === "공지 제목" &&
-    !String(notice.date || "") &&
-    String(notice.html || DEFAULT_NOTICE_HTML).trim() === DEFAULT_NOTICE_HTML
-  );
-  return menusEmpty && contentsEmpty && noticeEmpty;
-}
-
-async function readLegacyFirebaseSettings() {
-  if (legacySettingsPromise) return legacySettingsPromise;
-
-  legacySettingsPromise = (async () => {
-    try {
-      const [{ getApps }, { getFirestore, doc, getDoc }] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js")
-      ]);
-      const app = getApps()[0];
-      if (!app) return null;
-      const snapshot = await getDoc(doc(getFirestore(app), "sharedPages", "mainSettings"));
-      return snapshot.exists() ? (snapshot.data() || {}) : null;
-    } catch (error) {
-      console.warn("기존 Firebase 공지/콘텐츠 읽기 실패:", error);
-      return null;
-    }
-  })();
-
-  const result = await legacySettingsPromise;
-  if (!result) legacySettingsPromise = null;
-  return result;
-}
-
-function normalizeImportedContent(raw, title) {
-  if (typeof raw === "string") {
-    return {
-      majorTitle: title,
-      bodyHtml: raw,
-      tableData: { enabled: false, rows: [] },
-      html: raw
-    };
-  }
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const bodyHtml = typeof raw.bodyHtml === "string" && raw.bodyHtml.trim()
-    ? raw.bodyHtml
-    : typeof raw.html === "string" ? raw.html : "";
-  return {
-    ...raw,
-    majorTitle: raw.majorTitle || title,
-    bodyHtml,
-    tableData: raw.tableData || { enabled: false, rows: [] },
-    html: typeof raw.html === "string" ? raw.html : bodyHtml
-  };
-}
-
-async function bootstrapFromLegacy(snapshot, user) {
-  if (!isUninitialized(snapshot) || user?.role !== "ADMIN") return snapshot;
-  const legacy = await readLegacyFirebaseSettings();
-  if (!legacy) return snapshot;
-
-  const menus = Array.isArray(legacy.menus) ? legacy.menus : [];
-  const notice = legacy.notice || {};
-  const source = legacy.pageContents && typeof legacy.pageContents === "object" ? legacy.pageContents : {};
-  const pageContents = {};
-  for (const [key, raw] of Object.entries(source)) {
-    const fixed = FIXED_CONTENTS.find(item => item.key === key);
-    pageContents[key] = normalizeImportedContent(raw, fixed?.title || key) || raw;
-  }
-
-  if (!menus.length && !Object.keys(notice).length && !Object.keys(pageContents).length) return snapshot;
-  try {
-    return await api("/shared-pages/bootstrap", {
-      method: "POST",
-      body: JSON.stringify({ menus, notice, page_contents: pageContents })
-    });
-  } catch (error) {
-    if (error.status === 409) return api("/shared-pages");
-    throw error;
-  }
-}
-
-async function importMissingFixed(snapshot, user) {
-  if (user?.role !== "ADMIN") return snapshot;
-  const missing = FIXED_CONTENTS.filter(ref => !snapshot?.page_contents?.[ref.key]);
-  if (!missing.length) return snapshot;
-
-  const legacy = await readLegacyFirebaseSettings();
-  const source = legacy?.pageContents;
-  if (!source || typeof source !== "object") return snapshot;
-
-  const next = { ...snapshot, page_contents: { ...(snapshot.page_contents || {}) } };
-  for (const ref of missing) {
-    const content = normalizeImportedContent(source[ref.key], ref.title);
-    if (!content) continue;
-    const result = await api(`/shared-pages/contents/${encodeURIComponent(ref.key)}`, {
-      method: "PUT",
-      body: JSON.stringify({ content })
-    });
-    next.page_contents[ref.key] = result.content;
-  }
-  return next;
-}
-
 async function loadSharedPages() {
   let user;
   try {
@@ -385,9 +277,7 @@ async function loadSharedPages() {
   }
 
   currentUser = user;
-  let snapshot = await api("/shared-pages");
-  snapshot = await bootstrapFromLegacy(snapshot, user);
-  snapshot = await importMissingFixed(snapshot, user);
+  const snapshot = await api("/shared-pages");
   applySnapshot(snapshot);
   return snapshot;
 }
@@ -551,7 +441,6 @@ export function installLocalSharedPages() {
 
   document.addEventListener("submit", event => {
     if (event.target?.matches?.("#grv2LoginForm,#allocationLoginForm")) {
-      legacySettingsPromise = null;
       refresh(300);
       setTimeout(() => refresh(0), 900);
     }
