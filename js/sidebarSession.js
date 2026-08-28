@@ -28,6 +28,149 @@ function ensureStyles() {
   const style = document.createElement("style");
   style.id = "sidebar-session-styles";
   style.textContent = `
+    body.ch-auth-gated{
+      overflow:hidden!important;
+    }
+    body.ch-auth-gated > .app{
+      visibility:hidden!important;
+      pointer-events:none!important;
+      user-select:none!important;
+    }
+    #chAuthGate{
+      position:fixed!important;
+      inset:0!important;
+      z-index:2147483000!important;
+      display:flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      box-sizing:border-box!important;
+      padding:24px!important;
+      background:#f7f8fa!important;
+      font-family:"Gmarket Sans","Noto Sans KR",Arial,sans-serif!important;
+    }
+    #chAuthGate[hidden]{display:none!important}
+    #chAuthGate .ch-auth-card{
+      width:min(378px,calc(100vw - 40px))!important;
+      box-sizing:border-box!important;
+      padding:46px 40px 48px!important;
+      border:1px solid #e0e4e8!important;
+      border-radius:16px!important;
+      background:#ffffff!important;
+      box-shadow:0 2px 8px rgba(15,23,42,.04)!important;
+    }
+    #chAuthGate .ch-auth-brand{
+      display:flex!important;
+      align-items:baseline!important;
+      justify-content:center!important;
+      gap:7px!important;
+      margin:0!important;
+      color:#171b20!important;
+      white-space:nowrap!important;
+    }
+    #chAuthGate .ch-auth-brand-prefix{
+      font-size:21px!important;
+      font-weight:700!important;
+      letter-spacing:-1.4px!important;
+    }
+    #chAuthGate .ch-auth-brand-name{
+      font-family:"Noto Serif KR",serif!important;
+      font-size:37px!important;
+      font-weight:900!important;
+      line-height:1!important;
+      letter-spacing:-2px!important;
+    }
+    #chAuthGate .ch-auth-subtitle{
+      margin:8px 0 31px!important;
+      text-align:center!important;
+      color:#9a7b68!important;
+      font-size:11px!important;
+      font-weight:400!important;
+      letter-spacing:.5px!important;
+    }
+    #chAuthGate .ch-auth-form{
+      display:grid!important;
+      gap:20px!important;
+    }
+    #chAuthGate .ch-auth-field{
+      display:grid!important;
+      gap:7px!important;
+    }
+    #chAuthGate .ch-auth-label{
+      color:#262b30!important;
+      font-size:12px!important;
+      font-weight:700!important;
+      line-height:1.3!important;
+    }
+    #chAuthGate .ch-auth-input{
+      width:100%!important;
+      height:46px!important;
+      box-sizing:border-box!important;
+      padding:0 16px!important;
+      border:1px solid #cbd3dc!important;
+      border-radius:8px!important;
+      outline:none!important;
+      background:#ffffff!important;
+      color:#1f2937!important;
+      font:inherit!important;
+      font-size:13px!important;
+      transition:border-color .15s ease,box-shadow .15s ease!important;
+    }
+    #chAuthGate .ch-auth-input::placeholder{
+      color:#8d98a6!important;
+      opacity:1!important;
+    }
+    #chAuthGate .ch-auth-input:focus{
+      border-color:#7b8794!important;
+      box-shadow:0 0 0 3px rgba(31,41,55,.07)!important;
+    }
+    #chAuthGate .ch-auth-submit{
+      width:100%!important;
+      height:48px!important;
+      margin-top:10px!important;
+      border:0!important;
+      border-radius:8px!important;
+      background:#23272b!important;
+      color:#ffffff!important;
+      font:inherit!important;
+      font-size:14px!important;
+      font-weight:700!important;
+      cursor:pointer!important;
+      transition:background .15s ease,transform .05s ease!important;
+    }
+    #chAuthGate .ch-auth-submit:hover{background:#15191d!important}
+    #chAuthGate .ch-auth-submit:active{transform:translateY(1px)!important}
+    #chAuthGate .ch-auth-submit:disabled{
+      cursor:wait!important;
+      opacity:.7!important;
+    }
+    #chAuthGate .ch-auth-error{
+      min-height:18px!important;
+      margin-top:-7px!important;
+      color:#b42318!important;
+      font-size:11px!important;
+      font-weight:600!important;
+      line-height:1.45!important;
+      text-align:left!important;
+    }
+    #chAuthGate .ch-auth-checking{
+      min-height:18px!important;
+      margin-top:-7px!important;
+      color:#667085!important;
+      font-size:11px!important;
+      font-weight:500!important;
+      line-height:1.45!important;
+      text-align:center!important;
+    }
+    @media (max-width:520px){
+      #chAuthGate{padding:16px!important}
+      #chAuthGate .ch-auth-card{
+        width:min(378px,calc(100vw - 32px))!important;
+        padding:40px 28px 42px!important;
+      }
+      #chAuthGate .ch-auth-brand-prefix{font-size:19px!important}
+      #chAuthGate .ch-auth-brand-name{font-size:34px!important}
+    }
+
     #limitedLoginBox{
       display:flex!important;
       flex-direction:column!important;
@@ -86,39 +229,65 @@ function ensureStyles() {
       cursor:pointer!important;
       white-space:nowrap!important;
     }
-    #limitedLoginBox .sidebar-session-btn.primary{
-      background:#1f4e79!important;
-      color:#fff!important;
-      border-color:#1f4e79!important;
-    }
-    #limitedLoginBox .sidebar-session-form{
-      display:grid!important;
-      grid-template-columns:1fr!important;
-      gap:4px!important;
-      width:100%!important;
-      margin-top:2px!important;
-    }
-    #limitedLoginBox .sidebar-session-form[hidden]{display:none!important}
-    #limitedLoginBox .sidebar-session-input{
-      width:100%!important;
-      height:27px!important;
-      box-sizing:border-box!important;
-      padding:0 8px!important;
-      border:1px solid rgba(0,0,0,.22)!important;
-      border-radius:6px!important;
-      background:#fff!important;
-      color:#111!important;
-      font-size:10px!important;
-    }
-    #limitedLoginBox .sidebar-session-error{
-      min-height:0!important;
-      color:#b91c1c!important;
-      font-size:9px!important;
-      font-weight:700!important;
-      white-space:normal!important;
-    }
   `;
   document.head.appendChild(style);
+}
+
+function ensureGate() {
+  let gate = document.getElementById("chAuthGate");
+  if (gate) return gate;
+
+  gate = document.createElement("div");
+  gate.id = "chAuthGate";
+  gate.setAttribute("role", "dialog");
+  gate.setAttribute("aria-modal", "true");
+  gate.setAttribute("aria-label", "CH HOME 로그인");
+  gate.innerHTML = `
+    <section class="ch-auth-card">
+      <h1 class="ch-auth-brand">
+        <span class="ch-auth-brand-prefix">법무법인</span>
+        <span class="ch-auth-brand-name">淸賢</span>
+      </h1>
+      <p class="ch-auth-subtitle">CH HOME</p>
+      <form class="ch-auth-form" id="chAuthForm">
+        <label class="ch-auth-field" for="chAuthLoginId">
+          <span class="ch-auth-label">아이디</span>
+          <input class="ch-auth-input" id="chAuthLoginId" autocomplete="username" placeholder="아이디 입력" required>
+        </label>
+        <label class="ch-auth-field" for="chAuthPassword">
+          <span class="ch-auth-label">비밀번호</span>
+          <input class="ch-auth-input" id="chAuthPassword" type="password" autocomplete="current-password" placeholder="비밀번호" required>
+        </label>
+        <button class="ch-auth-submit" id="chAuthSubmit" type="submit">접속</button>
+        <div class="ch-auth-error" id="chAuthError" role="alert" aria-live="polite"></div>
+        <div class="ch-auth-checking" id="chAuthChecking">로그인 상태를 확인하고 있습니다.</div>
+      </form>
+    </section>`;
+  document.body.prepend(gate);
+  gate.querySelector("#chAuthForm")?.addEventListener("submit", login);
+  return gate;
+}
+
+function showGate({ checking = false } = {}) {
+  ensureStyles();
+  const gate = ensureGate();
+  gate.hidden = false;
+  document.body.classList.add("ch-auth-gated");
+  const checkingEl = document.getElementById("chAuthChecking");
+  if (checkingEl) checkingEl.hidden = !checking;
+  const submit = document.getElementById("chAuthSubmit");
+  const loginId = document.getElementById("chAuthLoginId");
+  const password = document.getElementById("chAuthPassword");
+  if (submit) submit.disabled = checking;
+  if (loginId) loginId.disabled = checking;
+  if (password) password.disabled = checking;
+  if (!checking) setTimeout(() => document.getElementById("chAuthLoginId")?.focus(), 0);
+}
+
+function hideGate() {
+  const gate = ensureGate();
+  gate.hidden = true;
+  document.body.classList.remove("ch-auth-gated");
 }
 
 function ensureBox() {
@@ -137,54 +306,45 @@ function render() {
   ensureStyles();
   const box = ensureBox();
   if (!box) return;
-  box.classList.add("visible");
 
-  if (currentUser) {
-    const role = currentUser.role === "ADMIN" ? "관리자" : currentUser.role === "WORKER" ? "작업자" : String(currentUser.role || "");
-    box.innerHTML = `
-      <div class="limited-login-line">
-        <span class="limited-login-name"></span>
-        <span class="limited-login-role"></span>
-        <div class="sidebar-session-actions">
-          <button type="button" class="sidebar-session-btn" id="sidebarLogoutBtn">로그아웃</button>
-        </div>
-      </div>`;
-    box.querySelector(".limited-login-name").textContent = currentUser.display_name || currentUser.login_id || "";
-    box.querySelector(".limited-login-role").textContent = role;
-    document.getElementById("sidebarLogoutBtn")?.addEventListener("click", logout);
+  if (!currentUser) {
+    box.classList.remove("visible");
+    box.replaceChildren();
     return;
   }
 
+  const role = currentUser.role === "ADMIN" ? "관리자" : currentUser.role === "WORKER" ? "작업자" : String(currentUser.role || "");
   box.innerHTML = `
     <div class="limited-login-line">
-      <span class="limited-login-name">로그인 전</span>
+      <span class="limited-login-name"></span>
+      <span class="limited-login-role"></span>
       <div class="sidebar-session-actions">
-        <button type="button" class="sidebar-session-btn primary" id="sidebarLoginOpenBtn">로그인</button>
+        <button type="button" class="sidebar-session-btn" id="sidebarLogoutBtn">로그아웃</button>
       </div>
-    </div>
-    <form class="sidebar-session-form" id="sidebarLoginForm" hidden>
-      <input class="sidebar-session-input" id="sidebarLoginId" autocomplete="username" placeholder="아이디" required>
-      <input class="sidebar-session-input" id="sidebarPassword" type="password" autocomplete="current-password" placeholder="비밀번호" required>
-      <button type="submit" class="sidebar-session-btn primary">로그인</button>
-      <div class="sidebar-session-error" id="sidebarLoginError"></div>
-    </form>`;
-
-  document.getElementById("sidebarLoginOpenBtn")?.addEventListener("click", () => {
-    const form = document.getElementById("sidebarLoginForm");
-    if (!form) return;
-    form.hidden = !form.hidden;
-    if (!form.hidden) document.getElementById("sidebarLoginId")?.focus();
-  });
-  document.getElementById("sidebarLoginForm")?.addEventListener("submit", login);
+    </div>`;
+  box.querySelector(".limited-login-name").textContent = currentUser.display_name || currentUser.login_id || "";
+  box.querySelector(".limited-login-role").textContent = role;
+  box.classList.add("visible");
+  document.getElementById("sidebarLogoutBtn")?.addEventListener("click", logout);
 }
 
 async function login(event) {
   event?.preventDefault?.();
-  const errorEl = document.getElementById("sidebarLoginError");
+  const errorEl = document.getElementById("chAuthError");
+  const checkingEl = document.getElementById("chAuthChecking");
+  const submit = document.getElementById("chAuthSubmit");
+  const loginIdEl = document.getElementById("chAuthLoginId");
+  const passwordEl = document.getElementById("chAuthPassword");
   if (errorEl) errorEl.textContent = "";
-  const loginId = document.getElementById("sidebarLoginId")?.value?.trim() || "";
-  const password = document.getElementById("sidebarPassword")?.value || "";
+  if (checkingEl) checkingEl.hidden = true;
+
+  const loginId = loginIdEl?.value?.trim() || "";
+  const password = passwordEl?.value || "";
   if (!loginId || !password) return;
+
+  if (submit) submit.disabled = true;
+  if (loginIdEl) loginIdEl.disabled = true;
+  if (passwordEl) passwordEl.disabled = true;
   try {
     await request("/auth/login", {
       method: "POST",
@@ -193,6 +353,11 @@ async function login(event) {
     location.reload();
   } catch (error) {
     if (errorEl) errorEl.textContent = error.message || "로그인에 실패했습니다.";
+    if (submit) submit.disabled = false;
+    if (loginIdEl) loginIdEl.disabled = false;
+    if (passwordEl) passwordEl.disabled = false;
+    passwordEl?.select?.();
+    passwordEl?.focus?.();
   }
 }
 
@@ -218,6 +383,7 @@ async function sendHeartbeat() {
       stopHeartbeat();
       currentUser = null;
       render();
+      showGate();
       location.reload();
     }
   }
@@ -241,28 +407,30 @@ function markSchedulePublic() {
   }
 }
 
-async function syncPublicMenu() {
-  try {
-    const snapshot = await request("/shared-pages/public-menu");
-    window.dispatchEvent(new CustomEvent("local-shared-pages-loaded", {
-      detail: { menus: snapshot?.menus || [], notice: {}, page_contents: {} }
-    }));
-    markSchedulePublic();
-  } catch (error) {
-    console.error("공개 메뉴 설정 불러오기 실패:", error);
-  }
-}
-
 async function syncSession() {
   if (syncing) return;
   syncing = true;
+  showGate({ checking: true });
   try {
-    try { currentUser = await request("/auth/me"); }
-    catch (error) { if (error.status === 401) currentUser = null; else throw error; }
+    try {
+      currentUser = await request("/auth/me");
+    } catch (error) {
+      if (error.status === 401) currentUser = null;
+      else throw error;
+    }
+
     render();
     syncHeartbeat();
-    if (!currentUser) await syncPublicMenu();
     markSchedulePublic();
+
+    if (currentUser) hideGate();
+    else showGate();
+  } catch (error) {
+    currentUser = null;
+    render();
+    showGate();
+    const errorEl = document.getElementById("chAuthError");
+    if (errorEl) errorEl.textContent = "서버 연결을 확인해주세요.";
   } finally {
     syncing = false;
   }
@@ -297,6 +465,8 @@ function watchGroupReviewSession() {
   syncSessionFromGroupReview();
 }
 
+ensureStyles();
+showGate({ checking: true });
 window.addEventListener("local-shared-pages-loaded", markSchedulePublic);
 window.addEventListener("beforeunload", stopHeartbeat);
 watchGroupReviewSession();
