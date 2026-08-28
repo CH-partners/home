@@ -1844,19 +1844,6 @@ window.logoutAdmin = async function() {
 
 async function ensureInitialData() {
   try {
-    const snap = await getDoc(settingsRef);
-    if (!snap.exists()) {
-      await setDoc(settingsRef, removeUndefinedDeep({
-        menus: defaultMenus,
-        notice: { title: "공지 제목", date: "", html: "<li>공지 내용이 없습니다.</li>" },
-        pageContents: defaultPageContents
-      }));
-    }
-  } catch (error) {
-    console.error("초기 데이터 생성 실패:", error);
-  }
-
-  try {
     const allocationSnap = await getDoc(allocationRef);
     if (!allocationSnap.exists()) {
       await setDoc(allocationRef, removeUndefinedDeep({ members: fixedMembers, projects: [] }));
@@ -1876,25 +1863,6 @@ onAuthStateChanged(auth, async user => {
   }
   window.groupReviewApi?.renderGroupReviewUI();
 });
-
-onSnapshot(settingsRef, snap => {
-  const data = snap.data() || {};
-  menuData = Array.isArray(data.menus) && data.menus.length ? data.menus : [...defaultMenus];
-  noticeData = data.notice || { title: "공지 제목", date: "", html: "<li>공지 내용이 없습니다.</li>" };
-  pageContents = normalizePageContents(data.pageContents || defaultPageContents);
-  ensureFixedMenus();
-
-  renderMenus();
-  renderNotice();
-  renderAllContents();
-
-  const activeTitle = document.querySelector(".nav-item.active")?.textContent?.trim();
-  if (!activeTitle) {
-    showSheet(0, "청현 공지사항");
-  }
-});
-
-
 
 initEditors();
 
