@@ -34,7 +34,6 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const settingsRef = doc(db, "sharedPages", "mainSettings");
 const allocationRef = doc(db, "sharedPages", "workAllocation");
 const schedulesColRef = collection(db, "schedules");
 const editLogsColRef = collection(db, "editLogs");
@@ -1710,17 +1709,6 @@ function syncMenuDataFromTable() {
   ensureFixedMenus();
 }
 
-window.saveMenusToFirebase = async function() {
-  if (!isAdmin(currentUser)) return alert("관리자만 저장할 수 있습니다.");
-  syncMenuDataFromTable();
-  await setDoc(settingsRef, removeUndefinedDeep({ menus: menuData, notice: noticeData, pageContents }), { merge: true });
-  await addEditLog("메뉴", "메뉴 설정", "수정");
-  renderMenus();
-  
-  closeModal("menuModal");
-  alert("메뉴가 저장되었습니다.");
-};
-
 function getPanelTitleByKey(panelKey) {
   const map = {
     rent: "임대차",
@@ -1786,40 +1774,6 @@ function syncContentFromEditor() {
   config.tableData = tableData;
   config.html = bodyHtml + tableHtml;
 }
-
-window.saveContentToFirebase = async function() {
-  try {
-    if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
-    syncContentFromEditor();
-    await setDoc(settingsRef, removeUndefinedDeep({ pageContents, menus: menuData, notice: noticeData }), { merge: true });
-    await addEditLog("본문", getPanelTitleByKey(currentContentPanelKey), "수정");
-    renderAllContents();
-    closeModal("contentModal");
-    alert("내용이 저장되었습니다.");
-  } catch (error) {
-    console.error("내용 저장 실패:", error);
-    alert("내용 저장 실패: " + (error.message || error));
-  }
-};
-
-window.saveNoticeToFirebase = async function() {
-  try {
-    if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
-    noticeData = {
-      title: document.getElementById("noticeFormTitle").value.trim() || "공지 제목",
-      date: document.getElementById("noticeFormDate").value || "",
-      html: noticeEditor.root.innerHTML
-    };
-    await setDoc(settingsRef, removeUndefinedDeep({ notice: noticeData, menus: menuData, pageContents }), { merge: true });
-    await addEditLog("공지사항", noticeData.title, "수정");
-    renderNotice();
-    closeModal("noticeModal");
-    alert("공지사항이 저장되었습니다.");
-  } catch (error) {
-    console.error("공지 저장 실패:", error);
-    alert("공지 저장 실패: " + (error.message || error));
-  }
-};
 
 window.loginAdmin = async function() {
   const email = document.getElementById("loginEmail").value.trim();
