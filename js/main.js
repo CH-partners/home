@@ -38,13 +38,7 @@ const allocationRef = doc(db, "sharedPages", "workAllocation");
 const editLogsColRef = collection(db, "editLogs");
 
 let currentUser = null;
-let currentContentPanelKey = null;
 let noticeEditor = null;
-let contentEditor = null;
-let currentContentTableData = {
-  enabled: false,
-  rows: []
-};
 let menuData = [];
 let noticeData = {
   title: "공지 제목",
@@ -53,7 +47,6 @@ let noticeData = {
 };
 let navGroupState = {};
 let workspaceFullscreen = false;
-let pageContents = {};
 
 function removeUndefinedDeep(value) {
   if (Array.isArray(value)) {
@@ -112,23 +105,11 @@ function isQnaMenu(menu) {
 
 function getMenuGroup(menu) {
   if (menu.group) return menu.group;
-
   if (isQnaMenu(menu)) return "qna";
-
   return "";
 }
 
-function getGroupTitle(groupKey) {
-  const map = {
-    qna: "Q&A 모음",
-    search: "비고 문구(경매, 감정평가, 기타)",
-    work: "법정선순위",
-    reference: "참고 메뉴"
-  };
-
-  return map[groupKey] || groupKey;
-}
-  const dashboardGroups = [
+const dashboardGroups = [
   {
     key: "notice",
     title: "공지사항",
@@ -174,7 +155,6 @@ function getDashboardGroupTitle(groupKey) {
 
 function isToolDashboardMenu(menu) {
   const title = (menu.title || "").trim();
-
   return (
     Number(menu.panelIndex) === 11 ||
     Number(menu.panelIndex) === 12 ||
@@ -205,23 +185,19 @@ function getMenusByDashboardGroup(groupKey) {
 
 function ensureDashboardPanel(groupKey) {
   const main = document.querySelector(".main");
-  const panelIndex = `dashboard-${groupKey}`;
-
   let panel = document.querySelector(`.sheet-panel[data-dashboard="${groupKey}"]`);
 
   if (!panel) {
     panel = document.createElement("div");
     panel.className = "sheet-panel dashboard-panel";
     panel.setAttribute("data-dashboard", groupKey);
-
     panel.innerHTML = `
       <header class="sheet-header">
         <h1>${escapeHtml(getDashboardGroupTitle(groupKey))}</h1>
       </header>
       <section class="dashboard-card-grid" id="dashboardGrid-${groupKey}"></section>
     `;
-
-    main.appendChild(panel);
+    main?.appendChild(panel);
   }
 
   return panel;
@@ -232,52 +208,40 @@ function showDashboardGroup(groupKey) {
   document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
 
   const panel = ensureDashboardPanel(groupKey);
-  const grid = panel.querySelector(`#dashboardGrid-${groupKey}`);
+  const grid = panel?.querySelector(`#dashboardGrid-${groupKey}`);
   const menus = getMenusByDashboardGroup(groupKey);
+  if (!grid) return;
 
   grid.innerHTML = "";
-
   if (!menus.length) {
-    grid.innerHTML = `
-      <div class="dashboard-empty">
-        등록된 메뉴가 없습니다.
-      </div>
-    `;
+    grid.innerHTML = '<div class="dashboard-empty">등록된 메뉴가 없습니다.</div>';
   } else {
-    menus.forEach(menu => {
-      grid.appendChild(createDashboardCard(menu));
-    });
+    menus.forEach(menu => grid.appendChild(createDashboardCard(menu)));
   }
 
-  panel.classList.add("active");
-
-  const activeBtn = document.querySelector(`[data-dashboard-nav="${groupKey}"]`);
-  if (activeBtn) activeBtn.classList.add("active");
+  panel?.classList.add("active");
+  document.querySelector(`[data-dashboard-nav="${groupKey}"]`)?.classList.add("active");
 }
 
 function getMenuIcon(title) {
   title = title || "";
-
   if (title.includes("분배표")) return "📊";
   if (title.includes("스케줄")) return "📅";
   if (title.includes("그룹리뷰") || title.includes("Group Review")) return "📝";
   if (title.includes("소액")) return "🏠";
   if (title.includes("전월세")) return "🏢";
   if (title.includes("최우선")) return "💰";
-
   if (title.includes("임대차") || title.includes("임차")) return "💬";
   if (title.includes("보증")) return "📜";
   if (title.includes("채권") || title.includes("피담보")) return "📋";
   if (title.includes("매각")) return "🏷️";
   if (title.includes("임금")) return "⚖️";
   if (title.includes("조세") || title.includes("당해세")) return "🏛️";
-
   if (title.includes("경매")) return "✒️";
   if (title.includes("감정")) return "📝";
   if (title.includes("공유")) return "🔥";
   if (title.includes("검토코드")) return "📌";
   if (title.includes("참고")) return "🚨";
-
   return "📁";
 }
 
@@ -294,7 +258,6 @@ function createDashboardCard(menu) {
   const title = menu.title || "메뉴";
   const groupKey = getMenuGroup(menu) || "tool";
   const icon = menu.icon || getMenuIcon(title);
-  
   card.innerHTML = `
     <div class="dashboard-card-top ${groupKey}"></div>
     <div class="dashboard-card-body">
@@ -308,32 +271,24 @@ function createDashboardCard(menu) {
     if (menu.kind === "iframe" && menu.url) {
       const panelIndex = Number(menu.panelIndex || 10);
       let panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
-
       if (!panel) {
         panel = document.createElement("div");
         panel.className = "sheet-panel";
         panel.setAttribute("data-index", String(panelIndex));
         panel.innerHTML = `
-          <header class="sheet-header">
-            <h1>${escapeHtml(menu.title || "외부페이지")}</h1>
-          </header>
-          <section class="major-card iframe-card">
-            <iframe class="tool-frame" src="${escapeHtml(menu.url)}"></iframe>
-          </section>
+          <header class="sheet-header"><h1>${escapeHtml(menu.title || "외부페이지")}</h1></header>
+          <section class="major-card iframe-card"><iframe class="tool-frame" src="${escapeHtml(menu.url)}"></iframe></section>
         `;
-        document.querySelector(".main").appendChild(panel);
+        document.querySelector(".main")?.appendChild(panel);
       } else {
         const frame = panel.querySelector("iframe");
         if (frame) frame.src = menu.url;
       }
     }
 
-    renderAllContents();
-
     if (Number(menu.panelIndex) === 11) {
       window.allocationApi?.renderAllocationUI();
     }
-
     showSheet(Number(menu.panelIndex || 0), menu.title);
   };
 
@@ -353,7 +308,6 @@ function updateAdminUI() {
   document.getElementById("menuEditBtn").classList.toggle("hidden", !admin);
   document.getElementById("logBtn")?.classList.toggle("hidden", !admin);
   document.getElementById("noticeEditBtn").classList.toggle("hidden", !admin);
-  document.querySelectorAll(".panel-edit-btn").forEach(btn => btn.classList.toggle("hidden", !admin));
   window.groupReviewApi?.renderGroupReviewUI();
 }
 
@@ -387,7 +341,8 @@ function showSheet(index, title = "") {
   document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
   const panel = document.querySelector('.sheet-panel[data-index="' + index + '"]');
   if (panel) panel.classList.add("active");
-  const matchedButton = Array.from(document.querySelectorAll(".nav-item")).find(btn => btn.textContent.trim() === title || btn.textContent.trim().includes(title));
+  const matchedButton = Array.from(document.querySelectorAll(".nav-item"))
+    .find(btn => btn.textContent.trim() === title || btn.textContent.trim().includes(title));
   if (matchedButton) matchedButton.classList.add("active");
   if (Number(index) === 12 && window.scheduleApi) {
     requestAnimationFrame(() => window.scheduleApi.updateSize());
@@ -397,12 +352,6 @@ function showSheet(index, title = "") {
   }
 }
 window.showSheet = showSheet;
-
-function getDynamicPanelKey(menu) {
-  return `panel_${Number(menu.panelIndex)}`;
-}
-
-const reservedPanelIndexes = new Set([11, 12, 13]);
 
 function getMenuTitle(menu) {
   return (menu?.title || "").trim();
@@ -429,137 +378,10 @@ function isGroupReviewTitle(title) {
 function getFixedMenuKind(menu) {
   const title = getMenuTitle(menu);
   const panelIndex = Number(menu?.panelIndex);
-
   if (isWorkAllocationTitle(title) || (panelIndex === 11 && title === "")) return "work";
   if (isScheduleTitle(title)) return "schedule";
   if (isGroupReviewTitle(title)) return "review";
   return "";
-}
-
-function collectUsedPanelIndexes() {
-  const usedIndexes = new Set();
-
-  menuData.forEach(menu => {
-    const panelIndex = Number(menu.panelIndex);
-    if (Number.isFinite(panelIndex)) usedIndexes.add(panelIndex);
-  });
-
-  Object.keys(pageContents || {}).forEach(key => {
-    const match = key.match(/^panel_(\d+)$/);
-    if (match) usedIndexes.add(Number(match[1]));
-  });
-
-  return usedIndexes;
-}
-
-function getNextAvailableDynamicPanelIndex(usedIndexes = collectUsedPanelIndexes()) {
-  let nextIndex = 14;
-  while (usedIndexes.has(nextIndex) || reservedPanelIndexes.has(nextIndex)) {
-    nextIndex += 1;
-  }
-  usedIndexes.add(nextIndex);
-  return nextIndex;
-}
-
-function copyDynamicPageContent(oldPanelIndex, newPanelIndex, title) {
-  const oldKey = `panel_${oldPanelIndex}`;
-  const newKey = `panel_${newPanelIndex}`;
-
-  if (pageContents?.[oldKey] && !pageContents[newKey]) {
-    pageContents[newKey] = normalizePageContentEntry(newKey, pageContents[oldKey], title);
-  } else if (!pageContents?.[newKey]) {
-    pageContents[newKey] = createDefaultPageContentEntry(newKey, title);
-  }
-}
-
-function recoverReservedPanelIndexConflicts() {
-  if (!Array.isArray(menuData)) return;
-
-  const usedIndexes = collectUsedPanelIndexes();
-
-  menuData = menuData.map(menu => {
-    const panelIndex = Number(menu.panelIndex);
-    if (!reservedPanelIndexes.has(panelIndex) || getFixedMenuKind(menu)) return menu;
-
-    const nextPanelIndex = getNextAvailableDynamicPanelIndex(usedIndexes);
-    copyDynamicPageContent(panelIndex, nextPanelIndex, menu.title || "메뉴");
-
-    return {
-      ...menu,
-      panelIndex: nextPanelIndex,
-      kind: menu.kind || "panel"
-    };
-  });
-}
-
-function getPageContentSearchText(entry) {
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return "";
-  return [entry.majorTitle, entry.html, entry.bodyHtml]
-    .filter(value => typeof value === "string")
-    .join(" ")
-    .replace(/<[^>]*>/g, " ");
-}
-
-function isAppraisalRemarkLabel(value) {
-  const compactText = compactKoreanLabel(value);
-  return compactText.includes("감정평가비고") || (
-    compactText.includes("감정평가") && compactText.includes("비고")
-  );
-}
-
-function hasAppraisalRemarkMenu() {
-  return menuData.some(menu => isAppraisalRemarkLabel(menu.title));
-}
-
-function insertRestoredRemarkMenu(menu) {
-  const auctionRemarkIndex = menuData.findIndex(item => {
-    const compactTitle = compactKoreanLabel(item.title);
-    return compactTitle.includes("경매") && compactTitle.includes("비고");
-  });
-
-  if (auctionRemarkIndex >= 0) {
-    menuData.splice(auctionRemarkIndex + 1, 0, menu);
-    return;
-  }
-
-  menuData.push(menu);
-}
-
-function recoverLegacyAppraisalRemarkMenu() {
-  if (hasAppraisalRemarkMenu()) return;
-
-  const candidates = Object.entries(pageContents || {})
-    .filter(([key, entry]) => /^panel_\d+$/.test(key) && isAppraisalRemarkLabel(getPageContentSearchText(entry)))
-    .map(([key, entry]) => {
-      const panelIndex = Number(key.replace("panel_", ""));
-      const isReusablePanel = !reservedPanelIndexes.has(panelIndex) &&
-        !menuData.some(menu => Number(menu.panelIndex) === panelIndex);
-      const titleMatchScore = isAppraisalRemarkLabel(entry?.majorTitle) ? 10 : 0;
-      return { key, entry, panelIndex, isReusablePanel, score: (isReusablePanel ? 20 : 0) + titleMatchScore };
-    })
-    .sort((a, b) => b.score - a.score);
-
-  if (!candidates.length) return;
-
-  const source = candidates[0];
-  const usedIndexes = collectUsedPanelIndexes();
-  const restoredPanelIndex = source.isReusablePanel
-    ? source.panelIndex
-    : getNextAvailableDynamicPanelIndex(usedIndexes);
-  const restoredKey = `panel_${restoredPanelIndex}`;
-  const restoredTitle = "감정평가 비고";
-
-  if (!pageContents[restoredKey]) {
-    pageContents[restoredKey] = normalizePageContentEntry(restoredKey, source.entry, restoredTitle);
-  }
-
-  insertRestoredRemarkMenu({
-    title: "✒️ 감정평가 비고",
-    panelIndex: restoredPanelIndex,
-    location: "top",
-    kind: "panel",
-    group: "search"
-  });
 }
 
 function ensureFixedMenus() {
@@ -585,8 +407,6 @@ function ensureFixedMenus() {
     theme: "blue"
   };
 
-  recoverReservedPanelIndexConflicts();
-
   menuData = menuData.filter(menu => {
     const fixedKind = getFixedMenuKind(menu);
     if (fixedKind === "work" && Number(menu.panelIndex) !== 11) return false;
@@ -595,52 +415,29 @@ function ensureFixedMenus() {
     return true;
   });
 
-  const hasWorkMenu = menuData.some(menu =>
-    Number(menu.panelIndex) === 11 ||
-    getFixedMenuKind(menu) === "work"
-  );
-
-  const hasScheduleMenu = menuData.some(menu =>
-    Number(menu.panelIndex) === 12 ||
-    getFixedMenuKind(menu) === "schedule"
-  );
-  const hasReviewMenu = menuData.some(menu =>
-    Number(menu.panelIndex) === 13 ||
-    getFixedMenuKind(menu) === "review"
-  );
+  const hasWorkMenu = menuData.some(menu => Number(menu.panelIndex) === 11 || getFixedMenuKind(menu) === "work");
+  const hasScheduleMenu = menuData.some(menu => Number(menu.panelIndex) === 12 || getFixedMenuKind(menu) === "schedule");
+  const hasReviewMenu = menuData.some(menu => Number(menu.panelIndex) === 13 || getFixedMenuKind(menu) === "review");
 
   if (!hasWorkMenu) {
     menuData.push(fixedWorkMenu);
   } else {
-    menuData = menuData.map(menu => {
-      if (
-        Number(menu.panelIndex) === 11 ||
-        getFixedMenuKind(menu) === "work"
-      ) return fixedWorkMenu;
-      return menu;
-    });
+    menuData = menuData.map(menu => Number(menu.panelIndex) === 11 || getFixedMenuKind(menu) === "work" ? fixedWorkMenu : menu);
   }
 
   if (!hasScheduleMenu) {
     menuData.push(fixedScheduleMenu);
   } else {
-    menuData = menuData.map(menu => {
-      if (Number(menu.panelIndex) === 12 || getFixedMenuKind(menu) === "schedule") return fixedScheduleMenu;
-      return menu;
-    });
+    menuData = menuData.map(menu => Number(menu.panelIndex) === 12 || getFixedMenuKind(menu) === "schedule" ? fixedScheduleMenu : menu);
   }
 
   if (!hasReviewMenu) {
     menuData.push(fixedReviewMenu);
   } else {
-    menuData = menuData.map(menu => {
-      if (Number(menu.panelIndex) === 13 || getFixedMenuKind(menu) === "review") return fixedReviewMenu;
-      return menu;
-    });
+    menuData = menuData.map(menu => Number(menu.panelIndex) === 13 || getFixedMenuKind(menu) === "review" ? fixedReviewMenu : menu);
   }
-
-  recoverLegacyAppraisalRemarkMenu();
 }
+
 function createMenuButton(menu, isChild = false) {
   const btn = document.createElement("button");
   btn.className = "nav-item";
@@ -650,15 +447,10 @@ function createMenuButton(menu, isChild = false) {
   if (isChild) btn.classList.add("nav-sub-item");
 
   if (menu.location === "bottom") {
-      if (menu.theme === "purple") {
-          btn.classList.add("nav-item-purple");
-      } else if (menu.theme === "pink") {
-          btn.classList.add("nav-item-pink");
-      } else if (menu.theme === "blue") {
-          btn.classList.add("nav-item-blue");
-      } else {
-          btn.classList.add("nav-item-green");
-      }
+    if (menu.theme === "purple") btn.classList.add("nav-item-purple");
+    else if (menu.theme === "pink") btn.classList.add("nav-item-pink");
+    else if (menu.theme === "blue") btn.classList.add("nav-item-blue");
+    else btn.classList.add("nav-item-green");
   }
 
   if (isTopToolMenu) {
@@ -681,35 +473,27 @@ function createMenuButton(menu, isChild = false) {
     btn.textContent = "그룹리뷰";
   } else {
     const title = menu.title || "메뉴";
-    btn.textContent = isTopToolMenu
-      ? (stripLeadingMenuIcon(title) || "메뉴")
-      : title;
+    btn.textContent = isTopToolMenu ? (stripLeadingMenuIcon(title) || "메뉴") : title;
   }
 
   btn.addEventListener("click", () => {
     if (menu.kind === "iframe" && menu.url) {
       const panelIndex = Number(menu.panelIndex || 10);
       let panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
-    
       if (!panel) {
         panel = document.createElement("div");
         panel.className = "sheet-panel";
         panel.setAttribute("data-index", String(panelIndex));
         panel.innerHTML = `
-          <header class="sheet-header">
-            <h1>${escapeHtml(menu.title || "외부페이지")}</h1>
-          </header>
-          <section class="major-card iframe-card">
-            <iframe class="tool-frame" src="${escapeHtml(menu.url)}"></iframe>
-          </section>
+          <header class="sheet-header"><h1>${escapeHtml(menu.title || "외부페이지")}</h1></header>
+          <section class="major-card iframe-card"><iframe class="tool-frame" src="${escapeHtml(menu.url)}"></iframe></section>
         `;
-        document.querySelector(".main").appendChild(panel);
+        document.querySelector(".main")?.appendChild(panel);
       } else {
         const frame = panel.querySelector("iframe");
         if (frame) frame.src = menu.url;
       }
     }
-    renderAllContents();
     if (fixedKind === "work") window.allocationApi?.renderAllocationUI();
     if (fixedKind === "review") window.groupReviewApi?.renderGroupReviewUI();
     showSheet(Number(menu.panelIndex || 0), menu.title);
@@ -728,6 +512,7 @@ function renderMenus() {
 
   const topNav = document.getElementById("topNav");
   const bottomNav = document.getElementById("bottomNav");
+  if (!topNav || !bottomNav) return;
 
   topNav.innerHTML = "";
   bottomNav.innerHTML = "";
@@ -744,22 +529,16 @@ function renderMenus() {
   divider1.className = "nav-divider";
   topNav.appendChild(divider1);
 
-  // 업무도구 메뉴들을 메인메뉴로 렌더링
-  const toolMenus = getMenusByDashboardGroup("tool")
-    .filter(menu => !renderedMenus.has(menu));
-  
+  const toolMenus = getMenusByDashboardGroup("tool").filter(menu => !renderedMenus.has(menu));
   toolMenus.forEach(menu => {
     topNav.appendChild(createMenuButton(menu));
     renderedMenus.add(menu);
   });
 
-  // 나머지 그룹들 렌더링 (tool 제외)
   dashboardGroups
     .filter(group => group.key !== "notice" && group.key !== "tool")
     .forEach(group => {
-      const menus = getMenusByDashboardGroup(group.key)
-        .filter(menu => !renderedMenus.has(menu));
-
+      const menus = getMenusByDashboardGroup(group.key).filter(menu => !renderedMenus.has(menu));
       if (!menus.length) return;
 
       const isExpanded = !!navGroupState[group.key];
@@ -788,23 +567,16 @@ function renderMenus() {
         groupWrap.appendChild(createMenuButton(menu, true));
         renderedMenus.add(menu);
       });
-
       topNav.appendChild(groupWrap);
     });
 
   const ungroupedMenus = menuData.filter(menu => !renderedMenus.has(menu));
-
   if (ungroupedMenus.length) {
     const extraDivider = document.createElement("div");
     extraDivider.className = "nav-divider";
     topNav.appendChild(extraDivider);
-
-    ungroupedMenus.forEach(menu => {
-      topNav.appendChild(createMenuButton(menu));
-    });
+    ungroupedMenus.forEach(menu => topNav.appendChild(createMenuButton(menu)));
   }
-
-  renderAllContents();
 }
 
 function renderNotice() {
@@ -813,144 +585,13 @@ function renderNotice() {
 
   const wrap = document.getElementById("noticeItems");
   if (!wrap) return;
-
   const html = (noticeData.html || "").trim();
-
   if (!html) {
     wrap.innerHTML = "<li>공지 내용이 없습니다.</li>";
     return;
   }
-
   const hasBlockTags = /<(li|ul|ol|p|div|h[1-6]|blockquote)/i.test(html);
-  if (hasBlockTags) {
-    wrap.innerHTML = html;
-  } else {
-    wrap.innerHTML = `<li>${html}</li>`;
-  }
-}
-
-function ensureDynamicPanels() {
-  const main = document.querySelector(".main");
-  if (!main) return;
-
-  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12,13]);
-
-  menuData.forEach(menu => {
-    const panelIndex = Number(menu.panelIndex);
-    if (fixedPanelIndexes.has(panelIndex)) return;
-    if (menu.kind === "iframe") return;
-
-    let panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
-
-    if (!panel) {
-      panel = document.createElement("div");
-      panel.className = "sheet-panel";
-      panel.setAttribute("data-index", String(panelIndex));
-
-      panel.innerHTML = `
-        <header class="sheet-header">
-          <h1>${escapeHtml(menu.title || "메뉴")}</h1>
-          <div class="sheet-tools">
-            <button class="action-btn hidden panel-edit-btn dynamic-panel-edit-btn" data-content-key="${getDynamicPanelKey(menu)}">내용 수정</button>
-          </div>
-        </header>
-        <section class="major-card"></section>
-      `;
-
-      main.appendChild(panel);
-    } else {
-      const h1 = panel.querySelector("h1");
-      if (h1) h1.textContent = menu.title || "메뉴";
-
-      let editBtn = panel.querySelector(".dynamic-panel-edit-btn");
-      if (!editBtn) {
-        const tools = panel.querySelector(".sheet-tools");
-        if (tools) {
-          editBtn = document.createElement("button");
-          editBtn.className = "action-btn hidden panel-edit-btn dynamic-panel-edit-btn";
-          editBtn.textContent = "내용 수정";
-          tools.appendChild(editBtn);
-        }
-      }
-      if (editBtn) {
-        editBtn.setAttribute("data-content-key", getDynamicPanelKey(menu));
-      }
-    }
-
-    const panelKey = getDynamicPanelKey(menu);
-    if (!pageContents[panelKey]) {
-      pageContents[panelKey] = createDefaultPageContentEntry(panelKey, menu.title || "메뉴");
-    } else {
-      pageContents[panelKey] = normalizePageContentEntry(panelKey, pageContents[panelKey], menu.title || "메뉴");
-    }
-  });
-
-  bindContentEditButtons();
-}
-
-function bindContentEditButtons() {
-  document.querySelectorAll(".panel-edit-btn[data-content-key]").forEach(btn => {
-    btn.onclick = () => {
-      const key = btn.getAttribute("data-content-key");
-      window.openContentEditor(key);
-    };
-  });
-}
-  function renderAllContents() {
-  const renderMap = {
-    rent: "content-rent",
-    wage: "content-wage",
-    tax: "content-tax",
-    tenantqa: "content-tenantqa",
-    guaranteeqa: "content-guaranteeqa",
-    securedqa: "content-securedqa",
-    saleqa: "content-saleqa",
-    browseqa: "content-browseqa",
-    machineqa: "content-machineqa"
-  };
-
-  Object.entries(renderMap).forEach(([key, targetId]) => {
-    const el = document.getElementById(targetId);
-    const config = pageContents[key];
-    if (!el || !config) return;
-    el.innerHTML = `
-      <div class="major-title">${escapeHtml(config.majorTitle || "")}</div>
-      <div class="rich-preview">${config.html || ""}</div>
-    `;
-  });
-
-  ensureDynamicPanels();
-
-  const fixedPanelIndexes = new Set([0,1,2,3,4,5,6,7,8,9,10,11,12,13]);
-
-  menuData.forEach(menu => {
-    const panelIndex = Number(menu.panelIndex);
-    if (fixedPanelIndexes.has(panelIndex)) return;
-    if (menu.kind === "iframe") return;
-
-    const panel = document.querySelector(`.sheet-panel[data-index="${panelIndex}"]`);
-    if (!panel) return;
-
-    const section = panel.querySelector("section.major-card");
-    if (!section) return;
-
-    const panelKey = getDynamicPanelKey(menu);
-    const config = pageContents[panelKey] || {
-      majorTitle: menu.title || "메뉴",
-      html: `<p>내용을 입력하세요.</p>`
-    };
-
-    section.innerHTML = `
-      <div class="major-title">${escapeHtml(config.majorTitle || "")}</div>
-      <div class="rich-preview">${config.html || ""}</div>
-    `;
-
-    const h1 = panel.querySelector("h1");
-    if (h1) h1.textContent = menu.title || "메뉴";
-  });
-
-  updateAdminUI();
-  window.allocationApi?.renderAllocationUI();
+  wrap.innerHTML = hasBlockTags ? html : `<li>${html}</li>`;
 }
 
 function getEditorToolbar() {
@@ -968,11 +609,9 @@ function createEditor(selector) {
   if (typeof Quill === "undefined") {
     throw new Error("Quill 편집기를 불러오지 못했습니다.");
   }
-
   if (!document.querySelector(selector)) {
     throw new Error(`${selector} 영역을 찾을 수 없습니다.`);
   }
-
   return new Quill(selector, {
     theme: "snow",
     modules: { toolbar: getEditorToolbar() }
@@ -987,19 +626,10 @@ function initEditors() {
   } catch (error) {
     console.error("공지 편집기 초기화 실패:", error);
   }
-
-  try {
-    if (!contentEditor?.root) {
-      contentEditor = createEditor("#contentEditor");
-    }
-  } catch (error) {
-    console.error("내용 편집기 초기화 실패:", error);
-  }
 }
 
 function ensureNoticeEditorReady() {
   if (noticeEditor?.root) return true;
-
   try {
     noticeEditor = createEditor("#noticeEditor");
     return true;
@@ -1010,297 +640,19 @@ function ensureNoticeEditorReady() {
   }
 }
 
-function ensureContentEditorReady() {
-  if (contentEditor?.root) return true;
-
-  try {
-    contentEditor = createEditor("#contentEditor");
-    return true;
-  } catch (error) {
-    console.error("내용 편집기 준비 실패:", error);
-    alert("내용 편집기를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
-    return false;
-  }
-}
-
-function hasContentTableValue(rows) {
-  return rows.some(row => row.some(cell => String(cell || "").trim() !== ""));
-}
-
-function getContentTableColumnCount(rows) {
-  return Math.max(2, ...rows.map(row => row.length), 2);
-}
-
-function createBlankContentTable(rowCount = 2, colCount = 2) {
-  return Array.from({ length: rowCount }, () => Array.from({ length: colCount }, () => ""));
-}
-
-function deserializeTableData(tableData) {
-  const sourceRows = Array.isArray(tableData)
-    ? tableData
-    : Array.isArray(tableData?.rows)
-      ? tableData.rows
-      : [];
-
-  const rows = sourceRows
-    .filter(row => Array.isArray(row))
-    .map(row => row.map(cell => String(cell ?? "")));
-
-  const colCount = getContentTableColumnCount(rows);
-  const normalizedRows = rows.map(row => {
-    const normalizedRow = [...row];
-    while (normalizedRow.length < colCount) normalizedRow.push("");
-    return normalizedRow;
-  });
-
-  const enabled = Boolean(tableData?.enabled || hasContentTableValue(normalizedRows));
-
-  return {
-    enabled,
-    rows: enabled && normalizedRows.length ? normalizedRows : []
-  };
-}
-
-function serializeTableData(tableData) {
-  const normalized = deserializeTableData(tableData);
-  return {
-    enabled: normalized.enabled,
-    rows: normalized.rows
-  };
-}
-
-function ensureEditableContentTable() {
-  if (!currentContentTableData.enabled) {
-    currentContentTableData = {
-      enabled: true,
-      rows: createBlankContentTable()
-    };
-    return;
-  }
-
-  if (!currentContentTableData.rows.length) {
-    currentContentTableData.rows = createBlankContentTable();
-    return;
-  }
-
-  const colCount = getContentTableColumnCount(currentContentTableData.rows);
-  currentContentTableData.rows = currentContentTableData.rows.map(row => {
-    const nextRow = [...row];
-    while (nextRow.length < colCount) nextRow.push("");
-    return nextRow;
-  });
-}
-
-function buildContentTableHtml(tableData) {
-  const normalized = deserializeTableData(tableData);
-  if (!normalized.enabled || !normalized.rows.length || !hasContentTableValue(normalized.rows)) {
-    return "";
-  }
-
-  const [headerRow, ...bodyRows] = normalized.rows;
-  const headerHtml = `
-    <thead>
-      <tr>${headerRow.map(cell => `<th>${escapeHtml(cell)}</th>`).join("")}</tr>
-    </thead>
-  `;
-  const bodyHtml = bodyRows.length
-    ? `
-      <tbody>
-        ${bodyRows.map(row => `
-          <tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>
-        `).join("")}
-      </tbody>
-    `
-    : "";
-
-  return `
-    <div class="content-table-preview">
-      <table>
-        ${headerHtml}
-        ${bodyHtml}
-      </table>
-    </div>
-  `;
-}
-
-function createDefaultPageContentEntry(panelKey, title) {
-  const bodyHtml = `<p>내용을 입력하세요.</p>`;
-  return {
-    majorTitle: title || getPanelTitleByKey(panelKey),
-    bodyHtml,
-    tableData: {
-      enabled: false,
-      rows: []
-    },
-    html: bodyHtml
-  };
-}
-
-function normalizePageContentEntry(panelKey, entry, title) {
-  const fallback = createDefaultPageContentEntry(panelKey, title);
-
-  if (typeof entry === "string") {
-    const bodyHtml = entry || fallback.bodyHtml;
-    return {
-      ...fallback,
-      bodyHtml,
-      tableData: {
-        enabled: false,
-        rows: []
-      },
-      html: bodyHtml
-    };
-  }
-
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-    return fallback;
-  }
-
-  const bodyHtml =
-    typeof entry.bodyHtml === "string" && entry.bodyHtml.trim()
-      ? entry.bodyHtml
-      : typeof entry.html === "string" && entry.html.trim()
-        ? entry.html
-        : fallback.bodyHtml;
-
-  const tableData = deserializeTableData(entry.tableData || fallback.tableData);
-  const html =
-    typeof entry.html === "string" && entry.html.trim()
-      ? entry.html
-      : bodyHtml + buildContentTableHtml(tableData);
-
-  return {
-    ...fallback,
-    ...entry,
-    majorTitle: entry.majorTitle || title || fallback.majorTitle || getPanelTitleByKey(panelKey),
-    bodyHtml,
-    tableData,
-    html
-  };
-}
-
-function normalizePageContents(rawContents) {
-  const source =
-    rawContents && typeof rawContents === "object" && !Array.isArray(rawContents)
-      ? rawContents
-      : {};
-  const normalized = {};
-
-  Object.keys(source).forEach(key => {
-    normalized[key] = normalizePageContentEntry(key, source[key]);
-  });
-
-  return normalized;
-}
-
-function renderContentTableEditor() {
-  const table = document.getElementById("contentTableEditor");
-  if (!table) return;
-
-  if (!currentContentTableData.enabled) {
-    table.innerHTML = `
-      <tbody>
-        <tr>
-          <td class="note">표를 사용하려면 표 사용을 눌러주세요.</td>
-        </tr>
-      </tbody>
-    `;
-    return;
-  }
-
-  ensureEditableContentTable();
-  const colCount = getContentTableColumnCount(currentContentTableData.rows);
-
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th>구분</th>
-        ${Array.from({ length: colCount }, (_, colIndex) => `<th>열 ${colIndex + 1}</th>`).join("")}
-      </tr>
-    </thead>
-    <tbody>
-      ${currentContentTableData.rows.map((row, rowIndex) => `
-        <tr>
-          <th>${rowIndex === 0 ? "제목" : `행 ${rowIndex + 1}`}</th>
-          ${row.map((cell, colIndex) => `
-            <td>
-              <input
-                type="text"
-                data-content-row="${rowIndex}"
-                data-content-col="${colIndex}"
-                value="${escapeHtml(cell)}"
-              >
-            </td>
-          `).join("")}
-        </tr>
-      `).join("")}
-    </tbody>
-  `;
-
-  table.querySelectorAll("input[data-content-row][data-content-col]").forEach(input => {
-    input.addEventListener("input", () => {
-      const rowIndex = Number(input.getAttribute("data-content-row"));
-      const colIndex = Number(input.getAttribute("data-content-col"));
-      if (!currentContentTableData.rows[rowIndex]) return;
-      currentContentTableData.rows[rowIndex][colIndex] = input.value;
-    });
-  });
-}
-
-window.enableContentTable = function() {
-  ensureEditableContentTable();
-  renderContentTableEditor();
-};
-
-window.addContentTableRow = function() {
-  ensureEditableContentTable();
-  const colCount = getContentTableColumnCount(currentContentTableData.rows);
-  currentContentTableData.rows.push(Array.from({ length: colCount }, () => ""));
-  renderContentTableEditor();
-};
-
-window.addContentTableColumn = function() {
-  ensureEditableContentTable();
-  currentContentTableData.rows.forEach(row => row.push(""));
-  renderContentTableEditor();
-};
-
-window.removeLastContentTableRow = function() {
-  if (!currentContentTableData.enabled || currentContentTableData.rows.length <= 1) return;
-  currentContentTableData.rows.pop();
-  renderContentTableEditor();
-};
-
-window.removeLastContentTableColumn = function() {
-  if (!currentContentTableData.enabled) return;
-  const colCount = getContentTableColumnCount(currentContentTableData.rows);
-  if (colCount <= 2) return;
-  currentContentTableData.rows.forEach(row => row.pop());
-  renderContentTableEditor();
-};
-
-window.clearContentTable = function() {
-  currentContentTableData = {
-    enabled: false,
-    rows: []
-  };
-  renderContentTableEditor();
-};
-
-function openModal(id) { document.getElementById(id).classList.add("show"); }
-function closeModal(id) { document.getElementById(id).classList.remove("show"); }
+function openModal(id) { document.getElementById(id)?.classList.add("show"); }
+function closeModal(id) { document.getElementById(id)?.classList.remove("show"); }
 let logUnsubscribe = null;
 
 window.openLogModal = function() {
   if (!isAdmin(currentUser)) return alert("관리자만 볼 수 있습니다.");
 
   openModal("logModal");
-
   const logList = document.getElementById("logList");
+  if (!logList) return;
   logList.innerHTML = "로그를 불러오는 중입니다.";
 
   if (logUnsubscribe) logUnsubscribe();
-
   const qRef = query(editLogsColRef, orderBy("time", "desc"));
 
   logUnsubscribe = onSnapshot(qRef, snap => {
@@ -1311,10 +663,7 @@ window.openLogModal = function() {
 
     logList.innerHTML = snap.docs.map(docSnap => {
       const log = docSnap.data() || {};
-      const date = log.time
-        ? new Date(log.time).toLocaleString("ko-KR")
-        : "-";
-
+      const date = log.time ? new Date(log.time).toLocaleString("ko-KR") : "-";
       return `
         <div style="padding:10px 0; border-bottom:1px solid #e5e7eb;">
           <div><strong>${escapeHtml(log.type || "-")}</strong> / ${escapeHtml(log.target || "-")}</div>
@@ -1326,9 +675,7 @@ window.openLogModal = function() {
     }).join("");
   }, error => {
     console.error("수정로그 불러오기 실패:", error);
-    logList.innerHTML =
-      "수정로그 불러오기 실패: " +
-      escapeHtml(error.message || error);
+    logList.innerHTML = "수정로그 불러오기 실패: " + escapeHtml(error.message || error);
   });
 };
 
@@ -1337,7 +684,6 @@ window.closeLogModal = function() {
     logUnsubscribe();
     logUnsubscribe = null;
   }
-
   closeModal("logModal");
 };
 
@@ -1363,6 +709,7 @@ window.closeMenuEditor = function() { closeModal("menuModal"); };
 
 function renderMenuTable() {
   const tbody = document.getElementById("menuTableBody");
+  if (!tbody) return;
   tbody.innerHTML = "";
   ensureFixedMenus();
 
@@ -1381,31 +728,16 @@ function renderMenuTable() {
     const isFixedMenu = isWork || isSchedule || isReviewMenu;
 
     tr.innerHTML = `
-      <td>
-        <input data-field="location" data-index="${realIndex}" value="${escapeHtml(isFixedMenu ? "bottom" : (menu.location || "top"))}" ${isFixedMenu ? "readonly" : ""}>
-      </td>
-     <td>
-      <input data-field="title" data-index="${realIndex}"
-        value="${escapeHtml(
-          isWork ? "분배표" :
-          isSchedule ? "스케줄" :
-          isReviewMenu ? "그룹리뷰" :
-          (menu.title || "").includes("소액") ? "소액조회" :
-          (menu.title || "")
-        )}"
-        ${isFixedMenu ? "readonly" : ""}
-      >
-    </td>
-    <td>
-      <input data-field="icon" data-index="${realIndex}"
-        value="${escapeHtml(menu.icon || "")}"
-        placeholder="예: 📊"
-        ${isFixedMenu ? "readonly" : ""}
-      >
-    </td>
-      <td>
-        <input data-field="panelIndex" data-index="${realIndex}" value="${escapeHtml(String(isWork ? 11 : isSchedule ? 12 : isReviewMenu ? 13 : (menu.panelIndex ?? "")))}" ${isFixedMenu ? "readonly" : ""}>
-      </td>
+      <td><input data-field="location" data-index="${realIndex}" value="${escapeHtml(isFixedMenu ? "bottom" : (menu.location || "top"))}" ${isFixedMenu ? "readonly" : ""}></td>
+      <td><input data-field="title" data-index="${realIndex}" value="${escapeHtml(
+        isWork ? "분배표" :
+        isSchedule ? "스케줄" :
+        isReviewMenu ? "그룹리뷰" :
+        (menu.title || "").includes("소액") ? "소액조회" :
+        (menu.title || "")
+      )}" ${isFixedMenu ? "readonly" : ""}></td>
+      <td><input data-field="icon" data-index="${realIndex}" value="${escapeHtml(menu.icon || "")}" placeholder="예: 📊" ${isFixedMenu ? "readonly" : ""}></td>
+      <td><input data-field="panelIndex" data-index="${realIndex}" value="${escapeHtml(String(isWork ? 11 : isSchedule ? 12 : isReviewMenu ? 13 : (menu.panelIndex ?? "")))}" ${isFixedMenu ? "readonly" : ""}></td>
       <td>
         <select data-field="theme" data-index="${realIndex}" ${isFixedMenu ? "disabled" : ""}>
           <option value="green" ${(menu.theme || "green") === "green" ? "selected" : ""}>초록</option>
@@ -1424,25 +756,14 @@ function renderMenuTable() {
           <option value="reference" ${getMenuGroup(menu) === "reference" ? "selected" : ""}>참고 메뉴</option>
         </select>
       </td>
-      <td>
-        <input data-field="url" data-index="${realIndex}" value="${escapeHtml(isFixedMenu ? "" : (menu.url || ""))}" ${isFixedMenu ? "readonly" : ""}>
-      </td>
+      <td><input data-field="url" data-index="${realIndex}" value="${escapeHtml(isFixedMenu ? "" : (menu.url || ""))}" ${isFixedMenu ? "readonly" : ""}></td>
       <td>
         <div class="menu-row-actions">
-          ${
-            isFixedMenu
-              ? '<span class="note">고정메뉴</span>'
-              : (menu.location || "top") === "top"
-                ? `
-                  <button class="small-btn" onclick="moveMenuUp(${realIndex})">위</button>
-                  <button class="small-btn" onclick="moveMenuDown(${realIndex})">아래</button>
-                  <button class="small-btn danger" onclick="removeMenuRow(${realIndex})">삭제</button>
-                `
-                : `
-                  <span class="note">하단메뉴</span>
-                  <button class="small-btn danger" onclick="removeMenuRow(${realIndex})">삭제</button>
-                `
-          }
+          ${isFixedMenu
+            ? '<span class="note">고정메뉴</span>'
+            : (menu.location || "top") === "top"
+              ? `<button class="small-btn" onclick="moveMenuUp(${realIndex})">위</button><button class="small-btn" onclick="moveMenuDown(${realIndex})">아래</button><button class="small-btn danger" onclick="removeMenuRow(${realIndex})">삭제</button>`
+              : `<span class="note">하단메뉴</span><button class="small-btn danger" onclick="removeMenuRow(${realIndex})">삭제</button>`}
         </div>
       </td>
     `;
@@ -1467,18 +788,9 @@ window.removeMenuRow = function(index) {
   const target = menuData[index];
   if (!target) return;
   const fixedKind = getFixedMenuKind(target);
-  if (fixedKind === "work") {
-    alert("Project 분배표 메뉴는 삭제할 수 없습니다.");
-    return;
-  }
-  if (fixedKind === "schedule") {
-    alert("스케줄 메뉴는 삭제할 수 없습니다.");
-    return;
-  }
-  if (fixedKind === "review") {
-    alert("그룹리뷰 메뉴는 삭제할 수 없습니다.");
-    return;
-  }
+  if (fixedKind === "work") return alert("Project 분배표 메뉴는 삭제할 수 없습니다.");
+  if (fixedKind === "schedule") return alert("스케줄 메뉴는 삭제할 수 없습니다.");
+  if (fixedKind === "review") return alert("그룹리뷰 메뉴는 삭제할 수 없습니다.");
   menuData.splice(index, 1);
   renderMenuTable();
 };
@@ -1511,14 +823,11 @@ function syncMenuDataFromTable() {
   const rows = Array.from(document.querySelectorAll("#menuTableBody tr"));
   const previousMenus = [...menuData];
 
-  menuData = rows.map((row) => {
+  menuData = rows.map(row => {
     const firstInput = row.querySelector("[data-index]");
     const realIndex = Number(firstInput?.getAttribute("data-index"));
     const prev = previousMenus[realIndex] || {};
-
-    const getVal = (field) => {
-      return row.querySelector(`[data-field="${field}"][data-index="${realIndex}"]`)?.value?.trim() || "";
-    };
+    const getVal = field => row.querySelector(`[data-field="${field}"][data-index="${realIndex}"]`)?.value?.trim() || "";
 
     const rawTitle = getVal("title");
     const rawIcon = getVal("icon");
@@ -1527,141 +836,37 @@ function syncMenuDataFromTable() {
     const rawUrl = getVal("url");
     const rawTheme = getVal("theme") || prev.theme || "green";
     const rawGroup = getVal("group") || "";
-
     const prevTitle = (prev.title || "").trim();
 
-    const isWorkAllocation =
-      isWorkAllocationTitle(rawTitle) ||
-      isWorkAllocationTitle(prevTitle);
+    const isWorkAllocation = isWorkAllocationTitle(rawTitle) || isWorkAllocationTitle(prevTitle);
+    const isSchedule = isScheduleTitle(rawTitle) || isScheduleTitle(prevTitle);
+    const isReviewMenu = isGroupReviewTitle(rawTitle) || isGroupReviewTitle(prevTitle);
 
-    const isSchedule =
-      isScheduleTitle(rawTitle) ||
-      isScheduleTitle(prevTitle);
+    const title = isWorkAllocation ? "분배표" : isSchedule ? "스케줄" : isReviewMenu ? "그룹리뷰" : (rawTitle || prev.title || "");
+    const panelIndex = isWorkAllocation ? 11 : isSchedule ? 12 : isReviewMenu ? 13 : (rawPanelIndex === "" ? Number(prev.panelIndex || 0) : Number(rawPanelIndex));
+    const location = (isWorkAllocation || isSchedule || isReviewMenu) ? "bottom" : (rawLocation || prev.location || "top");
 
-    const isReviewMenu =
-      isGroupReviewTitle(rawTitle) ||
-      isGroupReviewTitle(prevTitle);
-
-    const title = isWorkAllocation
-      ? "분배표"
-      : isSchedule
-        ? "스케줄"
-        : isReviewMenu
-          ? "그룹리뷰"
-          : (rawTitle || prev.title || "");
-
-    const panelIndex = isWorkAllocation
-      ? 11
-      : isSchedule
-        ? 12
-        : isReviewMenu
-          ? 13
-          : (rawPanelIndex === "" ? Number(prev.panelIndex || 0) : Number(rawPanelIndex));
-
-    const location = (isWorkAllocation || isSchedule || isReviewMenu)
-      ? "bottom"
-      : (rawLocation || prev.location || "top");
-
-   const item = {
+    const item = {
       title,
       icon: rawIcon || prev.icon || "",
       panelIndex,
       location,
-      kind: rawUrl
-        ? "iframe"
-        : ((isWorkAllocation || isSchedule || isReviewMenu) ? "panel" : (location === "bottom" ? "iframe" : "panel"))
+      kind: rawUrl ? "iframe" : ((isWorkAllocation || isSchedule || isReviewMenu) ? "panel" : (location === "bottom" ? "iframe" : "panel"))
     };
 
-    if (rawUrl && !(isWorkAllocation || isSchedule || isReviewMenu)) {
-      item.url = rawUrl;
-    } else if (!rawUrl && prev.url && item.kind === "iframe") {
-      item.url = prev.url;
-    }
+    if (rawUrl && !(isWorkAllocation || isSchedule || isReviewMenu)) item.url = rawUrl;
+    else if (!rawUrl && prev.url && item.kind === "iframe") item.url = prev.url;
 
-    if (isReviewMenu) {
-      item.theme = "blue";
-    } else if (isWorkAllocation || isSchedule) {
-      item.theme = "purple";
-    } else if (location === "bottom") {
-      item.theme = rawTheme || "green";
-    } else if (prev.theme) {
-      item.theme = prev.theme;
-    }
+    if (isReviewMenu) item.theme = "blue";
+    else if (isWorkAllocation || isSchedule) item.theme = "purple";
+    else if (location === "bottom") item.theme = rawTheme || "green";
+    else if (prev.theme) item.theme = prev.theme;
 
-    if (rawGroup && location !== "bottom") {
-      item.group = rawGroup;
-    }
-
+    if (rawGroup && location !== "bottom") item.group = rawGroup;
     return item;
   }).filter(menu => (menu.title || "").trim() !== "");
 
   ensureFixedMenus();
-}
-
-function getPanelTitleByKey(panelKey) {
-  const map = {
-    rent: "임대차",
-    wage: "임금",
-    tax: "조세",
-    tenantqa: "선순위임차인Q&A",
-    guaranteeqa: "보증서Q&A",
-    securedqa: "피담보채무Q&A",
-    saleqa: "매각대상여부Q&A",
-    browseqa: "열람자료Q&A",
-    machineqa: "기계기구Q&A"
-  };
-
-  if (map[panelKey]) return map[panelKey];
-
-  if (panelKey.startsWith("panel_")) {
-    const idx = Number(panelKey.replace("panel_", ""));
-    const found = menuData.find(menu => Number(menu.panelIndex) === idx);
-    if (found?.title) return found.title;
-  }
-
-  return "내용";
-}
-
-window.openContentEditor = function(panelKey) {
-  try {
-    if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
-    if (!ensureContentEditorReady()) return;
-
-    currentContentPanelKey = panelKey;
-    pageContents[panelKey] = normalizePageContentEntry(panelKey, pageContents[panelKey]);
-
-    const config = pageContents[panelKey];
-
-    document.getElementById("contentModalTitle").textContent = `${getPanelTitleByKey(panelKey)} 내용 수정`;
-    document.getElementById("contentMajorTitle").value = config.majorTitle || "";
-    contentEditor.root.innerHTML = config.bodyHtml || config.html || "";
-
-    currentContentTableData = deserializeTableData(config.tableData);
-    renderContentTableEditor();
-
-    openModal("contentModal");
-  } catch (error) {
-    console.error("내용 수정 창 열기 실패:", error);
-    alert("내용 수정 창 열기 실패: " + (error.message || error));
-  }
-};
-  
-window.closeContentEditor = function() { closeModal("contentModal"); };
-
-function syncContentFromEditor() {
-  const config = pageContents[currentContentPanelKey];
-
-  config.majorTitle =
-    document.getElementById("contentMajorTitle").value.trim() ||
-    getPanelTitleByKey(currentContentPanelKey);
-
-  const bodyHtml = contentEditor.root.innerHTML;
-  const tableData = serializeTableData(currentContentTableData);
-  const tableHtml = buildContentTableHtml(currentContentTableData);
-
-  config.bodyHtml = bodyHtml;
-  config.tableData = tableData;
-  config.html = bodyHtml + tableHtml;
 }
 
 window.loginAdmin = async function() {
@@ -1741,7 +946,6 @@ window.groupReviewApi = initGroupReview({
 
 renderMenus();
 renderNotice();
-renderAllContents();
 window.scheduleApi.initCalendar();
 window.scheduleApi.subscribeSchedules();
 showSheet(0, "청현 공지사항");
