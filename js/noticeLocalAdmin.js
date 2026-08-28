@@ -148,6 +148,13 @@ function bindActions() {
       return;
     }
 
+    if (target.closest("#noticeModal .secondary-btn")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      document.getElementById("noticeModal")?.classList.remove("show");
+      return;
+    }
+
     if (target.closest("#grv2Logout")) {
       setTimeout(() => void syncUser(), 250);
     }
