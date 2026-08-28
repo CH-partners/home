@@ -35,7 +35,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 const allocationRef = doc(db, "sharedPages", "workAllocation");
-const schedulesColRef = collection(db, "schedules");
 const editLogsColRef = collection(db, "editLogs");
 
 let currentUser = null;
@@ -54,108 +53,7 @@ let noticeData = {
 };
 let navGroupState = {};
 let workspaceFullscreen = false;
-
-const defaultMenus = [
-  { title: "청현 공지사항", panelIndex: 0, location: "top", kind: "panel" },
-  { title: "임대차", panelIndex: 1, location: "top", kind: "panel" },
-  { title: "임금", panelIndex: 2, location: "top", kind: "panel" },
-  { title: "조세", panelIndex: 3, location: "top", kind: "panel" },
-  { title: "선순위임차인Q&A", panelIndex: 4, location: "top", kind: "panel" },
-  { title: "보증서Q&A", panelIndex: 5, location: "top", kind: "panel" },
-  { title: "피담보채무Q&A", panelIndex: 6, location: "top", kind: "panel" },
-  { title: "매각대상여부Q&A", panelIndex: 7, location: "top", kind: "panel" },
-  { title: "열람자료Q&A", panelIndex: 8, location: "top", kind: "panel" },
-  { title: "기계기구Q&A", panelIndex: 9, location: "top", kind: "panel" },
-  { title: "소액조회", panelIndex: 10, location: "bottom", kind: "iframe", url: "주택상가 소액.html" },
-  { title: "", panelIndex: 11, location: "bottom", kind: "panel", theme: "purple" },
-  { title: "스케줄", panelIndex: 12, location: "bottom", kind: "panel", theme: "purple" },
-  { title: "그룹리뷰", panelIndex: 13, location: "bottom", kind: "panel", theme: "blue" }
-];
-
-const defaultPageContents = {
-  rent: {
-    majorTitle: "임대차",
-    bodyHtml: `
-      <div class="status-card">
-        <div class="badge gray">미진행</div>
-        <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 경매미진행건으로</p>
-        <ul class="clean-list">
-          <li>등본 상 소유자 거주로 추정되어 미반영 / (상가) - 임대차 관련자료 없어 미반영</li>
-          <li>전입세대확인서 상 전입인 소유자로 미반영 / (상가) - 상가건물임대차현황서 상 등록내역 없어 미반영</li>
-        </ul>
-      </div>
-    `,
-    tableData: { enabled: false, rows: [] },
-    html: `
-      <div class="status-card">
-        <div class="badge gray">미진행</div>
-        <p class="lead-line">1~2. 소액,임차: 담보물 서울특별시 서대문구 창천동 소재 아파트이며, 경매미진행건으로</p>
-        <ul class="clean-list">
-          <li>등본 상 소유자 거주로 추정되어 미반영 / (상가) - 임대차 관련자료 없어 미반영</li>
-          <li>전입세대확인서 상 전입인 소유자로 미반영 / (상가) - 상가건물임대차현황서 상 등록내역 없어 미반영</li>
-        </ul>
-      </div>
-    `
-  },
-  wage: {
-    majorTitle: "임금",
-    bodyHtml: `
-      <div class="group-title">개인</div>
-      <div class="sub-title">- 종기 내</div>
-      <p class="body-line">소유자 개인이며, 임금채권자로 추정되는 가압류권자 없어 미반영</p>
-    `,
-    tableData: { enabled: false, rows: [] },
-    html: `
-      <div class="group-title">개인</div>
-      <div class="sub-title">- 종기 내</div>
-      <p class="body-line">소유자 개인이며, 임금채권자로 추정되는 가압류권자 없어 미반영</p>
-    `
-  },
-  tax: {
-    majorTitle: "조세",
-    bodyHtml: `<p class="body-line">경매열람시 교부청구 순서대로 기입(재산세, 종부세 등 선순위 반영 분 먼저 기재)</p>`,
-    tableData: { enabled: false, rows: [] },
-    html: `<p class="body-line">경매열람시 교부청구 순서대로 기입(재산세, 종부세 등 선순위 반영 분 먼저 기재)</p>`
-  },
-  tenantqa: {
-    majorTitle: "선순위임차인Q&A",
-    bodyHtml: `<p class="body-line">전입세대확인서 상 선순위 전입인 존재하는 바, 현재 유효한 임차인 여부 및 취급 시 임대차 관련자료 송부 부탁 드립니다.</p>`,
-    tableData: { enabled: false, rows: [] },
-    html: `<p class="body-line">전입세대확인서 상 선순위 전입인 존재하는 바, 현재 유효한 임차인 여부 및 취급 시 임대차 관련자료 송부 부탁 드립니다.</p>`
-  },
-  guaranteeqa: {
-    majorTitle: "보증서Q&A",
-    bodyHtml: `<p class="body-line">담보로 제시한 보증서 관련 자료 송부 부탁 드립니다.</p>`,
-    tableData: { enabled: false, rows: [] },
-    html: `<p class="body-line">담보로 제시한 보증서 관련 자료 송부 부탁 드립니다.</p>`
-  },
-  securedqa: {
-    majorTitle: "피담보채무Q&A",
-    bodyHtml: `<p class="body-line">피담보채무범위 확인 부탁 드립니다.</p>`,
-    tableData: { enabled: false, rows: [] },
-    html: `<p class="body-line">피담보채무범위 확인 부탁 드립니다.</p>`
-  },
-  saleqa: {
-    majorTitle: "매각대상여부Q&A",
-    bodyHtml: `<p class="body-line">매각대상 여부 확인 부탁 드립니다.</p>`,
-    tableData: { enabled: false, rows: [] },
-    html: `<p class="body-line">매각대상 여부 확인 부탁 드립니다.</p>`
-  },
-  browseqa: {
-    majorTitle: "열람자료Q&A",
-    bodyHtml: `<p class="body-line">경매열람자료 송부 부탁 드립니다.</p>`,
-    tableData: { enabled: false, rows: [] },
-    html: `<p class="body-line">경매열람자료 송부 부탁 드립니다.</p>`
-  },
-  machineqa: {
-    majorTitle: "기계기구Q&A",
-    bodyHtml: `<p class="body-line">기계기구 수량 재검토 부탁 드립니다.</p>`,
-    tableData: { enabled: false, rows: [] },
-    html: `<p class="body-line">기계기구 수량 재검토 부탁 드립니다.</p>`
-  }
-};
-
-let pageContents = structuredClone(defaultPageContents);
+let pageContents = {};
 
 function removeUndefinedDeep(value) {
   if (Array.isArray(value)) {
@@ -1226,11 +1124,6 @@ function buildContentTableHtml(tableData) {
 }
 
 function createDefaultPageContentEntry(panelKey, title) {
-  const defaultEntry = defaultPageContents[panelKey];
-  if (defaultEntry && typeof defaultEntry === "object" && !Array.isArray(defaultEntry)) {
-    return structuredClone(defaultEntry);
-  }
-
   const bodyHtml = `<p>내용을 입력하세요.</p>`;
   return {
     majorTitle: title || getPanelTitleByKey(panelKey),
@@ -1291,13 +1184,9 @@ function normalizePageContents(rawContents) {
     rawContents && typeof rawContents === "object" && !Array.isArray(rawContents)
       ? rawContents
       : {};
-  const keys = new Set([
-    ...Object.keys(defaultPageContents),
-    ...Object.keys(source)
-  ]);
   const normalized = {};
 
-  keys.forEach(key => {
+  Object.keys(source).forEach(key => {
     normalized[key] = normalizePageContentEntry(key, source[key]);
   });
 
