@@ -3,6 +3,7 @@ import "./localTools.js";
 const API_ROOT = "/api/v1";
 let currentUser = null;
 let saving = false;
+let noticeEditor = null;
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -53,7 +54,28 @@ function renderNotice(notice) {
 }
 
 function editorRoot() {
-  return document.querySelector("#noticeEditor .ql-editor");
+  if (noticeEditor?.root) return noticeEditor.root;
+
+  const existing = document.querySelector("#noticeEditor .ql-editor");
+  if (existing) return existing;
+
+  const host = document.getElementById("noticeEditor");
+  if (!host || typeof Quill === "undefined") return null;
+
+  noticeEditor = new Quill(host, {
+    theme: "snow",
+    modules: {
+      toolbar: [
+        [{ size: ["small", false, "large", "huge"] }],
+        ["bold", "italic", "underline"],
+        [{ color: [] }, { background: [] }],
+        [{ list: "ordered" }, { list: "bullet" }],
+        [{ align: [] }],
+        ["link", "clean"]
+      ]
+    }
+  });
+  return noticeEditor.root;
 }
 
 async function openEditor() {
