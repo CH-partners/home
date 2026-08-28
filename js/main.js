@@ -38,7 +38,6 @@ const allocationRef = doc(db, "sharedPages", "workAllocation");
 const editLogsColRef = collection(db, "editLogs");
 
 let currentUser = null;
-let noticeEditor = null;
 let menuData = [];
 let noticeData = {
   title: "공지 제목",
@@ -594,52 +593,6 @@ function renderNotice() {
   wrap.innerHTML = hasBlockTags ? html : `<li>${html}</li>`;
 }
 
-function getEditorToolbar() {
-  return [
-    [{ size: ["small", false, "large", "huge"] }],
-    ["bold", "italic", "underline"],
-    [{ color: [] }, { background: [] }],
-    [{ list: "ordered" }, { list: "bullet" }],
-    [{ align: [] }],
-    ["link", "clean"]
-  ];
-}
-
-function createEditor(selector) {
-  if (typeof Quill === "undefined") {
-    throw new Error("Quill 편집기를 불러오지 못했습니다.");
-  }
-  if (!document.querySelector(selector)) {
-    throw new Error(`${selector} 영역을 찾을 수 없습니다.`);
-  }
-  return new Quill(selector, {
-    theme: "snow",
-    modules: { toolbar: getEditorToolbar() }
-  });
-}
-
-function initEditors() {
-  try {
-    if (!noticeEditor?.root) {
-      noticeEditor = createEditor("#noticeEditor");
-    }
-  } catch (error) {
-    console.error("공지 편집기 초기화 실패:", error);
-  }
-}
-
-function ensureNoticeEditorReady() {
-  if (noticeEditor?.root) return true;
-  try {
-    noticeEditor = createEditor("#noticeEditor");
-    return true;
-  } catch (error) {
-    console.error("공지 편집기 준비 실패:", error);
-    alert("공지 편집기를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.");
-    return false;
-  }
-}
-
 function openModal(id) { document.getElementById(id)?.classList.add("show"); }
 function closeModal(id) { document.getElementById(id)?.classList.remove("show"); }
 let logUnsubscribe = null;
@@ -689,16 +642,6 @@ window.closeLogModal = function() {
 
 window.openLoginModal = () => openModal("loginModal");
 window.closeLoginModal = () => closeModal("loginModal");
-
-window.openNoticeEditor = function() {
-  if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
-  if (!ensureNoticeEditorReady()) return;
-  document.getElementById("noticeFormTitle").value = noticeData.title || "";
-  document.getElementById("noticeFormDate").value = noticeData.date || "";
-  noticeEditor.root.innerHTML = noticeData.html || "";
-  openModal("noticeModal");
-};
-window.closeNoticeEditor = function() { closeModal("noticeModal"); };
 
 window.openMenuEditor = function() {
   if (!isAdmin(currentUser)) return alert("관리자만 수정할 수 있습니다.");
@@ -911,8 +854,6 @@ onAuthStateChanged(auth, async user => {
   }
   window.groupReviewApi?.renderGroupReviewUI();
 });
-
-initEditors();
 
 window.allocationApi = initAllocation({
   allocationRef,
