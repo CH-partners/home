@@ -6,7 +6,6 @@ export function initSchedule(ctx = {}) {
   let currentScheduleEventId = null;
   let scheduleEvents = [];
   let refreshTimer = null;
-  let legacyImportChecked = false;
 
   async function api(path, options = {}) {
     const headers = { ...(options.headers || {}) };
@@ -129,115 +128,16 @@ export function initSchedule(ctx = {}) {
     };
   }
 
-  function normalizeLegacyDateTime(value) {
-    if (!value) return null;
-    if (typeof value === "string") return value;
-
-    if (value instanceof Date) {
-      return Number.isNaN(value.getTime()) ? null : value.toISOString();
-    }
-
-    if (typeof value?.toDate === "function") {
-      try {
-        const date = value.toDate();
-        return date instanceof Date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
-      } catch (_) {
-        return null;
-      }
-    }
-
-    const seconds = Number(value?.seconds ?? value?._seconds);
-    const nanoseconds = Number(value?.nanoseconds ?? value?._nanoseconds ?? 0);
-    if (!Number.isFinite(seconds)) return null;
-
-    const milliseconds = seconds * 1000 + Math.floor((Number.isFinite(nanoseconds) ? nanoseconds : 0) / 1_000_000);
-    const date = new Date(milliseconds);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
-  }
-
   function refreshCalendarEvents() {
     if (!calendar) return;
     calendar.removeAllEvents();
     scheduleEvents.forEach(evt => calendar.addEvent(evt));
   }
 
-  async function currentLocalUser() {
-    try {
-      return await api("/auth/me");
-    } catch (error) {
-      if (error.status === 401) return null;
-      throw error;
-    }
-  }
-
-  async function readLegacySchedules() {
-    try {
-      const [{ getApps }, { getFirestore, collection, getDocs }] = await Promise.all([
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
-        import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js")
-      ]);
-      const app = getApps()[0];
-      if (!app) return [];
-      const snapshot = await getDocs(collection(getFirestore(app), "schedules"));
-      return snapshot.docs.map(docSnap => {
-        const data = docSnap.data() || {};
-        return {
-          source_id: docSnap.id,
-          title: String(data.title || "(제목 없음)"),
-          date: String(data.date || ""),
-          start_time: data.startTime ? String(data.startTime).slice(0, 5) : null,
-          end_time: data.endTime ? String(data.endTime).slice(0, 5) : null,
-          memo: String(data.memo || ""),
-          color: String(data.color || "#3b82f6"),
-          writer_email: String(data.writer || "anonymous"),
-          created_at: normalizeLegacyDateTime(data.createdAt),
-          updated_at: normalizeLegacyDateTime(data.updatedAt || data.createdAt)
-        };
-      }).filter(item => item.source_id && item.title && item.date);
-    } catch (error) {
-      console.warn("기존 Firebase 일정 읽기 실패:", error);
-      return [];
-    }
-  }
-
-  async function maybeImportLegacySchedules(localRows, status) {
-    if (status?.migration_complete || legacyImportChecked || localRows.length) return false;
-
-    const user = await currentLocalUser();
-    if (user?.role !== "ADMIN") return false;
-
-    legacyImportChecked = true;
-    const legacyItems = await readLegacySchedules();
-
-    try {
-      const result = await api("/schedules/bootstrap", {
-        method: "POST",
-        body: JSON.stringify({ items: legacyItems })
-      });
-      console.info(`기존 일정 확인 완료: ${Number(result?.imported || 0)}건을 로컬 DB로 이관했습니다.`);
-      return result?.migration_complete === true;
-    } catch (error) {
-      if (error.status === 409) {
-        console.warn("스케줄 이관 확인 필요:", error.message);
-        return false;
-      }
-      throw error;
-    }
-  }
-
   async function loadSchedules() {
-    let status = await getScheduleStatus();
+    await getScheduleStatus();
     let rows = await api("/schedules");
     rows = Array.isArray(rows) ? rows : [];
-
-    const completedNow = await maybeImportLegacySchedules(rows, status);
-    if (completedNow) {
-      status = await getScheduleStatus();
-      rows = await api("/schedules");
-      rows = Array.isArray(rows) ? rows : [];
-    } else {
-      publishStatus(status);
-    }
 
     scheduleEvents = rows.map(mapScheduleToEvent);
     refreshCalendarEvents();
@@ -347,7 +247,6 @@ export function initSchedule(ctx = {}) {
 
   document.addEventListener("submit", event => {
     if (event.target?.matches?.("#grv2LoginForm,#allocationLoginForm")) {
-      legacyImportChecked = false;
       scheduleRefresh(350);
       scheduleRefresh(900);
     }
