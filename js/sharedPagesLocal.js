@@ -403,15 +403,6 @@ function installObserver() {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
-function blockLegacyFirebaseSharedPageSaves() {
-  const blocked = () => {
-    alert("이전 Firebase 게시판 저장 경로는 사용하지 않습니다. 화면을 새로고침 후 다시 시도해주세요.");
-  };
-  window.saveMenusToFirebase = blocked;
-  window.saveContentToFirebase = blocked;
-  window.saveNoticeToFirebase = blocked;
-}
-
 export function installLocalSharedPages() {
   if (window.__localSharedPagesInstalled) return;
   window.__localSharedPagesInstalled = true;
@@ -463,7 +454,6 @@ export function installLocalSharedPages() {
     }
   }, true);
 
-  setTimeout(blockLegacyFirebaseSharedPageSaves, 0);
   refresh(0);
   setTimeout(() => refresh(0), 250);
   setTimeout(() => refresh(0), 800);
