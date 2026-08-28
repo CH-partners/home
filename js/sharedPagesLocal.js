@@ -283,7 +283,26 @@ async function loadSharedPages() {
 }
 
 function contentEditor() {
-  return document.querySelector("#contentEditor .ql-editor");
+  const existing = document.querySelector("#contentEditor .ql-editor");
+  if (existing) return existing;
+
+  const host = document.getElementById("contentEditor");
+  if (!host || typeof Quill === "undefined") return null;
+
+  const editor = new Quill(host, {
+    theme: "snow",
+    modules: {
+      toolbar: [
+        [{ size: ["small", false, "large", "huge"] }],
+        ["bold", "italic", "underline"],
+        [{ color: [] }, { background: [] }],
+        [{ list: "ordered" }, { list: "bullet" }],
+        [{ align: [] }],
+        ["link", "clean"]
+      ]
+    }
+  });
+  return editor.root;
 }
 
 function bodyHtmlFrom(config) {
