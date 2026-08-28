@@ -88,7 +88,7 @@
       <header class="sheet-header">
         <h1>청현 공지사항</h1>
         <div class="sheet-tools">
-          <button class="action-btn hidden" id="noticeEditBtn" onclick="openNoticeEditor()">공지 수정</button>
+          <button class="action-btn hidden" id="noticeEditBtn">공지 수정</button>
         </div>
       </header>
       <section class="major-card">
@@ -104,39 +104,39 @@
     </div>
 
     <div class="sheet-panel" data-index="1">
-      <header class="sheet-header"><h1>임대차</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="rent" onclick="openContentEditor('rent')">내용 수정</button></div></header>
+      <header class="sheet-header"><h1>임대차</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="rent">내용 수정</button></div></header>
       <section class="major-card" id="content-rent"></section>
     </div>
     <div class="sheet-panel" data-index="2">
-      <header class="sheet-header"><h1>임금</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="wage" onclick="openContentEditor('wage')">내용 수정</button></div></header>
+      <header class="sheet-header"><h1>임금</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="wage">내용 수정</button></div></header>
       <section class="major-card" id="content-wage"></section>
     </div>
     <div class="sheet-panel" data-index="3">
-      <header class="sheet-header"><h1>조세</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="tax" onclick="openContentEditor('tax')">내용 수정</button></div></header>
+      <header class="sheet-header"><h1>조세</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="tax">내용 수정</button></div></header>
       <section class="major-card" id="content-tax"></section>
     </div>
     <div class="sheet-panel" data-index="4">
-      <header class="sheet-header"><h1>선순위임차인Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="tenantqa" onclick="openContentEditor('tenantqa')">내용 수정</button></div></header>
+      <header class="sheet-header"><h1>선순위임차인Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="tenantqa">내용 수정</button></div></header>
       <section class="major-card" id="content-tenantqa"></section>
     </div>
     <div class="sheet-panel" data-index="5">
-      <header class="sheet-header"><h1>보증서Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="guaranteeqa" onclick="openContentEditor('guaranteeqa')">내용 수정</button></div></header>
+      <header class="sheet-header"><h1>보증서Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="guaranteeqa">내용 수정</button></div></header>
       <section class="major-card" id="content-guaranteeqa"></section>
     </div>
     <div class="sheet-panel" data-index="6">
-      <header class="sheet-header"><h1>피담보채무Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="securedqa" onclick="openContentEditor('securedqa')">내용 수정</button></div></header>
+      <header class="sheet-header"><h1>피담보채무Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="securedqa">내용 수정</button></div></header>
       <section class="major-card" id="content-securedqa"></section>
     </div>
     <div class="sheet-panel" data-index="7">
-      <header class="sheet-header"><h1>매각대상여부Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="saleqa" onclick="openContentEditor('saleqa')">내용 수정</button></div></header>
+      <header class="sheet-header"><h1>매각대상여부Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="saleqa">내용 수정</button></div></header>
       <section class="major-card" id="content-saleqa"></section>
     </div>
     <div class="sheet-panel" data-index="8">
-      <header class="sheet-header"><h1>열람자료Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="browseqa" onclick="openContentEditor('browseqa')">내용 수정</button></div></header>
+      <header class="sheet-header"><h1>열람자료Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="browseqa">내용 수정</button></div></header>
       <section class="major-card" id="content-browseqa"></section>
     </div>
     <div class="sheet-panel" data-index="9">
-      <header class="sheet-header"><h1>기계기구Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="machineqa" onclick="openContentEditor('machineqa')">내용 수정</button></div></header>
+      <header class="sheet-header"><h1>기계기구Q&amp;A</h1><div class="sheet-tools"><button class="action-btn hidden panel-edit-btn" data-content-key="machineqa">내용 수정</button></div></header>
       <section class="major-card" id="content-machineqa"></section>
     </div>
 
@@ -180,11 +180,11 @@
   </main>
 </div>
 
-<div class="modal-backdrop" id="noticeModal"><div class="modal large"><div class="modal-title">공지 수정</div><div class="form-row"><label for="noticeFormTitle">제목</label><input id="noticeFormTitle" type="text" placeholder="공지 제목 입력"></div><div class="form-row"><label for="noticeFormDate">기준일</label><input id="noticeFormDate" type="date"></div><div class="form-row"><label>내용</label><div id="noticeEditor" style="height:220px;"></div><div class="help-text">굵게, 색상, 글자크기, 목록, 정렬, 링크를 바로 적용할 수 있습니다.</div></div><div class="modal-actions"><button class="secondary-btn" onclick="closeNoticeEditor()">닫기</button><button class="primary-btn" onclick="saveNoticeToFirebase()">저장</button></div></div></div>
+<div class="modal-backdrop" id="noticeModal"><div class="modal large"><div class="modal-title">공지 수정</div><div class="form-row"><label for="noticeFormTitle">제목</label><input id="noticeFormTitle" type="text" placeholder="공지 제목 입력"></div><div class="form-row"><label for="noticeFormDate">기준일</label><input id="noticeFormDate" type="date"></div><div class="form-row"><label>내용</label><div id="noticeEditor" style="height:220px;"></div><div class="help-text">굵게, 색상, 글자크기, 목록, 정렬, 링크를 바로 적용할 수 있습니다.</div></div><div class="modal-actions"><button class="secondary-btn">닫기</button><button class="primary-btn">저장</button></div></div></div>
 
-<div class="modal-backdrop" id="menuModal"><div class="modal large"><div class="modal-title">메뉴 수정</div><div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. Project 분배표(panelIndex 11)와 스케줄(panelIndex 12)은 고정 메뉴입니다. Q&A는 화면에서 자동 그룹 처리됩니다.</div><table class="menu-table"><thead><tr><th style="width:90px;">위치</th><th>제목</th><th style="width:120px;">패널 번호</th><th style="width:100px;">색상</th><th style="width:120px;">펼침그룹</th><th>iframe URL</th><th style="width:120px;">삭제</th></tr></thead><tbody id="menuTableBody"></tbody></table><div style="margin-top:12px; display:flex; gap:8px;"><button class="small-btn" onclick="addMenuRow('top')">상단 메뉴 추가</button><button class="small-btn" onclick="addMenuRow('bottom')">하단 메뉴 추가</button></div><div class="modal-actions"><button class="secondary-btn" onclick="closeMenuEditor()">닫기</button><button class="primary-btn" onclick="saveMenusToFirebase()">저장</button></div></div></div>
+<div class="modal-backdrop" id="menuModal"><div class="modal large"><div class="modal-title">메뉴 수정</div><div class="help-text" style="margin-bottom:12px;">top 은 상단 메뉴, bottom 은 하단 메뉴입니다. Project 분배표(panelIndex 11)와 스케줄(panelIndex 12)은 고정 메뉴입니다. Q&A는 화면에서 자동 그룹 처리됩니다.</div><table class="menu-table"><thead><tr><th style="width:90px;">위치</th><th>제목</th><th style="width:120px;">패널 번호</th><th style="width:100px;">색상</th><th style="width:120px;">펼침그룹</th><th>iframe URL</th><th style="width:120px;">삭제</th></tr></thead><tbody id="menuTableBody"></tbody></table><div style="margin-top:12px; display:flex; gap:8px;"><button class="small-btn" onclick="addMenuRow('top')">상단 메뉴 추가</button><button class="small-btn" onclick="addMenuRow('bottom')">하단 메뉴 추가</button></div><div class="modal-actions"><button class="secondary-btn">닫기</button><button class="primary-btn">저장</button></div></div></div>
 
-<div class="modal-backdrop" id="contentModal"><div class="modal large"><div class="modal-title" id="contentModalTitle">내용 수정</div><div class="form-row"><label for="contentMajorTitle">상단 제목</label><input id="contentMajorTitle" type="text" placeholder="예: 임대차"></div><div class="help-text" style="margin-bottom:12px;">굵게, 색상, 글자크기, 글머리표, 번호목록, 정렬, 링크까지 적용할 수 있습니다.</div><div id="contentEditor" style="height:380px;"></div><div class="form-row" style="margin-top:18px;"><label>표 입력</label><div class="help-text" style="margin-bottom:10px;">표는 아래에서 입력/수정/삭제합니다. 저장 시 본문 아래에 표가 함께 반영됩니다.</div><div class="work-header-actions"><button type="button" class="action-btn" onclick="enableContentTable()">표 사용</button><button type="button" class="action-btn" onclick="addContentTableRow()">행 추가</button><button type="button" class="action-btn" onclick="addContentTableColumn()">열 추가</button><button type="button" class="action-btn" onclick="removeLastContentTableRow()">마지막 행 삭제</button><button type="button" class="action-btn" onclick="removeLastContentTableColumn()">마지막 열 삭제</button><button type="button" class="action-btn" onclick="clearContentTable()">표 삭제</button></div><div id="contentTableWrap" class="work-table-wrap" style="margin-top:10px;"><table class="work-table" id="contentTableEditor"></table></div></div><div class="modal-actions"><button class="secondary-btn" onclick="closeContentEditor()">닫기</button><button class="primary-btn" onclick="saveContentToFirebase()">저장</button></div></div></div>
+<div class="modal-backdrop" id="contentModal"><div class="modal large"><div class="modal-title" id="contentModalTitle">내용 수정</div><div class="form-row"><label for="contentMajorTitle">상단 제목</label><input id="contentMajorTitle" type="text" placeholder="예: 임대차"></div><div class="help-text" style="margin-bottom:12px;">굵게, 색상, 글자크기, 글머리표, 번호목록, 정렬, 링크까지 적용할 수 있습니다.</div><div id="contentEditor" style="height:380px;"></div><div class="form-row" style="margin-top:18px;"><label>표 입력</label><div class="help-text" style="margin-bottom:10px;">표는 아래에서 입력/수정/삭제합니다. 저장 시 본문 아래에 표가 함께 반영됩니다.</div><div class="work-header-actions"><button type="button" class="action-btn" onclick="enableContentTable()">표 사용</button><button type="button" class="action-btn" onclick="addContentTableRow()">행 추가</button><button type="button" class="action-btn" onclick="addContentTableColumn()">열 추가</button><button type="button" class="action-btn" onclick="removeLastContentTableRow()">마지막 행 삭제</button><button type="button" class="action-btn" onclick="removeLastContentTableColumn()">마지막 열 삭제</button><button type="button" class="action-btn" onclick="clearContentTable()">표 삭제</button></div><div id="contentTableWrap" class="work-table-wrap" style="margin-top:10px;"><table class="work-table" id="contentTableEditor"></table></div></div><div class="modal-actions"><button class="secondary-btn">닫기</button><button class="primary-btn">저장</button></div></div></div>
 
 <div class="modal-backdrop" id="loginModal"><div class="modal"><div class="modal-title">로그인</div><div class="form-row"><label for="loginEmail">이메일</label><input id="loginEmail" type="email" placeholder="admin@example.com" value="admin@admin.com"></div><div class="form-row"><label for="loginPassword">비밀번호</label><input id="loginPassword" type="password" placeholder="비밀번호 입력"></div><div class="help-text">관리자 또는 리뷰 전용 Firebase Email/Password 계정으로 로그인합니다.</div><div class="modal-actions"><button class="secondary-btn" onclick="closeLoginModal()">닫기</button><button class="primary-btn" onclick="loginAdmin()">로그인</button></div></div></div>
 
