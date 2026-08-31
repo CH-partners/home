@@ -1,3 +1,4 @@
+import "./sharedPageImages.js";
 import { initAllocation } from "./allocation.js";
 import { initSchedule } from "./schedule.js";
 import { initGroupReview } from "./groupReview.js";
