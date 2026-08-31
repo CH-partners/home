@@ -50,11 +50,11 @@ function applyAlignmentStyle(block, align) {
 
   if (next === "left") {
     block.style.float = "left";
-    block.style.clear = "none";
+    block.style.clear = "both";
     block.style.margin = "12px 16px 12px 0";
   } else if (next === "right") {
     block.style.float = "right";
-    block.style.clear = "none";
+    block.style.clear = "both";
     block.style.margin = "12px 0 12px 16px";
   } else {
     block.style.float = "none";
