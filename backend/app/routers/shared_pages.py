@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -16,10 +18,17 @@ from app.schemas.shared_pages import (
     SharedPagesResponse,
     SharedPagesUpdatePayload,
 )
+from app.services.shared_page_images import (
+    delete_image_file,
+    detect_image_mime,
+    find_image_file,
+    write_image_atomic,
+)
 
 
 router = APIRouter(prefix="/api/v1/shared-pages", tags=["shared-pages"])
 SETTINGS_ID = "main"
+MAX_IMAGE_BYTES = 10 * 1024 * 1024
 DEFAULT_NOTICE = {
     "title": "공지 제목",
     "date": "",
@@ -182,6 +191,11 @@ def _ensure_general_board(settings: AppSettings) -> bool:
     return True
 
 
+def _require_content_key(settings: AppSettings, content_key: str) -> None:
+    if content_key not in dict(settings.page_contents or {}):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="게시판을 찾을 수 없습니다.")
+
+
 @router.get("", response_model=SharedPagesResponse)
 def get_shared_pages(
     db: Session = Depends(get_db),
@@ -330,6 +344,68 @@ def update_notice(
     db.commit()
     db.refresh(settings)
     return _response(settings)
+
+
+@router.put("/contents/{content_key}/images")
+def upload_content_image(
+    content_key: str,
+    body: bytes = Body(media_type="application/octet-stream"),
+    db: Session = Depends(get_db),
+    _admin: AppUser = Depends(require_admin),
+) -> dict:
+    settings = _get_or_create(db)
+    _require_content_key(settings, content_key)
+    if not body:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="이미지 데이터가 없습니다.")
+    if len(body) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="이미지는 10MB 이하만 사용할 수 있습니다.")
+
+    mime_type = detect_image_mime(body)
+    if mime_type is None:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="PNG, JPG, WebP 이미지만 사용할 수 있습니다.")
+
+    image_id = uuid4().hex
+    write_image_atomic(
+        body,
+        content_key=content_key,
+        image_id=image_id,
+        mime_type=mime_type,
+    )
+    return {
+        "id": image_id,
+        "mimeType": mime_type,
+        "size": len(body),
+        "url": f"/api/v1/shared-pages/contents/{content_key}/images/{image_id}",
+    }
+
+
+@router.get("/contents/{content_key}/images/{image_id}")
+def get_content_image(
+    content_key: str,
+    image_id: str,
+    db: Session = Depends(get_db),
+    _user: AppUser = Depends(require_worker_or_admin),
+) -> FileResponse:
+    settings = _get_or_create(db)
+    _require_content_key(settings, content_key)
+    found = find_image_file(content_key, image_id)
+    if found is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="이미지를 찾을 수 없습니다.")
+    path, mime_type = found
+    return FileResponse(path, media_type=mime_type)
+
+
+@router.delete("/contents/{content_key}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_content_image(
+    content_key: str,
+    image_id: str,
+    db: Session = Depends(get_db),
+    _admin: AppUser = Depends(require_admin),
+) -> Response:
+    settings = _get_or_create(db)
+    _require_content_key(settings, content_key)
+    delete_image_file(content_key, image_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/contents/{content_key}", response_model=PageContentResponse)
