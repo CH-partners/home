@@ -38,8 +38,6 @@ export function installLimitedDeploymentMode() {
   if (window.__limitedDeploymentModeInstalled) return;
   window.__limitedDeploymentModeInstalled = true;
 
-  let sidebarUserSyncing = false;
-  let lastSidebarUserSync = 0;
   let scheduleStatusSyncing = false;
 
   function ensureLimitedStyles() {
@@ -296,47 +294,6 @@ export function installLimitedDeploymentMode() {
     document.head.appendChild(style);
   }
 
-  function ensureLoginBox() {
-    const sidebar = document.querySelector(".sidebar");
-    if (!sidebar) return null;
-
-    let box = document.getElementById("limitedLoginBox");
-    if (!box) {
-      box = document.createElement("div");
-      box.id = "limitedLoginBox";
-      sidebar.appendChild(box);
-    }
-    return box;
-  }
-
-  function renderLoginBox(user) {
-    const box = ensureLoginBox();
-    if (!box) return;
-    if (!user) return;
-
-    const nameEl = box.querySelector(".limited-login-name");
-    const roleEl = box.querySelector(".limited-login-role");
-    if (nameEl) nameEl.textContent = user.display_name || user.login_id || "";
-    if (roleEl) roleEl.textContent = user.role === "ADMIN" ? "관리자" : user.role === "WORKER" ? "작업자" : String(user.role || "");
-    box.classList.add("visible");
-  }
-
-  async function syncSidebarLogin(force = false) {
-    const now = Date.now();
-    if (sidebarUserSyncing || (!force && now - lastSidebarUserSync < 1200)) return;
-    sidebarUserSyncing = true;
-    lastSidebarUserSync = now;
-    try {
-      const response = await fetch("/api/v1/auth/me", { credentials: "include" });
-      if (response.status === 401) return;
-      if (!response.ok) return;
-      renderLoginBox(await response.json());
-    } catch (_) {
-    } finally {
-      sidebarUserSyncing = false;
-    }
-  }
-
   async function syncScheduleReadiness() {
     if (scheduleStatusSyncing) return;
     scheduleStatusSyncing = true;
@@ -359,11 +316,6 @@ export function installLimitedDeploymentMode() {
   function applyDeploymentMode() {
     ensureLimitedStyles();
     document.body.classList.add("limited-deployment-mode");
-    ensureLoginBox();
-    void syncSidebarLogin();
-
-    const adminBox = document.querySelector(".admin-box");
-    if (adminBox) adminBox.style.display = "none";
 
     document.querySelectorAll(".sheet-panel").forEach(panel => {
       if (!isAllowedPanel(panel)) {
@@ -406,17 +358,6 @@ export function installLimitedDeploymentMode() {
   void syncScheduleReadiness().finally(applyDeploymentMode);
   setTimeout(() => void syncScheduleReadiness().finally(applyDeploymentMode), 500);
   setTimeout(applyDeploymentMode, 1200);
-
-  document.addEventListener("click", event => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target) return;
-    if (target.closest("#sidebarLoginOpenBtn, #sidebarLoginSubmitBtn, #sidebarLogoutBtn")) {
-      setTimeout(() => {
-        void syncSidebarLogin(true);
-        applyDeploymentMode();
-      }, 150);
-    }
-  }, true);
 
   const observer = new MutationObserver(() => {
     clearTimeout(observerTimer);
