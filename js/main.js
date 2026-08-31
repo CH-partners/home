@@ -38,11 +38,6 @@ const allocationRef = doc(db, "sharedPages", "workAllocation");
 const editLogsColRef = collection(db, "editLogs");
 
 let currentUser = null;
-let noticeData = {
-  title: "공지 제목",
-  date: "",
-  html: "<li>공지 내용이 없습니다.</li>"
-};
 let workspaceFullscreen = false;
 
 function removeUndefinedDeep(value) {
@@ -150,21 +145,6 @@ function showSheet(index, title = "") {
   }
 }
 window.showSheet = showSheet;
-
-function renderNotice() {
-  document.getElementById("noticeTitle").textContent = noticeData.title || "공지 제목";
-  document.getElementById("noticeDate").textContent = "기준일: " + (noticeData.date || "-");
-
-  const wrap = document.getElementById("noticeItems");
-  if (!wrap) return;
-  const html = (noticeData.html || "").trim();
-  if (!html) {
-    wrap.innerHTML = "<li>공지 내용이 없습니다.</li>";
-    return;
-  }
-  const hasBlockTags = /<(li|ul|ol|p|div|h[1-6]|blockquote)/i.test(html);
-  wrap.innerHTML = hasBlockTags ? html : `<li>${html}</li>`;
-}
 
 function openModal(id) { document.getElementById(id)?.classList.add("show"); }
 function closeModal(id) { document.getElementById(id)?.classList.remove("show"); }
@@ -289,7 +269,6 @@ window.groupReviewApi = initGroupReview({
   getCurrentUser: () => currentUser
 });
 
-renderNotice();
 window.scheduleApi.initCalendar();
 window.scheduleApi.subscribeSchedules();
 showSheet(0, "청현 공지사항");
