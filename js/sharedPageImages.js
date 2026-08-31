@@ -12,6 +12,18 @@ function editorRoot() {
   return document.querySelector("#contentEditor .ql-editor");
 }
 
+function editorQuill() {
+  if (typeof Quill === "undefined") return null;
+  const host = document.getElementById("contentEditor");
+  if (!host) return null;
+  try {
+    const instance = Quill.find(host);
+    return instance && typeof instance.insertEmbed === "function" ? instance : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function modal() {
   return document.getElementById("contentModal");
 }
@@ -24,6 +36,106 @@ function imageFileFromClipboard(event) {
 
 function imageUrl(contentKey, imageId) {
   return `${API_ROOT}/shared-pages/contents/${encodeURIComponent(contentKey)}/images/${encodeURIComponent(imageId)}`;
+}
+
+function blockWidth(block) {
+  const parsed = Number.parseInt(block.style.width || "", 10);
+  return Number.isFinite(parsed) && parsed >= MIN_WIDTH ? parsed : DEFAULT_WIDTH;
+}
+
+function applyAlignmentStyle(block, align) {
+  const next = ["left", "center", "right"].includes(align) ? align : "center";
+  block.dataset.align = next;
+  block.style.display = "block";
+  if (next === "left") {
+    block.style.margin = "12px auto 12px 0";
+  } else if (next === "right") {
+    block.style.margin = "12px 0 12px auto";
+  } else {
+    block.style.margin = "12px auto";
+  }
+}
+
+function hydrateBlock(block) {
+  if (!(block instanceof HTMLElement)) return;
+  const imageId = block.dataset.imageId || "";
+  const contentKey = block.dataset.contentKey || activeContentKey || "";
+  if (!imageId || !contentKey) return;
+
+  block.dataset.contentKey = contentKey;
+  block.setAttribute("contenteditable", "false");
+  if (!block.style.width) block.style.width = `${DEFAULT_WIDTH}px`;
+  applyAlignmentStyle(block, block.dataset.align || "center");
+
+  let image = block.querySelector("img");
+  if (!image) {
+    image = document.createElement("img");
+    image.alt = "게시판 이미지";
+    block.appendChild(image);
+  }
+  const expected = imageUrl(contentKey, imageId);
+  if (!image.getAttribute("src") || !image.getAttribute("src").includes(`/images/${imageId}`)) {
+    image.src = expected;
+  }
+  image.alt = image.alt || "게시판 이미지";
+  image.draggable = false;
+}
+
+function hydrateEditorImages() {
+  editorRoot()?.querySelectorAll(".board-image-block").forEach(hydrateBlock);
+}
+
+function registerBoardImageBlot() {
+  if (typeof Quill === "undefined" || window.__boardImageBlotRegistered) return;
+  const BlockEmbed = Quill.import("blots/block/embed");
+
+  class BoardImageBlot extends BlockEmbed {
+    static create(value = {}) {
+      const node = super.create();
+      node.dataset.imageId = String(value.id || "");
+      node.dataset.contentKey = String(value.contentKey || "");
+      node.dataset.align = String(value.align || "center");
+      node.style.width = `${Math.max(MIN_WIDTH, Number(value.width) || DEFAULT_WIDTH)}px`;
+      applyAlignmentStyle(node, node.dataset.align);
+
+      const image = document.createElement("img");
+      image.src = String(value.url || imageUrl(node.dataset.contentKey, node.dataset.imageId));
+      image.alt = "게시판 이미지";
+      image.draggable = false;
+      node.appendChild(image);
+      return node;
+    }
+
+    static value(node) {
+      const image = node.querySelector("img");
+      return {
+        id: node.dataset.imageId || "",
+        contentKey: node.dataset.contentKey || "",
+        align: node.dataset.align || "center",
+        width: blockWidth(node),
+        url: image?.getAttribute("src") || ""
+      };
+    }
+
+    format(name, value) {
+      if (name === "width") {
+        const width = Math.max(MIN_WIDTH, Number(value) || DEFAULT_WIDTH);
+        this.domNode.style.width = `${Math.round(width)}px`;
+        return;
+      }
+      if (name === "align") {
+        applyAlignmentStyle(this.domNode, String(value || "center"));
+        return;
+      }
+      super.format(name, value);
+    }
+  }
+
+  BoardImageBlot.blotName = "boardImage";
+  BoardImageBlot.tagName = "div";
+  BoardImageBlot.className = "board-image-block";
+  Quill.register(BoardImageBlot, true);
+  window.__boardImageBlotRegistered = true;
 }
 
 async function uploadImage(contentKey, file) {
@@ -57,15 +169,20 @@ async function deleteImage(contentKey, imageId) {
 }
 
 function setAlignment(block, align) {
-  block.dataset.align = align;
-  block.style.display = "block";
-  if (align === "left") {
-    block.style.margin = "12px auto 12px 0";
-  } else if (align === "right") {
-    block.style.margin = "12px 0 12px auto";
-  } else {
-    block.style.margin = "12px auto";
+  const next = ["left", "center", "right"].includes(align) ? align : "center";
+  const quill = editorQuill();
+  let formatted = false;
+  if (quill && typeof Quill !== "undefined") {
+    try {
+      const blot = Quill.find(block);
+      if (blot && typeof blot.format === "function") {
+        blot.format("align", next);
+        quill.update("user");
+        formatted = true;
+      }
+    } catch (_) {}
   }
+  if (!formatted) applyAlignmentStyle(block, next);
   updateToolbar();
 }
 
@@ -97,7 +214,7 @@ function toolbar() {
     <button type="button" data-image-align="center">가운데</button>
     <button type="button" data-image-align="right">오른쪽</button>
     <button type="button" data-image-delete="1" class="danger">삭제</button>
-    <span class="board-image-toolbar-hint">이미지 선택 후 우측 아래 모서리를 드래그하면 크기를 조절할 수 있습니다.</span>
+    <span class="board-image-toolbar-hint">위치는 왼쪽·가운데·오른쪽으로 조절하고, 우측 아래 모서리를 드래그하면 크기를 조절할 수 있습니다.</span>
   `;
   host.parentElement.insertBefore(bar, host);
 
@@ -118,7 +235,19 @@ function toolbar() {
     button.disabled = true;
     try {
       await deleteImage(contentKey, imageId);
-      block.remove();
+      const quill = editorQuill();
+      let removed = false;
+      if (quill && typeof Quill !== "undefined") {
+        try {
+          const blot = Quill.find(block);
+          if (blot && typeof blot.remove === "function") {
+            blot.remove();
+            quill.update("user");
+            removed = true;
+          }
+        } catch (_) {}
+      }
+      if (!removed) block.remove();
       clearSelection();
     } catch (error) {
       alert(`이미지 삭제 실패: ${error.message}`);
@@ -161,7 +290,28 @@ function ensureStyles() {
   document.head.appendChild(style);
 }
 
-function insertBlock(root, range, upload) {
+function insertBlock(root, quill, insertionIndex, upload) {
+  if (quill) {
+    const index = Math.max(0, Math.min(Number(insertionIndex) || 0, Math.max(0, quill.getLength() - 1)));
+    quill.insertEmbed(index, "boardImage", {
+      id: upload.id,
+      contentKey: activeContentKey,
+      align: "center",
+      width: DEFAULT_WIDTH,
+      url: upload.url || imageUrl(activeContentKey, upload.id)
+    }, "user");
+    quill.insertText(index + 1, "\n", "user");
+    quill.setSelection(index + 2, 0, "silent");
+    quill.update("user");
+    const block = Array.from(root.querySelectorAll(".board-image-block"))
+      .find(node => node.dataset.imageId === upload.id);
+    if (block) {
+      hydrateBlock(block);
+      selectBlock(block);
+    }
+    return;
+  }
+
   const block = document.createElement("div");
   block.className = "board-image-block";
   block.dataset.imageId = upload.id;
@@ -169,7 +319,7 @@ function insertBlock(root, range, upload) {
   block.dataset.align = "center";
   block.setAttribute("contenteditable", "false");
   block.style.width = `${DEFAULT_WIDTH}px`;
-  block.style.margin = "12px auto";
+  applyAlignmentStyle(block, "center");
 
   const image = document.createElement("img");
   image.src = upload.url || imageUrl(activeContentKey, upload.id);
@@ -179,14 +329,7 @@ function insertBlock(root, range, upload) {
 
   const spacer = document.createElement("p");
   spacer.innerHTML = "<br>";
-
-  if (range && root.contains(range.commonAncestorContainer)) {
-    range.deleteContents();
-    range.insertNode(spacer);
-    range.insertNode(block);
-  } else {
-    root.append(block, spacer);
-  }
+  root.append(block, spacer);
   root.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertFromPaste" }));
   selectBlock(block);
 }
@@ -224,9 +367,25 @@ function moveResize(event) {
 function endResize(event) {
   if (!dragState || event.pointerId !== dragState.pointerId) return;
   const block = dragState.block;
+  const width = blockWidth(block);
   try { block.releasePointerCapture(event.pointerId); } catch (_) {}
   dragState = null;
-  editorRoot()?.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "formatSetBlockTextDirection" }));
+
+  const quill = editorQuill();
+  let formatted = false;
+  if (quill && typeof Quill !== "undefined") {
+    try {
+      const blot = Quill.find(block);
+      if (blot && typeof blot.format === "function") {
+        blot.format("width", width);
+        quill.update("user");
+        formatted = true;
+      }
+    } catch (_) {}
+  }
+  if (!formatted) {
+    editorRoot()?.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "formatSetBlockTextDirection" }));
+  }
 }
 
 function bindEvents() {
@@ -238,12 +397,17 @@ function bindEvents() {
     if (editButton) {
       activeContentKey = editButton.dataset.localSharedContentKey || "";
       clearSelection();
-      setTimeout(() => toolbar(), 0);
+      queueMicrotask(() => {
+        hydrateEditorImages();
+        toolbar();
+      });
+      requestAnimationFrame(hydrateEditorImages);
       return;
     }
 
     const block = target.closest("#contentEditor .ql-editor .board-image-block");
     if (block) {
+      hydrateBlock(block);
       selectBlock(block);
       return;
     }
@@ -262,11 +426,11 @@ function bindEvents() {
     event.preventDefault();
     event.stopPropagation();
 
-    const selection = window.getSelection();
-    const range = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+    const quill = editorQuill();
+    const insertionIndex = quill?.getSelection(true)?.index ?? Math.max(0, (quill?.getLength?.() || 1) - 1);
     try {
       const upload = await uploadImage(activeContentKey, file);
-      insertBlock(root, range, upload);
+      insertBlock(root, quill, insertionIndex, upload);
     } catch (error) {
       alert(`이미지 붙여넣기 실패: ${error.message}`);
     }
@@ -288,12 +452,15 @@ function bindEvents() {
     if (!active) {
       activeContentKey = "";
       clearSelection();
+      return;
     }
+    hydrateEditorImages();
   });
   const contentModal = modal();
   if (contentModal) observer.observe(contentModal, { attributes: true, attributeFilter: ["class"] });
 }
 
+registerBoardImageBlot();
 ensureStyles();
 toolbar();
 bindEvents();
