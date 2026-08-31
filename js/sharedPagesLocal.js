@@ -323,8 +323,6 @@ function setContentModalMode(enabled) {
   const modal = document.getElementById("contentModal");
   if (!modal) return;
   modal.classList.toggle("local-shared-edit-mode", enabled);
-  const tableRow = document.getElementById("contentTableWrap")?.closest(".form-row");
-  if (tableRow) tableRow.style.display = enabled ? "none" : "";
 }
 
 function openContentEditor(refOrIndex) {
