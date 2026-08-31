@@ -43,24 +43,12 @@ function blockWidth(block) {
   return Number.isFinite(parsed) && parsed >= MIN_WIDTH ? parsed : DEFAULT_WIDTH;
 }
 
-function applyAlignmentStyle(block, align) {
-  const next = ["left", "center", "right"].includes(align) ? align : "center";
-  block.dataset.align = next;
+function applyLeftLayout(block) {
+  block.dataset.align = "left";
   block.style.display = "block";
-
-  if (next === "left") {
-    block.style.float = "left";
-    block.style.clear = "both";
-    block.style.margin = "12px 16px 12px 0";
-  } else if (next === "right") {
-    block.style.float = "right";
-    block.style.clear = "both";
-    block.style.margin = "12px 0 12px 16px";
-  } else {
-    block.style.float = "none";
-    block.style.clear = "both";
-    block.style.margin = "12px auto";
-  }
+  block.style.float = "none";
+  block.style.clear = "both";
+  block.style.margin = "12px 0";
 }
 
 function hydrateBlock(block) {
@@ -72,7 +60,7 @@ function hydrateBlock(block) {
   block.dataset.contentKey = contentKey;
   block.setAttribute("contenteditable", "false");
   if (!block.style.width) block.style.width = `${DEFAULT_WIDTH}px`;
-  applyAlignmentStyle(block, block.dataset.align || "center");
+  applyLeftLayout(block);
 
   let image = block.querySelector("img");
   if (!image) {
@@ -101,9 +89,8 @@ function registerBoardImageBlot() {
       const node = super.create();
       node.dataset.imageId = String(value.id || "");
       node.dataset.contentKey = String(value.contentKey || "");
-      node.dataset.align = String(value.align || "left");
       node.style.width = `${Math.max(MIN_WIDTH, Number(value.width) || DEFAULT_WIDTH)}px`;
-      applyAlignmentStyle(node, node.dataset.align);
+      applyLeftLayout(node);
 
       const image = document.createElement("img");
       image.src = String(value.url || imageUrl(node.dataset.contentKey, node.dataset.imageId));
@@ -118,7 +105,6 @@ function registerBoardImageBlot() {
       return {
         id: node.dataset.imageId || "",
         contentKey: node.dataset.contentKey || "",
-        align: node.dataset.align || "left",
         width: blockWidth(node),
         url: image?.getAttribute("src") || ""
       };
@@ -128,10 +114,6 @@ function registerBoardImageBlot() {
       if (name === "width") {
         const width = Math.max(MIN_WIDTH, Number(value) || DEFAULT_WIDTH);
         this.domNode.style.width = `${Math.round(width)}px`;
-        return;
-      }
-      if (name === "align") {
-        applyAlignmentStyle(this.domNode, String(value || "left"));
         return;
       }
       super.format(name, value);
@@ -175,24 +157,6 @@ async function deleteImage(contentKey, imageId) {
   }
 }
 
-function setAlignment(block, align) {
-  const next = ["left", "center", "right"].includes(align) ? align : "left";
-  const quill = editorQuill();
-  let formatted = false;
-  if (quill && typeof Quill !== "undefined") {
-    try {
-      const blot = Quill.find(block);
-      if (blot && typeof blot.format === "function") {
-        blot.format("align", next);
-        quill.update("user");
-        formatted = true;
-      }
-    } catch (_) {}
-  }
-  if (!formatted) applyAlignmentStyle(block, next);
-  updateToolbar();
-}
-
 function clearSelection() {
   selectedBlock?.classList.remove("board-image-selected");
   selectedBlock = null;
@@ -217,23 +181,14 @@ function toolbar() {
   bar.id = "boardImageToolbar";
   bar.innerHTML = `
     <span class="board-image-toolbar-label">이미지</span>
-    <button type="button" data-image-align="left">왼쪽 · 글 오른쪽</button>
-    <button type="button" data-image-align="center">가운데 · 글 아래</button>
-    <button type="button" data-image-align="right">오른쪽 · 글 왼쪽</button>
     <button type="button" data-image-delete="1" class="danger">삭제</button>
-    <span class="board-image-toolbar-hint">왼쪽/오른쪽 배치에서는 다음 문단의 글이 이미지 옆과 아래로 자연스럽게 이어집니다. 우측 아래 모서리로 크기를 조절할 수 있습니다.</span>
+    <span class="board-image-toolbar-hint">이미지는 항상 왼쪽에서 시작합니다. 우측 아래 모서리를 드래그하면 크기를 조절할 수 있습니다.</span>
   `;
   host.parentElement.insertBefore(bar, host);
 
   bar.addEventListener("click", async event => {
     const button = event.target instanceof Element ? event.target.closest("button") : null;
-    if (!button || !selectedBlock) return;
-    const align = button.dataset.imageAlign;
-    if (align) {
-      setAlignment(selectedBlock, align);
-      return;
-    }
-    if (!button.dataset.imageDelete) return;
+    if (!button || !selectedBlock || !button.dataset.imageDelete) return;
 
     const block = selectedBlock;
     const contentKey = block.dataset.contentKey || activeContentKey;
@@ -269,10 +224,6 @@ function updateToolbar() {
   const bar = toolbar();
   if (!bar) return;
   bar.classList.toggle("visible", Boolean(selectedBlock));
-  const align = selectedBlock?.dataset.align || "left";
-  bar.querySelectorAll("[data-image-align]").forEach(button => {
-    button.classList.toggle("active", button.dataset.imageAlign === align);
-  });
 }
 
 function ensureStyles() {
@@ -283,17 +234,20 @@ function ensureStyles() {
     #boardImageToolbar{display:none;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 8px;padding:7px 9px;border:1px solid #dbe2ea;border-radius:8px;background:#f8fafc}
     #boardImageToolbar.visible{display:flex}
     #boardImageToolbar button{height:30px;padding:0 9px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#334155;font-size:12px;font-weight:700;cursor:pointer}
-    #boardImageToolbar button.active{border-color:#2563eb;background:#dbeafe;color:#1d4ed8}
     #boardImageToolbar button.danger{border-color:#fecaca;color:#b91c1c}
     #boardImageToolbar .board-image-toolbar-label{font-size:12px;font-weight:800;color:#334155;margin-right:2px}
     #boardImageToolbar .board-image-toolbar-hint{font-size:11px;color:#64748b;margin-left:4px}
     #contentEditor .ql-editor::after,.rich-preview::after{content:"";display:block;clear:both}
-    #contentEditor .ql-editor .board-image-block{position:relative;box-sizing:border-box;max-width:100%;min-width:${MIN_WIDTH}px;padding:0;line-height:0}
+    #contentEditor .ql-editor .board-image-block{position:relative;box-sizing:border-box;max-width:100%;min-width:${MIN_WIDTH}px;padding:0;line-height:0;float:none!important;clear:both!important;margin:12px 0!important}
     #contentEditor .ql-editor .board-image-block img{display:block;width:100%;height:auto;max-width:100%;user-select:none;-webkit-user-drag:none}
     #contentEditor .ql-editor .board-image-block.board-image-selected{outline:2px solid #2563eb;outline-offset:2px}
     #contentEditor .ql-editor .board-image-block.board-image-selected::after{content:"";position:absolute;right:-6px;bottom:-6px;width:13px;height:13px;border:2px solid #fff;border-radius:2px;background:#2563eb;box-shadow:0 0 0 1px #1d4ed8;cursor:nwse-resize}
-    .rich-preview .board-image-block{display:block;box-sizing:border-box;max-width:100%;padding:0;line-height:0}
+    .rich-preview .board-image-block{display:block;box-sizing:border-box;max-width:100%;padding:0;line-height:0;float:none!important;clear:both!important;margin:12px 0!important}
     .rich-preview .board-image-block img{display:block;width:100%;height:auto;max-width:100%}
+    .rich-preview .ql-align-center{text-align:center}
+    .rich-preview .ql-align-right{text-align:right}
+    .rich-preview .ql-align-justify{text-align:justify}
+    .rich-preview .ql-align-left{text-align:left}
   `;
   document.head.appendChild(style);
 }
@@ -304,7 +258,6 @@ function insertBlock(root, quill, insertionIndex, upload) {
     quill.insertEmbed(index, "boardImage", {
       id: upload.id,
       contentKey: activeContentKey,
-      align: "left",
       width: DEFAULT_WIDTH,
       url: upload.url || imageUrl(activeContentKey, upload.id)
     }, "user");
@@ -324,10 +277,9 @@ function insertBlock(root, quill, insertionIndex, upload) {
   block.className = "board-image-block";
   block.dataset.imageId = upload.id;
   block.dataset.contentKey = activeContentKey;
-  block.dataset.align = "left";
   block.setAttribute("contenteditable", "false");
   block.style.width = `${DEFAULT_WIDTH}px`;
-  applyAlignmentStyle(block, "left");
+  applyLeftLayout(block);
 
   const image = document.createElement("img");
   image.src = upload.url || imageUrl(activeContentKey, upload.id);
