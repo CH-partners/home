@@ -44,7 +44,7 @@ function blockWidth(block) {
 }
 
 function applyLeftLayout(block) {
-  block.dataset.align = "left";
+  block.removeAttribute("data-align");
   block.style.display = "block";
   block.style.float = "none";
   block.style.clear = "both";
