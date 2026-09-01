@@ -1,5 +1,6 @@
 import "./sharedPagesLocal.js";
 import "./noticeLocalAdmin.js";
+import "./localTools.js";
 import "./menuRollout.js";
 import "./menuAdminUnified.js";
 import "./menuPillStyle.js";
