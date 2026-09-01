@@ -8,13 +8,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.dependencies.auth import require_admin, require_worker_or_admin
+from app.dependencies.auth import require_worker_or_admin
 from app.models.app_settings import AppSettings
 from app.models.schedule import Schedule
 from app.models.user import AppUser
 from app.schemas.schedule import (
-    ScheduleBootstrapPayload,
-    ScheduleBootstrapResponse,
     ScheduleCreate,
     ScheduleResponse,
     ScheduleStatusResponse,
@@ -58,28 +56,6 @@ def _migration_complete(db: Session) -> bool:
     return isinstance(state, dict) and state.get("complete") is True
 
 
-def _mark_migration_complete(db: Session, imported: int) -> None:
-    settings = db.get(AppSettings, SCHEDULE_STATE_ID)
-    if settings is None:
-        settings = AppSettings(
-            id=SCHEDULE_STATE_ID,
-            menus=[],
-            notice={},
-            page_contents={},
-            updated_at=datetime.now(timezone.utc),
-        )
-
-    contents = dict(settings.page_contents or {})
-    contents[MIGRATION_STATE_KEY] = {
-        "complete": True,
-        "imported": imported,
-        "completed_at": datetime.now(timezone.utc).isoformat(),
-    }
-    settings.page_contents = contents
-    settings.updated_at = datetime.now(timezone.utc)
-    db.add(settings)
-
-
 @router.get("/status", response_model=ScheduleStatusResponse)
 def schedule_status(
     db: Session = Depends(get_db),
@@ -99,53 +75,6 @@ def list_schedules(
 ) -> list[ScheduleResponse]:
     items = db.scalars(select(Schedule).order_by(Schedule.date.asc(), Schedule.start_time.asc(), Schedule.created_at.asc())).all()
     return [_to_response(item) for item in items]
-
-
-@router.post("/bootstrap", response_model=ScheduleBootstrapResponse)
-def bootstrap_schedules(
-    payload: ScheduleBootstrapPayload,
-    db: Session = Depends(get_db),
-    _admin: AppUser = Depends(require_admin),
-) -> ScheduleBootstrapResponse:
-    if _migration_complete(db):
-        count = int(db.scalar(select(func.count()).select_from(Schedule)) or 0)
-        return ScheduleBootstrapResponse(imported=count, migration_complete=True)
-
-    existing_id = db.scalar(select(Schedule.id).limit(1))
-    if existing_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Local schedules already contain data before migration was confirmed.",
-        )
-
-    now = datetime.now(timezone.utc)
-    seen_ids: set[str] = set()
-    imported = 0
-
-    for source in payload.items:
-        source_id = source.source_id.strip()
-        if source_id in seen_ids:
-            continue
-        seen_ids.add(source_id)
-        _validate_times(source)
-        item = Schedule(
-            id=source_id,
-            title=source.title.strip(),
-            date=source.date,
-            start_time=source.start_time,
-            end_time=source.end_time,
-            memo=source.memo,
-            color=source.color,
-            writer_email=source.writer_email or "anonymous",
-            created_at=source.created_at or now,
-            updated_at=source.updated_at or source.created_at or now,
-        )
-        db.add(item)
-        imported += 1
-
-    _mark_migration_complete(db, imported)
-    db.commit()
-    return ScheduleBootstrapResponse(imported=imported, migration_complete=True)
 
 
 @router.post("", response_model=ScheduleResponse, status_code=status.HTTP_201_CREATED)
