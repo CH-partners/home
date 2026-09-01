@@ -361,6 +361,7 @@ async function saveContentEditor() {
   const editor = contentEditor();
   if (!editor) throw new Error("게시판 편집기를 찾을 수 없습니다.");
 
+  const savedKey = editingKey;
   const bodyHtml = editor.innerHTML;
   const content = {
     ...editingConfig,
@@ -368,15 +369,16 @@ async function saveContentEditor() {
     bodyHtml,
     html: bodyHtml + tableHtmlFrom(editingConfig)
   };
-  const result = await api(`/shared-pages/contents/${encodeURIComponent(editingKey)}`, {
+  const result = await api(`/shared-pages/contents/${encodeURIComponent(savedKey)}`, {
     method: "PUT",
     body: JSON.stringify({ content })
   });
+  await window.sharedPageImagesApi?.commit?.(savedKey);
   currentSnapshot = {
     ...(currentSnapshot || {}),
     page_contents: {
       ...(currentSnapshot?.page_contents || {}),
-      [editingKey]: result.content
+      [savedKey]: result.content
     }
   };
   applySnapshot(currentSnapshot);
