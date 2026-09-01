@@ -1,5 +1,3 @@
-import "./localTools.js";
-
 const API_ROOT = "/api/v1";
 let currentUser = null;
 let saving = false;
