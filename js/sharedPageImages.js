@@ -7,6 +7,8 @@ const MIN_WIDTH = 120;
 let activeContentKey = "";
 let selectedBlock = null;
 let dragState = null;
+const newUploadsByKey = new Map();
+const pendingDeletesByKey = new Map();
 
 function editorRoot() {
   return document.querySelector("#contentEditor .ql-editor");
@@ -43,6 +45,46 @@ function blockWidth(block) {
   return Number.isFinite(parsed) && parsed >= MIN_WIDTH ? parsed : DEFAULT_WIDTH;
 }
 
+function trackedSet(map, contentKey) {
+  let set = map.get(contentKey);
+  if (!set) {
+    set = new Set();
+    map.set(contentKey, set);
+  }
+  return set;
+}
+
+function trackNewUpload(contentKey, imageId) {
+  if (contentKey && imageId) trackedSet(newUploadsByKey, contentKey).add(imageId);
+}
+
+function trackPendingDelete(contentKey, imageId) {
+  if (contentKey && imageId) trackedSet(pendingDeletesByKey, contentKey).add(imageId);
+}
+
+async function deleteTrackedImages(contentKey, ids, reason) {
+  if (!contentKey || !ids?.size) return;
+  const results = await Promise.allSettled(Array.from(ids, imageId => deleteImage(contentKey, imageId)));
+  const failed = results.filter(result => result.status === "rejected");
+  if (failed.length) console.warn(`게시판 이미지 ${reason} 정리 일부 실패`, failed);
+}
+
+async function commitEditorImages(contentKey) {
+  if (!contentKey) return;
+  const pending = pendingDeletesByKey.get(contentKey);
+  await deleteTrackedImages(contentKey, pending, "저장 후 삭제");
+  pendingDeletesByKey.delete(contentKey);
+  newUploadsByKey.delete(contentKey);
+}
+
+async function rollbackEditorImages(contentKey) {
+  if (!contentKey) return;
+  const newUploads = newUploadsByKey.get(contentKey);
+  await deleteTrackedImages(contentKey, newUploads, "저장 취소");
+  newUploadsByKey.delete(contentKey);
+  pendingDeletesByKey.delete(contentKey);
+}
+
 function applyLeftLayout(block) {
   block.removeAttribute("data-align");
   block.style.display = "block";
@@ -69,9 +111,7 @@ function hydrateBlock(block) {
     block.appendChild(image);
   }
   const expected = imageUrl(contentKey, imageId);
-  if (!image.getAttribute("src") || !image.getAttribute("src").includes(`/images/${imageId}`)) {
-    image.src = expected;
-  }
+  if (!image.getAttribute("src") || !image.getAttribute("src").includes(`/images/${imageId}`)) image.src = expected;
   image.alt = image.alt || "게시판 이미지";
   image.draggable = false;
 }
@@ -112,8 +152,7 @@ function registerBoardImageBlot() {
 
     format(name, value) {
       if (name === "width") {
-        const width = Math.max(MIN_WIDTH, Number(value) || DEFAULT_WIDTH);
-        this.domNode.style.width = `${Math.round(width)}px`;
+        this.domNode.style.width = `${Math.round(Math.max(MIN_WIDTH, Number(value) || DEFAULT_WIDTH))}px`;
         return;
       }
       super.format(name, value);
@@ -128,12 +167,8 @@ function registerBoardImageBlot() {
 }
 
 async function uploadImage(contentKey, file) {
-  if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    throw new Error("PNG, JPG, WebP 이미지만 사용할 수 있습니다.");
-  }
-  if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error("이미지는 10MB 이하만 사용할 수 있습니다.");
-  }
+  if (!ALLOWED_IMAGE_TYPES.has(file.type)) throw new Error("PNG, JPG, WebP 이미지만 사용할 수 있습니다.");
+  if (file.size > MAX_IMAGE_BYTES) throw new Error("이미지는 10MB 이하만 사용할 수 있습니다.");
 
   const response = await fetch(`${API_ROOT}/shared-pages/contents/${encodeURIComponent(contentKey)}/images`, {
     method: "PUT",
@@ -171,6 +206,22 @@ function selectBlock(block) {
   updateToolbar();
 }
 
+function removeSelectedBlock(block) {
+  const quill = editorQuill();
+  let removed = false;
+  if (quill && typeof Quill !== "undefined") {
+    try {
+      const blot = Quill.find(block);
+      if (blot && typeof blot.remove === "function") {
+        blot.remove();
+        quill.update("user");
+        removed = true;
+      }
+    } catch (_) {}
+  }
+  if (!removed) block.remove();
+}
+
 function toolbar() {
   let bar = document.getElementById("boardImageToolbar");
   if (bar) return bar;
@@ -182,40 +233,22 @@ function toolbar() {
   bar.innerHTML = `
     <span class="board-image-toolbar-label">이미지</span>
     <button type="button" data-image-delete="1" class="danger">삭제</button>
-    <span class="board-image-toolbar-hint">이미지는 항상 왼쪽에서 시작합니다. 우측 아래 모서리를 드래그하면 크기를 조절할 수 있습니다.</span>
+    <span class="board-image-toolbar-hint">이미지는 왼쪽에서 시작합니다. 삭제는 게시판 저장 시 확정되고, 저장하지 않고 닫으면 취소됩니다.</span>
   `;
   host.parentElement.insertBefore(bar, host);
 
-  bar.addEventListener("click", async event => {
+  bar.addEventListener("click", event => {
     const button = event.target instanceof Element ? event.target.closest("button") : null;
     if (!button || !selectedBlock || !button.dataset.imageDelete) return;
 
     const block = selectedBlock;
     const contentKey = block.dataset.contentKey || activeContentKey;
     const imageId = block.dataset.imageId || "";
-    if (!contentKey || !imageId || !confirm("이 이미지를 삭제할까요?")) return;
-    button.disabled = true;
-    try {
-      await deleteImage(contentKey, imageId);
-      const quill = editorQuill();
-      let removed = false;
-      if (quill && typeof Quill !== "undefined") {
-        try {
-          const blot = Quill.find(block);
-          if (blot && typeof blot.remove === "function") {
-            blot.remove();
-            quill.update("user");
-            removed = true;
-          }
-        } catch (_) {}
-      }
-      if (!removed) block.remove();
-      clearSelection();
-    } catch (error) {
-      alert(`이미지 삭제 실패: ${error.message}`);
-    } finally {
-      button.disabled = false;
-    }
+    if (!contentKey || !imageId || !confirm("이 이미지를 삭제할까요? 저장할 때 삭제가 확정됩니다.")) return;
+
+    trackPendingDelete(contentKey, imageId);
+    removeSelectedBlock(block);
+    clearSelection();
   });
   return bar;
 }
@@ -264,8 +297,7 @@ function insertBlock(root, quill, insertionIndex, upload) {
     quill.insertText(index + 1, "\n", "user");
     quill.setSelection(index + 2, 0, "silent");
     quill.update("user");
-    const block = Array.from(root.querySelectorAll(".board-image-block"))
-      .find(node => node.dataset.imageId === upload.id);
+    const block = Array.from(root.querySelectorAll(".board-image-block")).find(node => node.dataset.imageId === upload.id);
     if (block) {
       hydrateBlock(block);
       selectBlock(block);
@@ -307,13 +339,12 @@ function beginResize(block, event) {
   selectBlock(block);
 
   const rect = block.getBoundingClientRect();
-  const maxWidth = Math.max(MIN_WIDTH, root.clientWidth - 8);
   dragState = {
     block,
     pointerId: event.pointerId,
     startX: event.clientX,
     startWidth: rect.width,
-    maxWidth
+    maxWidth: Math.max(MIN_WIDTH, root.clientWidth - 8)
   };
   try { block.setPointerCapture(event.pointerId); } catch (_) {}
 }
@@ -343,9 +374,7 @@ function endResize(event) {
       }
     } catch (_) {}
   }
-  if (!formatted) {
-    editorRoot()?.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "formatSetBlockTextDirection" }));
-  }
+  if (!formatted) editorRoot()?.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "formatSetBlockTextDirection" }));
 }
 
 function bindEvents() {
@@ -390,6 +419,7 @@ function bindEvents() {
     const insertionIndex = quill?.getSelection(true)?.index ?? Math.max(0, (quill?.getLength?.() || 1) - 1);
     try {
       const upload = await uploadImage(activeContentKey, file);
+      trackNewUpload(activeContentKey, upload.id);
       insertBlock(root, quill, insertionIndex, upload);
     } catch (error) {
       alert(`이미지 붙여넣기 실패: ${error.message}`);
@@ -410,8 +440,10 @@ function bindEvents() {
   const observer = new MutationObserver(() => {
     const active = modal()?.classList.contains("show");
     if (!active) {
+      const closingKey = activeContentKey;
       activeContentKey = "";
       clearSelection();
+      if (closingKey) void rollbackEditorImages(closingKey);
       return;
     }
     hydrateEditorImages();
@@ -419,6 +451,11 @@ function bindEvents() {
   const contentModal = modal();
   if (contentModal) observer.observe(contentModal, { attributes: true, attributeFilter: ["class"] });
 }
+
+window.sharedPageImagesApi = {
+  commit: commitEditorImages,
+  rollback: rollbackEditorImages
+};
 
 registerBoardImageBlot();
 ensureStyles();
