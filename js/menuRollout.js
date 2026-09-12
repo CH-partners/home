@@ -76,13 +76,6 @@ function normalizeLawPriorityMenus(snapshot) {
       continue;
     }
 
-    if (String(menu.group || "").trim().toLowerCase() === "work") {
-      menu.group = "reference";
-      menu.hidden = true;
-      menu.lawPriorityRolloutVersion = LAW_PRIORITY_ROLLOUT_VERSION;
-      changed = true;
-    }
-
     next.push(menu);
   }
 
